@@ -1,116 +1,185 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, STYLES } from '../constants';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomNav } from './components/SharedComponents';
-
-const StatBox = ({ label, count, color, icon }) => (
-  <View style={[styles.statBox, STYLES.shadow]}>
-    <View style={[styles.iconCircle, { backgroundColor: color + '15' }]}>
-      <FontAwesome5 name={icon} size={18} color={color} />
-    </View>
-    <Text style={styles.statCount}>{count}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-// --- NEW: Matching Project Design from Manage Projects ---
-const ProjectCard = ({ project }) => {
-  const isDelayed = project.badgeType === 'DELAYED';
-  const statusColor = isDelayed ? COLORS.error : COLORS.success;
-
-  return (
-    <View style={[styles.card, STYLES.shadow]}>
-      <View style={styles.cardHeader}>
-        <View style={{flex: 1}}>
-          <Text style={styles.cTitle}>{project.title}</Text>
-          <Text style={styles.cCat}>{project.category}</Text>
-        </View>
-        <View style={[styles.statusTag, { borderColor: statusColor }]}>
-          <Text style={{ fontSize: 10, fontWeight: '800', color: statusColor }}>{project.badgeType}</Text>
-        </View>
-      </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.detailsGrid}>
-        <View>
-          <Text style={styles.lbl}>BUDGET</Text>
-          <Text style={styles.val}>{project.budget}</Text>
-        </View>
-        <View>
-          <Text style={styles.lbl}>TARGET</Text>
-          <Text style={styles.val}>{project.targetDate}</Text>
-        </View>
-        <View>
-          <Text style={styles.lbl}>PROGRESS</Text>
-          <Text style={[styles.val, {color: COLORS.primary}]}>{project.progress}%</Text>
-        </View>
-      </View>
-    </View>
-  );
-};
+import { FontAwesome5 } from "@expo/vector-icons";
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../constants";
 
 export const DashboardView = ({ data, actions }) => {
-  const { stats, projects } = data;
   const insets = useSafeAreaInsets();
+  const { stats, recentLogs, engineerName, isLoading } = data;
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Visual Header */}
-      <View style={styles.headerContainer}>
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryDark]}
-          style={[styles.headerGradient, { paddingTop: insets.top + 30 }]}
-        >
-          <View>
-            <Text style={styles.greeting}>Good Morning,</Text>
-            <Text style={styles.username}>Captain!</Text>
-          </View>
-        </LinearGradient>
-      </View>
-
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <StatBox label="Active" count={stats.active} color={COLORS.primary} icon="hammer" />
-          <StatBox label="Issues" count={stats.issues} color={COLORS.error} icon="exclamation-triangle" />
-          <StatBox label="Done" count={stats.done} color={COLORS.success} icon="check" />
+    <View style={[styles.mainContainer, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={actions.onRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
+        <View style={styles.headerSection}>
+          <Text style={styles.greetingText}>Good Day,</Text>
+          <Text style={styles.engineerText}>
+            {engineerName || "Lead Engineer"}
+          </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
-      </ScrollView>
+        {/* ✅ FIXED SPACING: 3-Column Grid for construction status */}
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, { backgroundColor: "#EBF2FF" }]}>
+            <Text style={[styles.statNumber, { color: COLORS.primary }]}>
+              {stats.progress || 0}
+            </Text>
+            <Text style={styles.statLabel}>IN PROGRESS</Text>
+          </View>
 
-      <BottomNav activeTab="Dashboard" onNavigate={actions.navigate} />
+          <View style={[styles.statCard, { backgroundColor: "#E7F7EF" }]}>
+            <Text style={[styles.statNumber, { color: COLORS.success }]}>
+              {stats.done || 0}
+            </Text>
+            <Text style={styles.statLabel}>COMPLETED</Text>
+          </View>
+
+          <View style={[styles.statCard, { backgroundColor: "#FFEBEB" }]}>
+            <Text style={[styles.statNumber, { color: "#FF4D4D" }]}>
+              {stats.delay || 0}
+            </Text>
+            <Text style={styles.statLabel}>DELAYED</Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionHeading}>RECENT ACTIVITY</Text>
+
+        {recentLogs && recentLogs.length > 0 ? (
+          recentLogs.map((log) => (
+            <View key={log.id} style={styles.activityCard}>
+              <View style={styles.activityIcon}>
+                <FontAwesome5
+                  name="history"
+                  size={12}
+                  color={
+                    log.action?.toLowerCase() === "delayed"
+                      ? "#FF4D4D"
+                      : COLORS.primary
+                  }
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activityMessage}>
+                  {log.action}: {log.details}
+                </Text>
+                <Text style={styles.activityTime}>
+                  {log.timestamp?.seconds
+                    ? new Date(log.timestamp.seconds * 1000).toLocaleString(
+                        [],
+                        {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )
+                    : "Recently"}
+                </Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No recent activity found.</Text>
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  headerContainer: { height: 170, borderBottomRightRadius: 30, borderBottomLeftRadius: 30, overflow: 'hidden' },
-  headerGradient: { flex: 1, paddingHorizontal: 24 },
-  greeting: { color: 'rgba(255,255,255,0.8)', fontSize: 16, fontWeight: '600' },
-  username: { color: COLORS.white, fontSize: 34, fontWeight: '800' },
+  mainContainer: { flex: 1, backgroundColor: "#F8F9FA" },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  headerSection: { marginTop: 20, marginBottom: 24, paddingHorizontal: 4 },
+  greetingText: { fontSize: 14, fontWeight: "600", color: "#8E8E93" },
+  engineerText: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#1A1C1E",
+    marginTop: 2,
+  },
 
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 30 },
-  statBox: { width: '31%', backgroundColor: COLORS.surface, padding: 16, borderRadius: 20, alignItems: 'center' },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  statCount: { fontSize: 24, fontWeight: '800', color: COLORS.textDark },
-  statLabel: { fontSize: 12, color: COLORS.textGrey, fontWeight: '600' },
+  // ✅ REFINED GRID SPACING
+  statsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8, // Reduced gap to prevent overflow
+    marginBottom: 32,
+  },
+  statCard: {
+    flex: 1,
+    paddingVertical: 18,
+    paddingHorizontal: 4, // Tightened horizontal padding
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.03)",
+  },
+  statNumber: { fontSize: 20, fontWeight: "900" }, // Slightly smaller font for 3 columns
+  statLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: "#8E8E93",
+    marginTop: 4,
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
 
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: COLORS.textDark, marginBottom: 16 },
-
-  // --- Updated Card Styles (Matching Manage Projects) ---
-  card: { backgroundColor: COLORS.white, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F3F4F6' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textDark, marginBottom: 4 },
-  cCat: { fontSize: 12, color: COLORS.textGrey, fontWeight: '600', letterSpacing: 0.5 },
-  statusTag: { borderWidth: 1.5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
-  divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 16 },
-  detailsGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  lbl: { fontSize: 10, fontWeight: '700', color: COLORS.textLight, letterSpacing: 1, marginBottom: 4 },
-  val: { fontSize: 14, fontWeight: '600', color: COLORS.textDark }
+  sectionHeading: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#8E8E93",
+    marginBottom: 16,
+    letterSpacing: 1,
+    paddingHorizontal: 4,
+  },
+  activityCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#F2F2F7",
+  },
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#F0F4FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  activityMessage: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1A1C1E",
+    lineHeight: 18,
+  },
+  activityTime: {
+    fontSize: 10,
+    color: "#8E8E93",
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  emptyState: { paddingVertical: 40, alignItems: "center" },
+  emptyText: { color: "#C7C7CC", fontStyle: "italic", fontSize: 13 },
 });

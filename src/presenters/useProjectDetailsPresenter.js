@@ -1,114 +1,128 @@
-import { useState, useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
-import { db } from '../firebaseConfig';
-import { ref, onValue, update } from 'firebase/database';
-import { useCameraPermissions } from 'expo-camera';
-import * as Location from 'expo-location';
+import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import { arrayUnion, doc, updateDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { useCallback, useEffect, useState } from "react";
+import { Alert } from "react-native";
+import { db, storage } from "../firebaseConfig";
+import { ProjectModel } from "../models/ProjectModel";
 
-export const useProjectDetailsPresenter = (projectId, onBack) => {
+export const useProjectDetailsPresenter = (projectId, onBackCallback) => {
   const [project, setProject] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedMilestone, setSelectedMilestone] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Camera & Location
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [cameraVisible, setCameraVisible] = useState(false);
-  const [capturedImage, setCapturedImage] = useState(null);
-  const [capturedLocation, setCapturedLocation] = useState(null);
-  const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(null);
-
-  const cameraRef = useRef(null);
-
-  // 1. Listen for Database Changes
-  useEffect(() => {
+  const loadProject = useCallback(async () => {
     if (!projectId) return;
-    const projectRef = ref(db, `Projects/${projectId}`);
-    const unsubscribe = onValue(projectRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setProject(snapshot.val());
+    setIsLoading(true);
+    try {
+      const data = await ProjectModel.getById(projectId);
+
+      if (data && data.milestones?.length > 0) {
+        // ✅ FIX: Dynamic Progress Calculation
+        const total = data.milestones.length;
+        const completedCount = data.milestones.filter(
+          (m) => m.status?.toString().toLowerCase() === "completed",
+        ).length;
+
+        // Attach calculated progress to the project data
+        data.progress = Math.round((completedCount / total) * 100);
+
+        // Sync the selected milestone with fresh data from the database
+        if (selectedMilestone) {
+          const freshMilestone = data.milestones.find(
+            (m) => m.id === selectedMilestone.id,
+          );
+          if (freshMilestone) setSelectedMilestone(freshMilestone);
+        }
       }
+      setProject(data);
+    } catch (e) {
+      console.error("Load Project Error:", e);
+    } finally {
       setIsLoading(false);
-    });
-    return () => unsubscribe();
+    }
+  }, [projectId, selectedMilestone]);
+
+  useEffect(() => {
+    loadProject();
   }, [projectId]);
 
-  // 2. Open Camera (Strict Checks)
-  const openCamera = async (index) => {
-    // Check Camera
-    if (!cameraPermission?.granted) {
-      const permission = await requestCameraPermission();
-      if (!permission.granted) {
-        Alert.alert("Permission Denied", "Camera access is strictly required for proof.");
+  const handleAddProof = async (m) => {
+    try {
+      const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
+      const locationStatus = await Location.requestForegroundPermissionsAsync();
+
+      if (
+        cameraStatus.status !== "granted" ||
+        locationStatus.status !== "granted"
+      ) {
+        Alert.alert(
+          "Permission Required",
+          "Camera and location access are needed for official documentation.",
+        );
         return;
       }
-    }
-    // Check Location
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert("Permission Denied", "Location access is strictly required for geo-tagging.");
-      return;
-    }
 
-    setActiveMilestoneIndex(index);
-    setCameraVisible(true);
-  };
-
-  // 3. Capture & Tag
-  const takePicture = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-        setCapturedImage(photo.uri);
-
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        setCapturedLocation({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          timestamp: loc.timestamp
-        });
-
-      } catch (error) {
-        Alert.alert("Error", "Failed to capture proof.");
-      }
-    }
-  };
-
-  // 4. Save Proof to Database
-  const confirmProof = async () => {
-    if (!project || activeMilestoneIndex === null) return;
-
-    try {
-      const updatedMilestones = [...(project.milestones || [])];
-
-      updatedMilestones[activeMilestoneIndex] = {
-        ...updatedMilestones[activeMilestoneIndex],
-        status: 'Completed',
-        proofImage: capturedImage,
-        location: capturedLocation,
-        completedAt: new Date().toISOString()
-      };
-
-      await update(ref(db, `Projects/${projectId}`), {
-        milestones: updatedMilestones
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.7,
       });
 
-      setCameraVisible(false);
-      setCapturedImage(null);
-      Alert.alert("Success", "Proof submitted successfully!");
+      if (!result.canceled) {
+        setIsLoading(true);
 
+        // 1. Get precise GPS coordinates
+        const userLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        const photoUri = result.assets[0].uri;
+        const { latitude, longitude } = userLocation.coords;
+
+        // 2. Upload to Firebase Storage
+        const filename = `proofs/${m.id}_${Date.now()}.jpg`;
+        const storageRef = ref(storage, filename);
+
+        const response = await fetch(photoUri);
+        const blob = await response.blob();
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+
+        // 3. Update Firestore Document with proofs array
+        const milestoneRef = doc(db, "milestones", m.id);
+        const newProof = {
+          url: downloadURL,
+          location: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+          timestamp: Date.now(),
+          latitude,
+          longitude,
+        };
+
+        await updateDoc(milestoneRef, {
+          proofs: arrayUnion(newProof),
+          status: "Pending",
+        });
+
+        // ✅ REFRESH: This triggers the recalculation of progress
+        await loadProject();
+        Alert.alert("Success", "Evidence and GPS coordinates saved.");
+      }
     } catch (error) {
-      Alert.alert("Error", error.message);
+      console.error("Upload Error:", error);
+      Alert.alert("Error", "Failed to save evidence log.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const closeCamera = () => {
-    setCameraVisible(false);
-    setCapturedImage(null);
-  };
-
-  const retakePicture = () => setCapturedImage(null);
-
   return {
-    data: { project, isLoading, cameraVisible, capturedImage, isCameraReady: true },
-    actions: { openCamera, closeCamera, takePicture, retakePicture, confirmProof, setCameraRef: (ref) => cameraRef.current = ref }
+    data: { project, selectedMilestone, isLoading },
+    actions: {
+      onRefresh: loadProject,
+      goBack: onBackCallback,
+      onSelectMilestone: setSelectedMilestone,
+      onAddProof: handleAddProof,
+    },
   };
 };

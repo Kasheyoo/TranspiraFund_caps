@@ -1,138 +1,198 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, StatusBar, ActivityIndicator } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, STYLES } from '../constants';
-import { BlockInput, PrimaryButton } from './components/SharedComponents';
+import { FontAwesome5 } from "@expo/vector-icons";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { COLORS, STYLES } from "../constants";
+// ✅ IMPORT THE MODAL
+import { ForgotPasswordModal } from "./ForgotPasswordView";
 
-// --- NEW: First Time Login Modal ---
-const FirstTimeModal = ({ visible, onUpdate, onClose }) => {
-  const [newPass, setNewPass] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
+export const LoginView = ({ data, actions }) => {
+  // Destructure with safe defaults
+  const {
+    email,
+    password,
+    rememberMe,
+    isLoading,
+    errorMessage,
+    isResetModalVisible,
+  } = data || {};
+
+  const {
+    setEmail,
+    setPassword,
+    setRememberMe,
+    onLogin,
+    onForgotPassword,
+    setIsResetModalVisible,
+  } = actions || {};
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <View style={[styles.modalContainer, STYLES.shadow]}>
-          <View style={styles.iconCircle}>
-            <FontAwesome5 name="lock" size={24} color={COLORS.primary} />
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={STYLES.container}
+    >
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          padding: 24,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <FontAwesome5 name="layer-group" size={40} color={COLORS.primary} />
           </View>
-          <Text style={styles.mTitle}>Security Update</Text>
-          <Text style={styles.mSub}>Since this is your first login, please create a new secure password.</Text>
-
-          <BlockInput
-            icon="lock"
-            placeholder="New Password"
-            isPassword
-            value={newPass}
-            onChangeText={setNewPass}
-          />
-          <BlockInput
-            icon="check-circle"
-            placeholder="Confirm Password"
-            isPassword
-            value={confirmPass}
-            onChangeText={setConfirmPass}
-          />
-
-          <PrimaryButton
-            title="Update & Login"
-            onPress={() => onUpdate(newPass, confirmPass)}
-            style={{ marginTop: 10, width: '100%' }}
-          />
-
-          <TouchableOpacity onPress={onClose} style={{ marginTop: 16 }}>
-            <Text style={{ color: COLORS.textGrey, fontSize: 12 }}>Cancel</Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>Project Watch</Text>
+          <Text style={styles.subtitle}>Engineering Portal</Text>
         </View>
-      </View>
-    </Modal>
-  );
-};
 
-export const LoginView = ({ data, actions, onBack }) => {
-  const { user, isRemembered, isLoading, isChangePassVisible } = data;
-  const { handleEmailChange, handlePasswordChange, toggleRemember, onLogin, onUpdatePassword, closeModal } = actions;
+        <View style={STYLES.card}>
+          {errorMessage ? (
+            <View style={styles.errorContainer}>
+              <FontAwesome5
+                name="exclamation-circle"
+                size={14}
+                color={COLORS.error}
+              />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <TouchableOpacity onPress={onBack} style={styles.backLink}>
-        <FontAwesome5 name="arrow-left" size={16} color={COLORS.textGrey} />
-        <Text style={{ color: COLORS.textGrey, marginLeft: 8, fontWeight: '600' }}>Back</Text>
-      </TouchableOpacity>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              style={STYLES.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="name@lgu.gov.ph"
+              placeholderTextColor={COLORS.textTertiary}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
 
-      <View style={styles.content}>
-        <View style={styles.logoBox}>
-          <FontAwesome5 name="shield-alt" size={32} color={COLORS.primary} />
-        </View>
-        <Text style={styles.headerTitle}>LGU Portal</Text>
-        <Text style={styles.headerSub}>Sign in with your Employee ID.</Text>
-
-        <View style={styles.form}>
-          <BlockInput
-            icon="id-card"
-            placeholder="Employee ID (e.g. Eng_123)"
-            value={user.email}
-            onChangeText={handleEmailChange}
-          />
-          <BlockInput
-            icon="lock"
-            placeholder="Password"
-            isPassword
-            value={user.password}
-            onChangeText={handlePasswordChange}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={STYLES.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholder="••••••••"
+              placeholderTextColor={COLORS.textTertiary}
+            />
+          </View>
 
           <View style={styles.row}>
-            <TouchableOpacity onPress={toggleRemember} style={styles.checkRow}>
-              <View style={[styles.checkbox, isRemembered && styles.checked]}>
-                {isRemembered && <FontAwesome5 name="check" size={10} color={COLORS.white} />}
+            <TouchableOpacity
+              onPress={() => setRememberMe && setRememberMe(!rememberMe)}
+              style={styles.checkRow}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checked]}>
+                {rememberMe && (
+                  <FontAwesome5 name="check" size={10} color="white" />
+                )}
               </View>
-              <Text style={styles.checkLabel}>Remember me</Text>
+              <Text style={styles.checkText}>Remember me</Text>
             </TouchableOpacity>
-            <TouchableOpacity>
-              <Text style={styles.forgotLink}>Help?</Text>
+
+            {/* ✅ OPEN MODAL ACTION */}
+            <TouchableOpacity onPress={() => setIsResetModalVisible?.(true)}>
+              <Text style={styles.link}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
 
-          {isLoading ? (
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          ) : (
-            <PrimaryButton title="Sign In" onPress={onLogin} style={{ marginTop: 20 }} />
-          )}
+          <TouchableOpacity
+            style={[STYLES.button, isLoading && { opacity: 0.8 }]}
+            onPress={onLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.btnText}>Sign In</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* --- The Pop Up Layout --- */}
-      <FirstTimeModal
-        visible={isChangePassVisible}
-        onUpdate={onUpdatePassword}
-        onClose={closeModal}
-      />
-    </SafeAreaView>
+        <Text style={styles.footer}>v1.0.6 • Official Access Only</Text>
+
+        {/* ✅ INTEGRATED MODAL */}
+        <ForgotPasswordModal
+          visible={isResetModalVisible}
+          onClose={() => setIsResetModalVisible?.(false)}
+          onSend={(resetEmail) => onForgotPassword?.(resetEmail)}
+          isLoading={isLoading}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, padding: 24 },
-  backLink: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  content: { flex: 1, justifyContent: 'center' },
-  logoBox: { width: 64, height: 64, backgroundColor: '#EFF6FF', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  headerTitle: { fontSize: 32, fontWeight: '800', color: COLORS.textDark, marginBottom: 8, letterSpacing: -0.5 },
-  headerSub: { fontSize: 16, color: COLORS.textGrey, marginBottom: 40 },
-  form: { width: '100%' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  checkRow: { flexDirection: 'row', alignItems: 'center' },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.inputBorder, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  header: { alignItems: "center", marginBottom: 32 },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    elevation: 4,
+  },
+  title: { fontSize: 26, fontWeight: "800", color: COLORS.textPrimary },
+  subtitle: { fontSize: 16, color: COLORS.textSecondary, marginTop: 4 },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  errorText: { color: COLORS.error, fontWeight: "600", marginLeft: 8, flex: 1 },
+  inputGroup: { marginBottom: 16 },
+  label: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  checkRow: { flexDirection: "row", alignItems: "center" },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    marginRight: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   checked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkLabel: { color: COLORS.textGrey, fontWeight: '500' },
-  forgotLink: { color: COLORS.primary, fontWeight: '700' },
-
-  // Modal Styles
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 },
-  modalContainer: { backgroundColor: COLORS.white, borderRadius: 24, padding: 32, alignItems: 'center' },
-  iconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  mTitle: { fontSize: 22, fontWeight: '800', color: COLORS.textDark, marginBottom: 8 },
-  mSub: { fontSize: 14, color: COLORS.textGrey, marginBottom: 24, textAlign: 'center' }
+  checkText: { color: COLORS.textSecondary, fontSize: 14 },
+  link: { color: COLORS.primary, fontWeight: "700", fontSize: 14 },
+  btnText: { color: "white", fontSize: 16, fontWeight: "700" },
+  footer: {
+    textAlign: "center",
+    color: COLORS.textTertiary,
+    fontSize: 12,
+    marginTop: 24,
+  },
 });

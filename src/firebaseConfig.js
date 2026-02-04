@@ -1,20 +1,34 @@
-import { initializeApp } from 'firebase/app';
-import { getDatabase } from 'firebase/database';
+import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import { initializeApp } from "firebase/app";
+import { getReactNativePersistence, initializeAuth } from "firebase/auth";
+import { initializeFirestore } from "firebase/firestore"; // ✅ Changed import
+import { getStorage } from "firebase/storage";
 
-// Configuration extracted from your google-services.json
 const firebaseConfig = {
-  apiKey: "AIzaSyDz5FGxdIJqlmYgzskwrw3_82Ivf3Icf7c",
-  authDomain: "transpirafund-cf15b.firebaseapp.com",
-  projectId: "transpirafund-cf15b",
-  storageBucket: "transpirafund-cf15b.firebasestorage.app",
-  messagingSenderId: "427541163832",
-  appId: "1:427541163832:android:f5f3d98fc797ec052c9bcd",
-  // Standard Realtime Database URL format
-  databaseURL: "https://transpirafund-cf15b-default-rtdb.firebaseio.com"
+  apiKey: "AIzaSyBznumKpktI9C71TOBlvXi6VOO0JpwB2gY",
+  authDomain: "transpirafund-webapp.firebaseapp.com",
+  projectId: "transpirafund-webapp",
+  storageBucket: "transpirafund-webapp.firebasestorage.app",
+  messagingSenderId: "693869638538",
+  appId: "1:693869638538:web:2ef6730f38dd5a31248e73",
+  measurementId: "G-0DSYB9ZDWL",
 };
 
-// Initialize Firebase
+// 1. Initialize App
 const app = initializeApp(firebaseConfig);
 
-// Export Realtime Database for use in Presenters
-export const db = getDatabase(app);
+// 2. Initialize Auth with Persistence
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+});
+
+// 3. Initialize Firestore with Long Polling (✅ THE FIX)
+// This prevents the "Backend didn't respond" timeout error
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+
+// 4. Initialize Storage
+export const storage = getStorage(app);
+
+export default app;

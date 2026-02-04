@@ -10,8 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.transpirafund.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to capture proof of project milestones.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photos to upload existing proof.",
         "NSLocationWhenInUseUsageDescription": "This app needs location access to tag the location of your project proofs."
       }
     },
@@ -25,6 +27,8 @@
       },
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
@@ -51,9 +55,10 @@
       ],
       "expo-font",
       [
-        "expo-camera",
+        "expo-image-picker",
         {
-          "cameraPermission": "Allow TranspiraFund to access your camera to capture proof of work."
+          "cameraPermission": "Allow TranspiraFund to access your camera to capture proof of work.",
+          "photosPermission": "Allow TranspiraFund to access your photos to select proof of work."
         }
       ],
       [

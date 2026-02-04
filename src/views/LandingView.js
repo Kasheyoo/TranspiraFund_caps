@@ -1,40 +1,76 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
-// FIXED PATH: Uses ../ (one level up)
-import { COLORS } from '../constants';
-import { PrimaryButton } from './components/SharedComponents';
+import { FontAwesome5 } from "@expo/vector-icons";
+import { StatusBar, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+// ✅ CORRECT IMPORTS (Go up one folder from 'views' to 'src')
+import { PrimaryButton } from "../components/SharedComponents";
+import { COLORS } from "../constants";
 
 export const LandingView = ({ onGetStarted }) => {
   return (
-    <LinearGradient colors={[COLORS.white, '#EFF6FF']} style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <View style={styles.iconCircle}>
-            <LinearGradient colors={[COLORS.secondary, COLORS.primary]} style={styles.iconGradient}>
-              <FontAwesome5 name="shield-alt" size={48} color={COLORS.white} />
-            </LinearGradient>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <View style={styles.content}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logoCircle}>
+            <FontAwesome5 name="building" size={48} color={COLORS.primary} />
           </View>
-          <View style={styles.badge}><Text style={styles.badgeText}>LGU PROJECT MONITORING</Text></View>
-          <Text style={styles.headline}>Transparency <Text style={{color: COLORS.primary}}>Reimagined.</Text></Text>
-          <Text style={styles.subHeadline}>Real-time oversight for Barangay infrastructure projects. Secure, fast, and transparent.</Text>
-          <View style={styles.bottomCard}><PrimaryButton title="Get Started" onPress={onGetStarted} style={{ width: '100%' }} /></View>
+          <Text style={styles.appName}>TranspiraFund</Text>
+          <Text style={styles.tagline}>LGU Financial Management System</Text>
         </View>
-      </SafeAreaView>
-    </LinearGradient>
+
+        <View style={styles.illustrationContainer}>
+          <FontAwesome5
+            name="chart-line"
+            size={120}
+            color={COLORS.primary}
+            opacity={0.2}
+          />
+        </View>
+
+        <View style={styles.descriptionContainer}>
+          <Text style={styles.description}>
+            Manage projects, track milestones, and monitor budgets efficiently.
+          </Text>
+        </View>
+
+        <PrimaryButton
+          title="Get Started"
+          onPress={onGetStarted}
+          style={{ width: "100%", marginTop: 40 }}
+        />
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30 },
-  iconCircle: { marginBottom: 40, shadowColor: COLORS.primary, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
-  iconGradient: { width: 100, height: 100, borderRadius: 35, justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '-10deg' }] },
-  badge: { backgroundColor: '#DBEAFE', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, marginBottom: 16 },
-  badgeText: { color: COLORS.primary, fontWeight: '800', fontSize: 10, letterSpacing: 1 },
-  headline: { fontSize: 34, fontWeight: '900', color: COLORS.textDark, textAlign: 'center', marginBottom: 16, lineHeight: 40 },
-  subHeadline: { fontSize: 16, color: COLORS.textGrey, textAlign: 'center', lineHeight: 24, marginBottom: 50, paddingHorizontal: 10 },
-  bottomCard: { width: '100%' }
+  container: { flex: 1, backgroundColor: COLORS.background, padding: 24 },
+  content: { flex: 1, justifyContent: "center", alignItems: "center" },
+  logoContainer: { alignItems: "center", marginBottom: 40 },
+  logoCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  appName: {
+    fontSize: 32,
+    fontWeight: "900",
+    color: COLORS.textDark,
+    marginBottom: 8,
+  },
+  tagline: { fontSize: 16, color: COLORS.textGrey, textAlign: "center" },
+  illustrationContainer: { marginVertical: 30 },
+  descriptionContainer: { paddingHorizontal: 20 },
+  description: {
+    fontSize: 16,
+    color: COLORS.textGrey,
+    textAlign: "center",
+    lineHeight: 24,
+  },
 });

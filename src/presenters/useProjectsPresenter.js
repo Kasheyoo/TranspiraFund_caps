@@ -1,43 +1,38 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebaseConfig';
-import { ref, onValue } from 'firebase/database';
+import { useEffect, useState } from "react";
+import { ProjectModel } from "../models/ProjectModel";
 
 export const useProjectsPresenter = (onNavigate) => {
-  const [activeTab, setActiveTab] = useState('Active');
-  const [searchQuery, setSearchQuery] = useState('');
   const [projects, setProjects] = useState([]);
+  const [filter, setFilter] = useState("All");
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch Projects from Firebase
+  const loadProjects = async () => {
+    setIsLoading(true);
+    try {
+      const data = await ProjectModel.getAll();
+      setProjects(data);
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const projectsRef = ref(db, 'Projects');
-
-    // onValue listener updates automatically whenever data changes
-    const unsubscribe = onValue(projectsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        // Convert Firebase object to Array
-        const loadedProjects = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setProjects(loadedProjects);
-      } else {
-        setProjects([]);
-      }
-    });
-
-    return () => unsubscribe();
+    loadProjects();
   }, []);
 
-  const filteredProjects = projects.filter(p => {
-    // If activeTab is 'Active', show 'Active' status. If 'Pending', show 'Pending', etc.
-    const matchesTab = activeTab === 'All' ? true : p.status === activeTab;
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
+  const filteredProjects = projects.filter((p) => {
+    if (filter === "All") return true;
+    return p.status === filter;
   });
 
   return {
-    data: { projects: filteredProjects, activeTab, searchQuery, counts: { pending: 0, issues: 0 } },
-    actions: { setActiveTab, setSearchQuery, navigate: onNavigate }
+    data: { projects: filteredProjects, filter, isLoading },
+    actions: {
+      setFilter,
+      refresh: loadProjects,
+      navigate: onNavigate,
+    },
   };
 };
