@@ -1,13 +1,26 @@
-import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useCallback, useEffect, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, PermissionsAndroid, Platform } from "react-native";
+import { launchCamera } from "react-native-image-picker";
+import Geolocation from "react-native-geolocation-service";
 import { db, storage } from "../firebaseConfig";
 import { ProjectModel } from "../models/ProjectModel";
 import { invalidateCache } from "../utils/cache";
 import type { Milestone, Project } from "../types";
+
+const requestLocationPermission = async (): Promise<boolean> => {
+  if (Platform.OS !== "android") return true;
+  const granted = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    {
+      title: "Location Permission",
+      message: "TranspiraFund needs location access to geo-tag project proofs.",
+      buttonPositive: "Allow",
+    },
+  );
+  return granted === PermissionsAndroid.RESULTS.GRANTED;
+};
 
 export const useProjectDetailsPresenter = (
   projectId: string,
@@ -52,13 +65,8 @@ export const useProjectDetailsPresenter = (
 
   const handleAddProof = async (m: Milestone) => {
     try {
-      const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
-      const locationStatus = await Location.requestForegroundPermissionsAsync();
-
-      if (
-        cameraStatus.status !== "granted" ||
-        locationStatus.status !== "granted"
-      ) {
+      const locationGranted = await requestLocationPermission();
+      if (!locationGranted) {
         Alert.alert(
           "Permission Required",
           "Camera and location access are needed for official documentation.",
@@ -66,21 +74,29 @@ export const useProjectDetailsPresenter = (
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
+      const result = await launchCamera({
+        mediaType: "photo",
         quality: 0.7,
+        saveToPhotos: false,
       });
 
-      if (!result.canceled) {
+      if (!result.didCancel && result.assets && result.assets[0]) {
         setIsLoading(true);
 
-        const userLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
+        const photoUri = result.assets[0].uri!;
 
-        const photoUri = result.assets[0].uri;
-        const { latitude, longitude } = userLocation.coords;
+        const userLocation = await new Promise<{ latitude: number; longitude: number }>(
+          (resolve, reject) => {
+            Geolocation.getCurrentPosition(
+              (pos: { coords: { latitude: number; longitude: number } }) =>
+                resolve(pos.coords),
+              (err: { code: number; message: string }) => reject(err),
+              { enableHighAccuracy: true, timeout: 15000 },
+            );
+          },
+        );
 
+        const { latitude, longitude } = userLocation;
         const filename = `proofs/${m.id}_${Date.now()}.jpg`;
         const storageRef = ref(storage, filename);
 

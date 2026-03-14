@@ -1,10 +1,10 @@
-import { FontAwesome5 } from "@expo/vector-icons";
-import Constants from "expo-constants";
-import * as Notifications from "expo-notifications";
+import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useEffect, useState } from "react";
 import {
   Alert,
   Linking,
+  PermissionsAndroid,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -32,47 +32,35 @@ interface SettingItemProps {
 export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   const insets = useSafeAreaInsets();
   const [isPushEnabled, setIsPushEnabled] = useState(false);
-  const isExpoGo = Constants.appOwnership === "expo";
 
   useEffect(() => {
     (async () => {
-      if (!isExpoGo) {
-        const { status } = await Notifications.getPermissionsAsync();
-        setIsPushEnabled(status === "granted");
+      if (Platform.OS === "android") {
+        const granted = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
+        );
+        setIsPushEnabled(granted);
       }
     })();
-  }, [isExpoGo]);
+  }, []);
 
   const handleToggleNotifications = async (value: boolean) => {
-    if (isExpoGo) {
-      Alert.alert(
-        "Expo Go Limitation",
-        "Push notifications require an APK or Development Build to function.",
-      );
-      setIsPushEnabled(false);
-      return;
-    }
-
     if (value) {
-      const { status: existingStatus } =
-        await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      if (finalStatus !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "Please enable notifications in your device settings.",
-          [{ text: "Open Settings", onPress: () => Linking.openSettings() }],
+      if (Platform.OS === "android") {
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
         );
-        setIsPushEnabled(false);
-        return;
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          setIsPushEnabled(true);
+        } else {
+          Alert.alert(
+            "Permission Denied",
+            "Please enable notifications in your device settings.",
+            [{ text: "Open Settings", onPress: () => Linking.openSettings() }],
+          );
+          setIsPushEnabled(false);
+        }
       }
-      setIsPushEnabled(true);
     } else {
       setIsPushEnabled(false);
     }
