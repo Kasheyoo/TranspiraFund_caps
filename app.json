@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TranspiraFund",
-    "slug": "TranspiraFund",
+    "slug": "transpirafund-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -40,7 +40,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
       [
         "expo-splash-screen",
         {
@@ -67,10 +66,6 @@
           "locationAlwaysAndWhenInUsePermission": "Allow TranspiraFund to use your location to geo-tag your project proofs."
         }
       ]
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+    ]
   }
 }
