@@ -1,10 +1,12 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
+import { useMemo, useState } from "react";
 import {
   FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -32,6 +34,18 @@ interface ProjectListViewProps {
 export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   const insets = useSafeAreaInsets();
   const filters = ["All", "In Progress", "Completed", "Delayed"];
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const searchedProjects = useMemo(() => {
+    if (!searchQuery.trim()) return data.projects;
+    const q = searchQuery.toLowerCase();
+    return data.projects.filter(
+      (p) =>
+        (p.projectTitle || p.title || "").toLowerCase().includes(q) ||
+        (p.engineer || "").toLowerCase().includes(q) ||
+        (p.location || "").toLowerCase().includes(q),
+    );
+  }, [data.projects, searchQuery]);
 
   const renderItem = ({ item }: { item: Project }) => (
     <TouchableOpacity
@@ -94,16 +108,52 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
           </Text>
         </View>
       </View>
+
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            {
+              width: `${item.progress || 0}%`,
+              backgroundColor:
+                item.status === "Completed"
+                  ? COLORS.success
+                  : item.status === "Delayed"
+                    ? COLORS.error
+                    : COLORS.primary,
+            },
+          ]}
+        />
+      </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={STYLES.container}>
       <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-        <Text style={styles.headerTitle}>Projects List</Text>
+        <Text style={styles.headerTitle}>Projects</Text>
         <Text style={styles.headerSub}>
           Monitor construction status and progress
         </Text>
+      </View>
+
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <FontAwesome5 name="search" size={14} color={COLORS.textTertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search projects..."
+            placeholderTextColor={COLORS.textTertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <FontAwesome5 name="times" size={14} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.filterContainer}>
@@ -135,7 +185,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
       </View>
 
       <FlatList
-        data={data.projects}
+        data={searchedProjects}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
@@ -162,6 +212,35 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
 };
 
 const styles = StyleSheet.create({
+  searchContainer: { paddingHorizontal: 24, marginBottom: 12 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 44,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: COLORS.background,
+    borderRadius: 2,
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
   header: { paddingHorizontal: 24, marginBottom: 10 },
   headerTitle: { fontSize: 28, fontWeight: "900", color: COLORS.textPrimary },
   headerSub: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },

@@ -1,10 +1,13 @@
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { db } from "../firebaseConfig";
+import { requireAuth } from "../utils/authGuard";
 import { getCached, setCached } from "../utils/cache";
 import type { AuditLog } from "../types";
 
 export class AuditService {
   static async getAll(): Promise<AuditLog[]> {
+    requireAuth();
+
     const cached = getCached<AuditLog[]>("audit_logs");
     if (cached) return cached;
 
@@ -18,8 +21,12 @@ export class AuditService {
       })) as AuditLog[];
       setCached("audit_logs", results);
       return results;
-    } catch (error) {
-      console.error("Audit Logs Fetch Error:", error);
+    } catch (error: any) {
+      if (error?.code === "permission-denied") {
+        console.warn("AuditLogs: insufficient Firestore permissions. Update security rules.");
+      } else {
+        console.error("Audit Logs Fetch Error:", error);
+      }
       return [];
     }
   }

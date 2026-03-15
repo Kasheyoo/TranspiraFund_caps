@@ -1,4 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,6 +21,7 @@ interface LoginData {
   isLoading: boolean;
   errorMessage: string;
   isResetModalVisible: boolean;
+  lockoutSeconds?: number;
 }
 
 interface LoginActions {
@@ -44,6 +46,7 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
     isLoading,
     errorMessage,
     isResetModalVisible,
+    lockoutSeconds = 0,
   } = data || {};
 
   const {
@@ -54,6 +57,9 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
     onForgotPassword,
     setIsResetModalVisible,
   } = actions || {};
+
+  const [showPassword, setShowPassword] = useState(false);
+  const isLocked = lockoutSeconds > 0;
 
   return (
     <KeyboardAvoidingView
@@ -70,21 +76,23 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
       >
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <FontAwesome5 name="layer-group" size={40} color={COLORS.primary} />
+            <FontAwesome5 name="layer-group" size={36} color={COLORS.primary} />
           </View>
-          <Text style={styles.title}>Project Watch</Text>
+          <Text style={styles.title}>TranspiraFund</Text>
           <Text style={styles.subtitle}>Engineering Portal</Text>
         </View>
 
         <View style={STYLES.card}>
           {errorMessage ? (
-            <View style={styles.errorContainer}>
+            <View style={[styles.errorContainer, isLocked && styles.lockoutContainer]}>
               <FontAwesome5
-                name="exclamation-circle"
+                name={isLocked ? "lock" : "exclamation-circle"}
                 size={14}
-                color={COLORS.error}
+                color={isLocked ? COLORS.warning : COLORS.error}
               />
-              <Text style={styles.errorText}>{errorMessage}</Text>
+              <Text style={[styles.errorText, isLocked && { color: COLORS.warning }]}>
+                {errorMessage}
+              </Text>
             </View>
           ) : null}
 
@@ -98,19 +106,34 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               placeholderTextColor={COLORS.textTertiary}
               autoCapitalize="none"
               keyboardType="email-address"
+              autoCorrect={false}
+              editable={!isLocked}
             />
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={STYLES.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="••••••••"
-              placeholderTextColor={COLORS.textTertiary}
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={styles.passwordInput}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                placeholder="Enter your password"
+                placeholderTextColor={COLORS.textTertiary}
+                editable={!isLocked}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeBtn}
+              >
+                <FontAwesome5
+                  name={showPassword ? "eye-slash" : "eye"}
+                  size={16}
+                  color={COLORS.textTertiary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.row}>
@@ -132,19 +155,21 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
           </View>
 
           <TouchableOpacity
-            style={[STYLES.button, isLoading && { opacity: 0.8 }]}
+            style={[STYLES.button, (isLoading || isLocked) && { opacity: 0.5 }]}
             onPress={onLogin}
-            disabled={isLoading}
+            disabled={isLoading || isLocked}
           >
             {isLoading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.btnText}>Sign In</Text>
+              <Text style={styles.btnText}>
+                {isLocked ? `Locked (${lockoutSeconds}s)` : "Sign In"}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footer}>v1.0.6 • Official Access Only</Text>
+        <Text style={styles.footer}>v1.0.6 — Official Access Only</Text>
 
         <ForgotPasswordModal
           visible={isResetModalVisible}
@@ -168,24 +193,49 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
     elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
   title: { fontSize: 26, fontWeight: "800", color: COLORS.textPrimary },
-  subtitle: { fontSize: 16, color: COLORS.textSecondary, marginTop: 4 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4, fontWeight: "600" },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FEE2E2",
+    backgroundColor: COLORS.errorSoft,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 20,
   },
-  errorText: { color: COLORS.error, fontWeight: "600", marginLeft: 8, flex: 1 },
+  lockoutContainer: {
+    backgroundColor: COLORS.warningSoft,
+  },
+  errorText: { color: COLORS.error, fontWeight: "600", marginLeft: 10, flex: 1, fontSize: 13 },
   inputGroup: { marginBottom: 16 },
   label: {
     fontSize: 13,
     fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 8,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    height: 56,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+  },
+  eyeBtn: {
+    padding: 16,
   },
   row: {
     flexDirection: "row",
@@ -199,7 +249,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#E5E7EB",
+    borderColor: COLORS.border,
     marginRight: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -213,5 +263,6 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     fontSize: 12,
     marginTop: 24,
+    fontWeight: "500",
   },
 });

@@ -42,7 +42,8 @@ export interface UserProfile {
   department?: string;
   role?: string;
   status?: string;
-  firstTimeAccess?: boolean;
+  firstTimeAccess?: boolean;   // legacy field (unused by web app)
+  mustChangePassword?: boolean; // set by web app on account creation
   name?: string;
   photoURL?: string;
 }

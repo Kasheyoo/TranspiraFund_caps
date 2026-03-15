@@ -8,7 +8,7 @@ const Stack = createNativeStackNavigator();
 export function AuthNavigator() {
   return (
     <Stack.Navigator
-      initialRouteName={ROUTES.LOGIN}
+      initialRouteName={ROUTES.LANDING}
       screenOptions={{ headerShown: false }}
     >
       <Stack.Screen name={ROUTES.LANDING} component={LandingScreen} />

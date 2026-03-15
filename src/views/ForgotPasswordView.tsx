@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { COLORS, STYLES } from "../constants";
+import { isValidEmail, sanitizeInput } from "../utils/security";
 
 interface ForgotPasswordModalProps {
   visible?: boolean;
@@ -27,6 +28,28 @@ export const ForgotPasswordModal = ({
   isLoading,
 }: ForgotPasswordModalProps) => {
   const [resetEmail, setResetEmail] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSend = () => {
+    setError("");
+    const cleaned = sanitizeInput(resetEmail, 254);
+    if (!cleaned) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!isValidEmail(cleaned)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    onSend(cleaned);
+    setResetEmail("");
+  };
+
+  const handleClose = () => {
+    setResetEmail("");
+    setError("");
+    onClose();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -46,25 +69,37 @@ export const ForgotPasswordModal = ({
               </View>
               <Text style={styles.modalTitle}>Reset Password</Text>
               <Text style={styles.modalSubtitle}>
-                A secure reset link will be sent to your Gmail.
+                A secure reset link will be sent to your registered email.
               </Text>
             </View>
+
+            {error ? (
+              <View style={styles.errorBox}>
+                <FontAwesome5 name="exclamation-circle" size={12} color={COLORS.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Registered Email</Text>
               <TextInput
-                style={STYLES.input}
+                style={[STYLES.input, error ? { borderColor: COLORS.error } : {}]}
                 placeholder="name@lgu.gov.ph"
+                placeholderTextColor={COLORS.textTertiary}
                 value={resetEmail}
-                onChangeText={setResetEmail}
+                onChangeText={(t) => {
+                  setResetEmail(t);
+                  if (error) setError("");
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
 
             <TouchableOpacity
               style={[STYLES.button, isLoading && { opacity: 0.8 }]}
-              onPress={() => onSend(resetEmail)}
+              onPress={handleSend}
               disabled={isLoading}
             >
               {isLoading ? (
@@ -74,7 +109,7 @@ export const ForgotPasswordModal = ({
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <TouchableOpacity onPress={handleClose} style={styles.cancelBtn}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -103,7 +138,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.primarySoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -114,6 +149,22 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: "center",
     marginTop: 4,
+    lineHeight: 20,
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.errorSoft,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 8,
+    flex: 1,
   },
   inputGroup: { marginBottom: 20 },
   label: {

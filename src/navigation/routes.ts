@@ -2,6 +2,7 @@ export const ROUTES = {
   // Auth flow
   LANDING: "Landing",
   LOGIN: "Login",
+  FORCE_PASSWORD_CHANGE: "ForcePasswordChange",
 
   // Main tabs
   DASHBOARD: "Dashboard",

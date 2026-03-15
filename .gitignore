@@ -1,15 +1,7 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
 node_modules/
 
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
+# Native build artifacts
 .kotlin/
 *.orig.*
 *.jks
@@ -36,8 +28,8 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-app-example
+# Firebase Cloud Functions compiled output
+functions/lib/
 
-# generated native folders
-/ios
-/android
+# APK build output
+android/app/build/

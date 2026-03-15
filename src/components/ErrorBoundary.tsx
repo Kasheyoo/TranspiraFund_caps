@@ -24,7 +24,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error("💥 Global Error Caught:", error, errorInfo);
+    // Log error for debugging (production: send to error reporting service)
+    console.error("ErrorBoundary caught:", error.message);
+    if (errorInfo.componentStack) {
+      console.error("Component stack:", errorInfo.componentStack);
+    }
   }
 
   handleRestart = (): void => {
@@ -39,30 +43,28 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <View style={styles.container}>
           <View style={styles.content}>
-            <FontAwesome5
-              name="exclamation-triangle"
-              size={60}
-              color={COLORS.error || "#FF0000"}
-            />
-            <Text style={styles.title}>Whoops!</Text>
+            <View style={styles.iconCircle}>
+              <FontAwesome5
+                name="exclamation-triangle"
+                size={32}
+                color={COLORS.error}
+              />
+            </View>
+            <Text style={styles.title}>Something Went Wrong</Text>
             <Text style={styles.subTitle}>
-              Something went wrong. We caught the error so the app wouldn't
-              crash.
+              An unexpected error occurred. Please try again or restart the app.
             </Text>
 
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>
-                {this.state.error?.toString()}
-              </Text>
-            </View>
-
             <TouchableOpacity
-              style={styles.button}
+              style={styles.primaryButton}
               onPress={this.handleRestart}
             >
-              <Text style={styles.buttonText}>Try Again</Text>
+              <FontAwesome5 name="redo" size={14} color="white" />
+              <Text style={styles.primaryButtonText}>Try Again</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.versionText}>TranspiraFund v1.0.6</Text>
         </View>
       );
     }
@@ -74,35 +76,50 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: COLORS.background,
     justifyContent: "center",
-    padding: 24,
+    padding: 32,
   },
   content: { alignItems: "center" },
-  title: { fontSize: 28, fontWeight: "800", color: "#1E293B", marginTop: 20 },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.errorSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
   subTitle: {
     textAlign: "center",
-    color: "#64748B",
+    color: COLORS.textSecondary,
     marginTop: 10,
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 22,
+    paddingHorizontal: 10,
   },
-  errorBox: {
-    backgroundColor: "#FFF",
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 24,
-    width: "100%",
-    borderWidth: 1,
-    borderColor: "#FECACA",
-  },
-  errorText: { color: "#EF4444", fontSize: 12, fontFamily: "monospace" },
-  button: {
-    marginTop: 30,
-    backgroundColor: "#2563EB",
+  primaryButton: {
+    marginTop: 32,
+    backgroundColor: COLORS.primary,
     paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 12,
+    paddingHorizontal: 28,
+    borderRadius: 14,
     elevation: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  buttonText: { color: "white", fontWeight: "700", fontSize: 16 },
+  primaryButtonText: { color: "white", fontWeight: "700", fontSize: 16 },
+  versionText: {
+    textAlign: "center",
+    color: COLORS.textTertiary,
+    fontSize: 12,
+    marginTop: 60,
+  },
 });

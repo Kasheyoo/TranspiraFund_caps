@@ -1,6 +1,9 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useCallback, useEffect, useState } from "react";
 import { BottomNavBar } from "../components/BottomNavBar";
+import { NotificationService } from "../services/NotificationService";
+import { getCurrentUserId } from "../utils/authGuard";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { NotificationsScreen } from "./screens/NotificationsScreen";
 import { ProjectDetailsScreen } from "./screens/ProjectDetailsScreen";
@@ -36,13 +39,39 @@ function SettingsNavigator() {
 }
 
 export function MainNavigator() {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!getCurrentUserId()) return;
+    try {
+      const notifications = await NotificationService.getAll();
+      const unread = notifications.filter((n) => n.status === "Unread").length;
+      setUnreadCount(unread);
+    } catch {
+      // Silently fail for badge count
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 60_000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
+
   return (
     <Tab.Navigator
       screenOptions={{ headerShown: false }}
       tabBar={(props) => (
         <BottomNavBar
           currentScreen={props.state.routes[props.state.index].name}
-          onNavigate={(screen) => props.navigation.navigate(screen)}
+          onNavigate={(screen) => {
+            props.navigation.navigate(screen);
+            if (screen === "Notifications") {
+              // Refresh count when navigating to notifications
+              setTimeout(fetchUnreadCount, 1000);
+            }
+          }}
+          notificationCount={unreadCount}
         />
       )}
     >

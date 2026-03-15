@@ -6,8 +6,13 @@ import { launchCamera } from "react-native-image-picker";
 import Geolocation from "react-native-geolocation-service";
 import { db, storage } from "../firebaseConfig";
 import { ProjectModel } from "../models/ProjectModel";
+import { requireAuth } from "../utils/authGuard";
 import { invalidateCache } from "../utils/cache";
+import { sanitizeInput } from "../utils/security";
 import type { Milestone, Project } from "../types";
+
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg"];
 
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS !== "android") return true;
@@ -65,6 +70,9 @@ export const useProjectDetailsPresenter = (
 
   const handleAddProof = async (m: Milestone) => {
     try {
+      // Auth guard
+      requireAuth();
+
       const locationGranted = await requestLocationPermission();
       if (!locationGranted) {
         Alert.alert(
@@ -81,9 +89,25 @@ export const useProjectDetailsPresenter = (
       });
 
       if (!result.didCancel && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+
+        // Validate file type
+        const fileType = asset.type || "";
+        if (!ALLOWED_IMAGE_TYPES.includes(fileType.toLowerCase())) {
+          Alert.alert("Invalid File", "Only JPEG and PNG images are allowed.");
+          return;
+        }
+
+        // Validate file size
+        const fileSize = asset.fileSize || 0;
+        if (fileSize > MAX_IMAGE_SIZE_BYTES) {
+          Alert.alert("File Too Large", "Image must be under 10MB.");
+          return;
+        }
+
         setIsLoading(true);
 
-        const photoUri = result.assets[0].uri!;
+        const photoUri = asset.uri!;
 
         const userLocation = await new Promise<{ latitude: number; longitude: number }>(
           (resolve, reject) => {
@@ -97,7 +121,9 @@ export const useProjectDetailsPresenter = (
         );
 
         const { latitude, longitude } = userLocation;
-        const filename = `proofs/${m.id}_${Date.now()}.jpg`;
+        // Sanitize milestone ID for filename
+        const safeId = sanitizeInput(m.id, 64).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `proofs/${safeId}_${Date.now()}.jpg`;
         const storageRef = ref(storage, filename);
 
         const response = await fetch(photoUri);

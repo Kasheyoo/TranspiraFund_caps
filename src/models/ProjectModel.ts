@@ -7,11 +7,13 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
+import { requireAuth } from "../utils/authGuard";
 import { getCached, setCached } from "../utils/cache";
 import type { Milestone, Project } from "../types";
 
 export class ProjectModel {
   static async getAll(): Promise<Project[]> {
+    requireAuth();
     try {
       const cached = getCached<Project[]>("projects_all");
       if (cached) return cached;
@@ -67,6 +69,7 @@ export class ProjectModel {
   }
 
   static async getById(projectId: string): Promise<Project | null> {
+    requireAuth();
     try {
       if (!projectId) return null;
       const docRef = doc(db, "projects", projectId);

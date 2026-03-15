@@ -2,13 +2,13 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import {
   Image,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
 
@@ -30,6 +30,7 @@ interface MilestoneDetailsViewProps {
 }
 
 export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProps) => {
+  const insets = useSafeAreaInsets();
   const { selectedMilestone: m, isLoading } = data || {};
 
   if (!m) return null;
@@ -40,8 +41,8 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
   const proofs = Array.isArray(m.proofs) ? [...m.proofs].reverse() : [];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { marginTop: insets.top }]}>
         <TouchableOpacity
           onPress={() => actions.onSelectMilestone(null)}
           style={styles.backBtn}
@@ -129,14 +130,13 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "white" },
   header: {
-    marginTop: 50,
     flexDirection: "row",
     alignItems: "center",
     padding: 16,

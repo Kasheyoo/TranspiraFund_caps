@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { auth, db } from "../firebaseConfig";
 import type { UserProfile } from "../types";
+import { passwordVerifyRateLimiter, validatePassword } from "../utils/security";
 
 export const useProfilePresenter = (
   onBack: () => void,
@@ -33,14 +34,21 @@ export const useProfilePresenter = (
 
   const verifyCurrentPassword = async (password: string): Promise<boolean> => {
     if (!password || password.length < 6) return false;
+
+    // Rate limiting for password verification
+    const rateLimitCheck = passwordVerifyRateLimiter.check("verify_password");
+    if (!rateLimitCheck.allowed) return false;
+
     try {
       const credential = EmailAuthProvider.credential(
         auth.currentUser!.email!,
         password,
       );
       await reauthenticateWithCredential(auth.currentUser!, credential);
+      passwordVerifyRateLimiter.reset("verify_password");
       return true;
     } catch {
+      passwordVerifyRateLimiter.recordAttempt("verify_password");
       return false;
     }
   };
@@ -49,6 +57,10 @@ export const useProfilePresenter = (
     currentPassword: string,
     newPassword: string,
   ): Promise<boolean> => {
+    // Enforce strong password policy
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) return false;
+
     try {
       const credential = EmailAuthProvider.credential(
         auth.currentUser!.email!,

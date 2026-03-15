@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, STYLES } from "../constants";
 import type { UserProfile } from "../types";
+import { validatePassword } from "../utils/security";
 
 interface PasswordState {
   current: string;
@@ -55,11 +56,8 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   const [isCurrentCorrect, setIsCurrentCorrect] = useState<boolean | null>(null);
   const [verifying, setVerifying] = useState(false);
 
-  const requirements = useMemo(() => {
-    const letterCount = (passwords.new.match(/[a-zA-Z]/g) || []).length;
-    const hasNumber = /\d/.test(passwords.new);
-    return { minLetters: letterCount >= 4, hasNumber };
-  }, [passwords.new]);
+  const requirements = useMemo(() => validatePassword(passwords.new), [passwords.new]);
+  const passwordsMatch = passwords.new.length > 0 && passwords.new === passwords.confirm;
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -78,10 +76,10 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   const handleUpdatePassword = async () => {
     if (!isCurrentCorrect)
       return Alert.alert("Error", "Current password incorrect.");
-    if (passwords.new !== passwords.confirm)
+    if (!requirements.isValid)
+      return Alert.alert("Security", "Please meet all password requirements.");
+    if (!passwordsMatch)
       return Alert.alert("Error", "Passwords do not match.");
-    if (!requirements.minLetters || !requirements.hasNumber)
-      return Alert.alert("Security", "Requirements not met.");
 
     setUpdating(true);
     const success = await actions.onChangePassword(passwords.current, passwords.new);
@@ -92,6 +90,8 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
       setPasswords({ current: "", new: "", confirm: "" });
       setIsCurrentCorrect(null);
       Alert.alert("Success", "Password changed successfully.");
+    } else {
+      Alert.alert("Error", "Failed to change password. Please try again.");
     }
   };
 
@@ -248,42 +248,41 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               </View>
 
               <View style={styles.checklistContainer}>
-                <View style={styles.reqRow}>
-                  <FontAwesome5
-                    name={requirements.minLetters ? "check-circle" : "circle"}
-                    size={10}
-                    color={requirements.minLetters ? COLORS.success : COLORS.textTertiary}
-                  />
-                  <Text
-                    style={[
-                      styles.reqText,
-                      requirements.minLetters && { color: COLORS.success },
-                    ]}
-                  >
-                    At least 4 letters
-                  </Text>
-                </View>
-                <View style={styles.reqRow}>
-                  <FontAwesome5
-                    name={requirements.hasNumber ? "check-circle" : "circle"}
-                    size={10}
-                    color={requirements.hasNumber ? COLORS.success : COLORS.textTertiary}
-                  />
-                  <Text
-                    style={[
-                      styles.reqText,
-                      requirements.hasNumber && { color: COLORS.success },
-                    ]}
-                  >
-                    At least 1 number
-                  </Text>
-                </View>
+                {[
+                  { met: requirements.minLength, label: "At least 8 characters" },
+                  { met: requirements.hasUppercase, label: "One uppercase letter (A-Z)" },
+                  { met: requirements.hasLowercase, label: "One lowercase letter (a-z)" },
+                  { met: requirements.hasNumber, label: "One number (0-9)" },
+                  { met: requirements.hasSpecialChar, label: "One special character" },
+                  ...(passwords.confirm.length > 0
+                    ? [{ met: passwordsMatch, label: "Passwords match" }]
+                    : []),
+                ].map((req) => (
+                  <View key={req.label} style={styles.reqRow}>
+                    <FontAwesome5
+                      name={req.met ? "check-circle" : "circle"}
+                      size={10}
+                      color={req.met ? COLORS.success : COLORS.textTertiary}
+                    />
+                    <Text
+                      style={[
+                        styles.reqText,
+                        req.met && { color: COLORS.success },
+                      ]}
+                    >
+                      {req.label}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
               <TouchableOpacity
-                style={styles.saveBtn}
+                style={[
+                  styles.saveBtn,
+                  (!requirements.isValid || !passwordsMatch || !isCurrentCorrect) && { opacity: 0.5 },
+                ]}
                 onPress={handleUpdatePassword}
-                disabled={updating || !isCurrentCorrect}
+                disabled={updating || !isCurrentCorrect || !requirements.isValid || !passwordsMatch}
               >
                 {updating ? (
                   <ActivityIndicator color="white" />

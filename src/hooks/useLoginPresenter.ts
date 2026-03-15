@@ -1,11 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-} from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { auth } from "../firebaseConfig";
+import { OTPService } from "../services/OTPService";
+import {
+  isValidEmail,
+  loginRateLimiter,
+  sanitizeFirebaseError,
+  sanitizeInput,
+} from "../utils/security";
 
 export const useLoginPresenter = (navigationCallback?: () => void) => {
   const [email, setEmail] = useState("");
@@ -14,6 +18,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isResetModalVisible, setIsResetModalVisible] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -30,16 +35,33 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
     load();
   }, []);
 
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setErrorMessage("");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutSeconds]);
+
   const onLogin = async () => {
     setErrorMessage("");
-    if (!email || !password) {
+    const cleanEmail = sanitizeInput(email, 254);
+
+    if (!cleanEmail || !password) {
       setErrorMessage("Enter email and password.");
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setErrorMessage("Enter a valid email address.");
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMessage("Please enter a valid email address.");
       return;
     }
     if (password.length < 6) {
@@ -47,46 +69,70 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       return;
     }
 
+    // Rate limiting
+    const rateLimitCheck = loginRateLimiter.check(cleanEmail);
+    if (!rateLimitCheck.allowed) {
+      setLockoutSeconds(rateLimitCheck.lockoutSeconds);
+      setErrorMessage(
+        `Too many login attempts. Please wait ${rateLimitCheck.lockoutSeconds}s.`,
+      );
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await signInWithEmailAndPassword(auth, cleanEmail, password);
+      loginRateLimiter.reset(cleanEmail);
       if (rememberMe) {
-        await AsyncStorage.setItem("saved_email", email.trim());
+        await AsyncStorage.setItem("saved_email", cleanEmail);
       } else {
         await AsyncStorage.removeItem("saved_email");
       }
       if (navigationCallback) navigationCallback();
     } catch (error) {
       const err = error as { code?: string };
-      if (err.code === "auth/invalid-email")
-        setErrorMessage("Invalid email format.");
-      else if (
-        err.code === "auth/user-not-found" ||
-        err.code === "auth/invalid-credential"
-      )
-        setErrorMessage("Account not found or password incorrect.");
-      else setErrorMessage("Authentication failed. Please try again.");
+      loginRateLimiter.recordAttempt(cleanEmail);
+
+      const check = loginRateLimiter.check(cleanEmail);
+      if (!check.allowed) {
+        setLockoutSeconds(check.lockoutSeconds);
+        setErrorMessage(
+          `Account temporarily locked. Try again in ${check.lockoutSeconds}s.`,
+        );
+      } else {
+        setErrorMessage(sanitizeFirebaseError(err.code));
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const onForgotPassword = async (resetEmail?: string) => {
-    const targetEmail = resetEmail || email;
+    const targetEmail = sanitizeInput(resetEmail || email, 254);
     if (!targetEmail) {
       Alert.alert("Input Required", "Enter your email address to receive a link.");
       return;
     }
+    if (!isValidEmail(targetEmail)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
     setIsLoading(true);
     try {
-      await sendPasswordResetEmail(auth, targetEmail);
+      // Uses web app's sendPasswordReset Cloud Function — branded email via Gmail
+      await OTPService.sendPasswordReset(targetEmail);
       setIsResetModalVisible(false);
       Alert.alert(
         "Reset Link Sent",
-        `Check your Gmail inbox for ${targetEmail}. Follow the link to reset your password.`,
+        "If an account exists for this email, a password reset link has been sent.",
       );
     } catch {
-      Alert.alert("Error", "Failed to send reset email.");
+      // Always show generic message — don't reveal if email exists
+      setIsResetModalVisible(false);
+      Alert.alert(
+        "Request Processed",
+        "If an account exists for this email, a password reset link has been sent.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -100,6 +146,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       isLoading,
       errorMessage,
       isResetModalVisible,
+      lockoutSeconds,
     },
     actions: {
       setEmail,

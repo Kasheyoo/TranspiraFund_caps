@@ -21,7 +21,24 @@ interface NotificationsData {
 interface NotificationsActions {
   onPressItem: (item: AppNotification) => void;
   refresh: () => void;
+  markAllAsRead?: () => void;
 }
+
+const getRelativeTime = (seconds: number): string => {
+  const now = Date.now();
+  const diff = now - seconds * 1000;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(seconds * 1000).toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  });
+};
 
 interface NotificationsViewProps {
   data: NotificationsData;
@@ -75,7 +92,7 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
             <Text style={styles.typeText}>{item.type || "Notification"}</Text>
             <Text style={styles.timeText}>
               {item.timestamp?.seconds
-                ? new Date(item.timestamp.seconds * 1000).toLocaleDateString()
+                ? getRelativeTime(item.timestamp.seconds)
                 : "Just now"}
             </Text>
           </View>
@@ -92,6 +109,12 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
     <View style={STYLES.container}>
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
         <Text style={styles.title}>Notifications</Text>
+        {notifications.some((n) => n.status === "Unread") && actions?.markAllAsRead && (
+          <TouchableOpacity onPress={actions.markAllAsRead} style={styles.markAllBtn}>
+            <FontAwesome5 name="check-double" size={12} color={COLORS.primary} />
+            <Text style={styles.markAllText}>Mark All Read</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.filterBar}>
@@ -154,8 +177,25 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
 };
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: 24, marginBottom: 12 },
+  header: {
+    paddingHorizontal: 24,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
   title: { fontSize: 28, fontWeight: "900", color: COLORS.textPrimary },
+  markAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primarySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+    marginBottom: 2,
+  },
+  markAllText: { fontSize: 11, fontWeight: "700", color: COLORS.primary },
   filterBar: { marginBottom: 8, height: 50 },
   filterTab: {
     paddingHorizontal: 16,

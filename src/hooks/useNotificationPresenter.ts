@@ -37,11 +37,29 @@ export const useNotificationPresenter = () => {
     }
   };
 
+  const handleMarkAllAsRead = async () => {
+    const unread = notifications.filter((n) => n.status === "Unread");
+    if (unread.length === 0) return;
+
+    // Optimistic update
+    setNotifications((prev) =>
+      prev.map((n) => (n.status === "Unread" ? { ...n, status: "Read" } : n)),
+    );
+
+    try {
+      await Promise.all(unread.map((n) => NotificationService.markAsRead(n.id)));
+    } catch (error) {
+      console.error("Mark All Read Error:", error);
+      loadNotifications();
+    }
+  };
+
   return {
     data: { notifications, isLoading },
     actions: {
       refresh: loadNotifications,
       onPressItem: handleItemPress,
+      markAllAsRead: handleMarkAllAsRead,
     },
   };
 };
