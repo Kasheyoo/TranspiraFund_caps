@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { auth, db } from "../firebaseConfig";
 import type { UserProfile } from "../types";
+import { logger } from "../utils/logger";
 import { passwordVerifyRateLimiter, validatePassword } from "../utils/security";
 
 export const useProfilePresenter = (
@@ -26,7 +27,7 @@ export const useProfilePresenter = (
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) setUserProfile(docSnap.data() as UserProfile);
     } catch (error) {
-      console.error("Profile Fetch Error:", error);
+      logger.error("Profile Fetch Error:", error);
     } finally {
       setIsLoading(false);
     }

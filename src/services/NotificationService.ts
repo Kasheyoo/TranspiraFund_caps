@@ -9,6 +9,7 @@ import {
 import { db } from "../firebaseConfig";
 import { requireAuth } from "../utils/authGuard";
 import { getCached, invalidateCache, setCached } from "../utils/cache";
+import { logger } from "../utils/logger";
 import type { AppNotification } from "../types";
 
 export const NotificationService = {
@@ -31,9 +32,9 @@ export const NotificationService = {
       return results;
     } catch (error: any) {
       if (error?.code === "permission-denied") {
-        console.warn("Notifications: insufficient Firestore permissions. Update security rules.");
+        // Expected during auth flow — user may not have completed login yet
       } else {
-        console.error("Error fetching notifications:", error);
+        logger.error("Error fetching notifications:", error);
       }
       return [];
     }
@@ -48,7 +49,7 @@ export const NotificationService = {
       return true;
     } catch (error: any) {
       if (error?.code !== "permission-denied") {
-        console.error("Error updating notification status:", error);
+        logger.error("Error updating notification status:", error);
       }
       return false;
     }

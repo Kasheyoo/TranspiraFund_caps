@@ -1,10 +1,27 @@
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { useAuth } from "../../context/AuthContext";
-import { auth, db } from "../../firebaseConfig";
+import { auth } from "../../firebaseConfig";
 import { OTPService } from "../../services/OTPService";
+import { sanitizeOTPError } from "../../utils/security";
 import { OTPVerificationView } from "../../views/OTPVerificationView";
+
+const BASE_URL =
+  "https://asia-southeast1-transpirafund-webapp.cloudfunctions.net";
+
+async function callFn(name: string, data: Record<string, unknown> = {}) {
+  const user = auth.currentUser;
+  if (!user) return;
+  const token = await user.getIdToken();
+  await fetch(`${BASE_URL}/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ data }),
+  });
+}
 
 const RESEND_COOLDOWN = 60;
 
@@ -40,8 +57,7 @@ export function OTPVerificationScreen() {
         await OTPService.sendCode();
         startResendTimer();
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Failed to send code.";
-        setErrorMessage(msg + " Tap 'Resend Code' to try again.");
+        setErrorMessage(sanitizeOTPError(e, "send") + " Tap 'Resend Code' to try again.");
         setResendSeconds(0); // Allow immediate resend
       } finally {
         setIsSending(false);
@@ -58,27 +74,18 @@ export function OTPVerificationScreen() {
     try {
       const success = await OTPService.verifyCode(code);
       if (success) {
-        // Write audit log so DEPW can monitor PROJ_ENG logins in the web app
-        try {
-          const user = auth.currentUser;
-          await addDoc(collection(db, "audit_logs"), {
-            uid: user?.uid ?? "",
-            email: user?.email ?? "",
-            action: "LOGIN",
-            details: "PROJ_ENG signed in via mobile app",
-            platform: "mobile",
-            timestamp: serverTimestamp(),
-          });
-        } catch {
-          // Audit log failure is non-blocking — proceed to main app regardless
-        }
+        // Log to both audit_logs and depwAuditTrails via Cloud Function
+        callFn("logMobileAudit", {
+          action: "LOGIN",
+          details: "PROJ_ENG signed in via mobile app",
+        }).catch(() => {}); // Non-blocking
+
         setIsOTPVerified(true); // AppNavigator proceeds to main app / force password change
       } else {
         setErrorMessage("Invalid or expired code. Tap the error to clear and try again.");
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Verification failed.";
-      setErrorMessage(msg);
+      setErrorMessage(sanitizeOTPError(e, "verify"));
     } finally {
       setIsLoading(false);
     }
@@ -92,8 +99,7 @@ export function OTPVerificationScreen() {
       startResendTimer();
       Alert.alert("Code Sent", "A new 6-digit code has been sent to your email.");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to resend code.";
-      setErrorMessage(msg + " Please try again.");
+      setErrorMessage(sanitizeOTPError(e, "send"));
     } finally {
       setIsSending(false);
     }

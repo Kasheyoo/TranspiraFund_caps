@@ -1,7 +1,8 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +12,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolateColor,
+} from "react-native-reanimated";
 import { COLORS, STYLES } from "../constants";
 import { ForgotPasswordModal } from "./ForgotPasswordView";
 
@@ -38,6 +47,37 @@ interface LoginViewProps {
   actions: LoginActions;
 }
 
+/** Reusable animated input wrapper with focus border transition */
+const FocusInput = ({
+  children,
+  isFocused,
+  style,
+}: {
+  children: React.ReactNode;
+  isFocused: boolean;
+  style?: object;
+}) => {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(isFocused ? 1 : 0, { duration: 200 });
+  }, [isFocused, progress]);
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      [COLORS.border, COLORS.primary],
+    ),
+    borderWidth: 1.5,
+  }));
+
+  return (
+    <Animated.View style={[styles.inputBase, style, borderStyle]}>
+      {children}
+    </Animated.View>
+  );
+};
+
 export const LoginView = ({ data, actions }: LoginViewProps) => {
   const {
     email,
@@ -59,7 +99,12 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
   } = actions || {};
 
   const [showPassword, setShowPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const isLocked = lockoutSeconds > 0;
+
+  const handleLogin = useCallback(() => {
+    if (!isLoading && !isLocked) onLogin?.();
+  }, [isLoading, isLocked, onLogin]);
 
   return (
     <KeyboardAvoidingView
@@ -67,30 +112,45 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
       style={STYLES.container}
     >
       <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          padding: 24,
-        }}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <FontAwesome5 name="layer-group" size={36} color={COLORS.primary} />
+        {/* Header — centered with circular logo */}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
+          <View style={styles.logoClip}>
+            <Image
+              source={require("../../assets/images/logo.png")}
+              style={styles.logoImage}
+              resizeMode="cover"
+            />
           </View>
           <Text style={styles.title}>TranspiraFund</Text>
-          <Text style={styles.subtitle}>Engineering Portal</Text>
-        </View>
+          <Text style={styles.subtitle}>Project Engineer Portal</Text>
+        </Animated.View>
 
-        <View style={STYLES.card}>
+        {/* Form Card */}
+        <Animated.View
+          entering={FadeInDown.delay(150).duration(500).springify().damping(20)}
+          style={STYLES.card}
+        >
           {errorMessage ? (
-            <View style={[styles.errorContainer, isLocked && styles.lockoutContainer]}>
+            <View
+              style={[
+                styles.errorContainer,
+                isLocked && styles.lockoutContainer,
+              ]}
+            >
               <FontAwesome5
                 name={isLocked ? "lock" : "exclamation-circle"}
                 size={14}
                 color={isLocked ? COLORS.warning : COLORS.error}
               />
-              <Text style={[styles.errorText, isLocked && { color: COLORS.warning }]}>
+              <Text
+                style={[
+                  styles.errorText,
+                  isLocked && { color: COLORS.warning },
+                ]}
+              >
                 {errorMessage}
               </Text>
             </View>
@@ -98,30 +158,39 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email Address</Text>
-            <TextInput
-              style={STYLES.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="name@lgu.gov.ph"
-              placeholderTextColor={COLORS.textTertiary}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoCorrect={false}
-              editable={!isLocked}
-            />
+            <FocusInput isFocused={focusedField === "email"}>
+              <TextInput
+                style={styles.inputInner}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="name@lgu.gov.ph"
+                placeholderTextColor={COLORS.textTertiary}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                editable={!isLocked}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+              />
+            </FocusInput>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordRow}>
+            <FocusInput
+              isFocused={focusedField === "password"}
+              style={styles.passwordRow}
+            >
               <TextInput
-                style={styles.passwordInput}
+                style={[styles.inputInner, { flex: 1 }]}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 placeholder="Enter your password"
                 placeholderTextColor={COLORS.textTertiary}
                 editable={!isLocked}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
@@ -129,11 +198,11 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               >
                 <FontAwesome5
                   name={showPassword ? "eye-slash" : "eye"}
-                  size={16}
+                  size={18}
                   color={COLORS.textTertiary}
                 />
               </TouchableOpacity>
-            </View>
+            </FocusInput>
           </View>
 
           <View style={styles.row}>
@@ -155,9 +224,13 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
           </View>
 
           <TouchableOpacity
-            style={[STYLES.button, (isLoading || isLocked) && { opacity: 0.5 }]}
-            onPress={onLogin}
+            style={[
+              STYLES.button,
+              (isLoading || isLocked) && { opacity: 0.5 },
+            ]}
+            onPress={handleLogin}
             disabled={isLoading || isLocked}
+            activeOpacity={0.85}
           >
             {isLoading ? (
               <ActivityIndicator color="white" />
@@ -167,9 +240,14 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               </Text>
             )}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        <Text style={styles.footer}>v1.0.6 — Official Access Only</Text>
+        <Animated.Text
+          entering={FadeIn.delay(300).duration(300)}
+          style={styles.footer}
+        >
+          v1.0.6 — Official Access Only
+        </Animated.Text>
 
         <ForgotPasswordModal
           visible={isResetModalVisible}
@@ -183,23 +261,40 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
 };
 
 const styles = StyleSheet.create({
-  header: { alignItems: "center", marginBottom: 32 },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: COLORS.surface,
-    borderRadius: 24,
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 24,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  logoClip: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-    elevation: 4,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
   },
-  title: { fontSize: 26, fontWeight: "800", color: COLORS.textPrimary },
-  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4, fontWeight: "600" },
+  logoImage: {
+    width: 112,
+    height: 112,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    fontWeight: "600",
+  },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -211,28 +306,34 @@ const styles = StyleSheet.create({
   lockoutContainer: {
     backgroundColor: COLORS.warningSoft,
   },
-  errorText: { color: COLORS.error, fontWeight: "600", marginLeft: 10, flex: 1, fontSize: 13 },
+  errorText: {
+    color: COLORS.error,
+    fontWeight: "600",
+    marginLeft: 10,
+    flex: 1,
+    fontSize: 14,
+  },
   inputGroup: { marginBottom: 16 },
   label: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 8,
   },
-  passwordRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  inputBase: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: 12,
+    overflow: "hidden",
   },
-  passwordInput: {
-    flex: 1,
+  inputInner: {
     paddingHorizontal: 16,
     height: 56,
     fontSize: 16,
     color: COLORS.textPrimary,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   eyeBtn: {
     padding: 16,
@@ -245,8 +346,8 @@ const styles = StyleSheet.create({
   },
   checkRow: { flexDirection: "row", alignItems: "center" },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: 6,
     borderWidth: 2,
     borderColor: COLORS.border,
@@ -255,9 +356,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkText: { color: COLORS.textSecondary, fontSize: 14 },
-  link: { color: COLORS.primary, fontWeight: "700", fontSize: 14 },
-  btnText: { color: "white", fontSize: 16, fontWeight: "700" },
+  checkText: { color: COLORS.textSecondary, fontSize: 15 },
+  link: { color: COLORS.primary, fontWeight: "700", fontSize: 15 },
+  btnText: { color: "white", fontSize: 17, fontWeight: "700" },
   footer: {
     textAlign: "center",
     color: COLORS.textTertiary,

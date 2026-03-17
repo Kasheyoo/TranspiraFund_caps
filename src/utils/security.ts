@@ -150,6 +150,31 @@ export const sanitizeFirebaseError = (errorCode?: string): string => {
   }
 };
 
+// --- OTP Error Sanitizer ---
+
+/** Map OTP/Cloud Function errors to safe user-facing messages */
+export const sanitizeOTPError = (
+  error: unknown,
+  context: "send" | "verify",
+): string => {
+  const msg = error instanceof Error ? error.message.toLowerCase() : "";
+
+  if (msg.includes("too many") || msg.includes("rate limit") || msg.includes("resource-exhausted"))
+    return "Too many attempts. Please wait before trying again.";
+  if (msg.includes("expired"))
+    return "Code has expired. Please request a new code.";
+  if (msg.includes("invalid") || msg.includes("incorrect"))
+    return "Invalid code. Please check and try again.";
+  if (msg.includes("not authenticated") || msg.includes("unauthenticated"))
+    return "Session expired. Please log in again.";
+  if (msg.includes("network") || msg.includes("fetch"))
+    return "Network error. Check your internet connection.";
+
+  return context === "send"
+    ? "Unable to send verification code. Please try again."
+    : "Verification failed. Please try again.";
+};
+
 // --- Session Timeout ---
 
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes

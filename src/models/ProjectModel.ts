@@ -9,6 +9,7 @@ import {
 import { db } from "../firebaseConfig";
 import { requireAuth } from "../utils/authGuard";
 import { getCached, setCached } from "../utils/cache";
+import { logger } from "../utils/logger";
 import type { Milestone, Project } from "../types";
 
 export class ProjectModel {
@@ -63,7 +64,7 @@ export class ProjectModel {
       setCached("projects_all", result);
       return result;
     } catch (error) {
-      console.error("Error fetching projects:", error);
+      logger.error("Error fetching projects:", error);
       return [];
     }
   }
@@ -91,7 +92,7 @@ export class ProjectModel {
       );
       return projectData;
     } catch (error) {
-      console.error("ProjectModel Error:", error);
+      logger.error("ProjectModel Error:", error);
       return null;
     }
   }

@@ -31,5 +31,14 @@ yarn-error.*
 # Firebase Cloud Functions compiled output
 functions/lib/
 
-# APK build output
+# Android build artifacts
 android/app/build/
+android/.gradle/
+android/build/
+android/.idea/
+android/local.properties
+
+# iOS build artifacts
+ios/build/
+ios/Pods/
+ios/DerivedData/

@@ -10,6 +10,7 @@ import {
   sanitizeFirebaseError,
   sanitizeInput,
 } from "../utils/security";
+import { logger } from "../utils/logger";
 
 export const useLoginPresenter = (navigationCallback?: () => void) => {
   const [email, setEmail] = useState("");
@@ -29,7 +30,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
           setRememberMe(true);
         }
       } catch (e) {
-        console.error("AsyncStorage Load Error:", e);
+        logger.error("AsyncStorage Load Error:", e);
       }
     };
     load();

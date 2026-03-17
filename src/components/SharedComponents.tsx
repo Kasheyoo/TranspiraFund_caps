@@ -1,6 +1,7 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useState } from "react";
 import {
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -8,6 +9,11 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 import { COLORS } from "../constants";
 
 interface PrimaryButtonProps {
@@ -15,25 +21,50 @@ interface PrimaryButtonProps {
   title: string;
   style?: ViewStyle;
   icon?: string;
+  disabled?: boolean;
 }
 
-export const PrimaryButton = ({ onPress, title, style, icon }: PrimaryButtonProps) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={[styles.button, style]}
-    activeOpacity={0.8}
-  >
-    {icon && (
-      <FontAwesome5
-        name={icon}
-        size={16}
-        color="white"
-        style={{ marginRight: 8 }}
-      />
-    )}
-    <Text style={styles.buttonText}>{title}</Text>
-  </TouchableOpacity>
-);
+export const PrimaryButton = ({
+  onPress,
+  title,
+  style,
+  icon,
+  disabled,
+}: PrimaryButtonProps) => {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Pressable
+      onPressIn={() => {
+        if (!disabled) {
+          scale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
+        }
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+      }}
+      onPress={disabled ? undefined : onPress}
+    >
+      <Animated.View
+        style={[styles.button, style, disabled && { opacity: 0.5 }, animatedStyle]}
+      >
+        {icon && (
+          <FontAwesome5
+            name={icon}
+            size={16}
+            color="white"
+            style={{ marginRight: 8 }}
+          />
+        )}
+        <Text style={styles.buttonText}>{title}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 interface BlockInputProps {
   icon: string;
@@ -95,7 +126,6 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "700",
-    fontFamily: "Inter-Bold",
   },
   inputContainer: {
     flexDirection: "row",
@@ -113,7 +143,6 @@ const styles = StyleSheet.create({
     height: "100%",
     fontSize: 15,
     color: COLORS.textDark,
-    fontFamily: "Inter-Regular",
     paddingRight: 16,
   },
   eyeBtn: {

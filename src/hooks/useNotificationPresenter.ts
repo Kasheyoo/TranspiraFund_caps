@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { NotificationService } from "../services/NotificationService";
 import type { AppNotification } from "../types";
+import { logger } from "../utils/logger";
 
 export const useNotificationPresenter = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -12,7 +13,7 @@ export const useNotificationPresenter = () => {
       const data = await NotificationService.getAll();
       setNotifications(data);
     } catch (error) {
-      console.error("Load Notifications Error:", error);
+      logger.error("Load Notifications Error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -31,7 +32,7 @@ export const useNotificationPresenter = () => {
       try {
         await NotificationService.markAsRead(item.id);
       } catch (error) {
-        console.error("Mark Read Error:", error);
+        logger.error("Mark Read Error:", error);
         loadNotifications();
       }
     }
@@ -49,7 +50,7 @@ export const useNotificationPresenter = () => {
     try {
       await Promise.all(unread.map((n) => NotificationService.markAsRead(n.id)));
     } catch (error) {
-      console.error("Mark All Read Error:", error);
+      logger.error("Mark All Read Error:", error);
       loadNotifications();
     }
   };

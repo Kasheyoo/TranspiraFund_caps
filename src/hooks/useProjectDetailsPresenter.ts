@@ -9,6 +9,7 @@ import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
 import { invalidateCache } from "../utils/cache";
 import { sanitizeInput } from "../utils/security";
+import { logger } from "../utils/logger";
 import type { Milestone, Project } from "../types";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -58,7 +59,7 @@ export const useProjectDetailsPresenter = (
       }
       setProject(data);
     } catch (e) {
-      console.error("Load Project Error:", e);
+      logger.error("Load Project Error:", e);
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +151,7 @@ export const useProjectDetailsPresenter = (
         Alert.alert("Success", "Evidence and GPS coordinates saved.");
       }
     } catch (error) {
-      console.error("Upload Error:", error);
+      logger.error("Upload Error:", error);
       Alert.alert("Error", "Failed to save evidence log.");
     } finally {
       setIsLoading(false);

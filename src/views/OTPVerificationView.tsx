@@ -9,6 +9,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 import { COLORS, STYLES } from "../constants";
 
 interface OTPVerificationViewProps {
@@ -23,6 +30,65 @@ interface OTPVerificationViewProps {
 }
 
 const CELL_COUNT = 6;
+
+/** Animated OTP cell with pop effect on digit entry */
+const OTPCell = ({
+  digit,
+  index,
+  hasError,
+  inputRef,
+  onChangeText,
+  onKeyPress,
+  isLoading,
+}: {
+  digit: string;
+  index: number;
+  hasError: boolean;
+  inputRef: (ref: TextInput | null) => void;
+  onChangeText: (text: string) => void;
+  onKeyPress: (key: string) => void;
+  isLoading: boolean;
+}) => {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handleChange = (text: string) => {
+    if (text.length >= 1) {
+      scale.value = withSpring(1.08, { damping: 12, stiffness: 400 });
+      setTimeout(() => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+      }, 80);
+    }
+    onChangeText(text);
+  };
+
+  return (
+    <Animated.View
+      entering={FadeIn.delay(200 + index * 60).duration(300)}
+      style={animatedStyle}
+    >
+      <TextInput
+        ref={inputRef}
+        style={[
+          styles.otpCell,
+          digit ? styles.otpCellFilled : null,
+          hasError ? styles.otpCellError : null,
+        ]}
+        value={digit}
+        onChangeText={handleChange}
+        onKeyPress={({ nativeEvent }) => onKeyPress(nativeEvent.key)}
+        keyboardType="numeric"
+        maxLength={6}
+        selectTextOnFocus
+        autoFocus={index === 0}
+        editable={!isLoading}
+      />
+    </Animated.View>
+  );
+};
 
 export const OTPVerificationView = ({
   email,
@@ -43,7 +109,9 @@ export const OTPVerificationView = ({
     if (text.length > 1) {
       const digits = text.replace(/\D/g, "").split("").slice(0, CELL_COUNT);
       const next = [...Array(CELL_COUNT).fill("")];
-      digits.forEach((d, i) => { next[i] = d; });
+      digits.forEach((d, i) => {
+        next[i] = d;
+      });
       setOtp(next);
       const lastFilled = Math.min(digits.length, CELL_COUNT - 1);
       inputRefs.current[lastFilled]?.focus();
@@ -85,66 +153,96 @@ export const OTPVerificationView = ({
   return (
     <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
       {/* Back button */}
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <FontAwesome5 name="arrow-left" size={16} color={COLORS.textSecondary} />
-        <Text style={styles.backText}>Back to Login</Text>
-      </TouchableOpacity>
+      <Animated.View entering={FadeIn.duration(300)}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+          <FontAwesome5
+            name="arrow-left"
+            size={16}
+            color={COLORS.textSecondary}
+          />
+          <Text style={styles.backText}>Back to Login</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
       <View style={styles.content}>
-        {/* Icon */}
-        <View style={styles.iconCircle}>
-          <FontAwesome5 name="envelope-open-text" size={32} color={COLORS.primary} />
-        </View>
+        {/* Header — inline icon with title, left-aligned */}
+        <Animated.View
+          entering={FadeIn.delay(100).duration(400)}
+          style={styles.headerRow}
+        >
+          <FontAwesome5
+            name="envelope-open-text"
+            size={20}
+            color={COLORS.primary}
+          />
+          <Text style={styles.title}>Check your email</Text>
+        </Animated.View>
 
-        <Text style={styles.title}>Check your email</Text>
-        <Text style={styles.subtitle}>
+        <Animated.Text
+          entering={FadeIn.delay(150).duration(400)}
+          style={styles.subtitle}
+        >
           We sent a 6-digit verification code to
-        </Text>
-        <Text style={styles.emailText}>{maskedEmail}</Text>
+        </Animated.Text>
+        <Animated.Text
+          entering={FadeIn.delay(180).duration(400)}
+          style={styles.emailText}
+        >
+          {maskedEmail}
+        </Animated.Text>
 
         {/* OTP cells */}
         <View style={styles.otpRow}>
           {otp.map((digit, index) => (
-            <TextInput
+            <OTPCell
               key={index}
-              ref={(ref) => { inputRefs.current[index] = ref; }}
-              style={[
-                styles.otpCell,
-                digit ? styles.otpCellFilled : null,
-                errorMessage ? styles.otpCellError : null,
-              ]}
-              value={digit}
+              digit={digit}
+              index={index}
+              hasError={!!errorMessage}
+              inputRef={(ref) => {
+                inputRefs.current[index] = ref;
+              }}
               onChangeText={(text) => handleChange(text, index)}
-              onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
-              keyboardType="numeric"
-              maxLength={6}
-              selectTextOnFocus
-              autoFocus={index === 0}
-              editable={!isLoading}
+              onKeyPress={(key) => handleKeyPress(key, index)}
+              isLoading={isLoading}
             />
           ))}
         </View>
 
         {/* Error */}
         {errorMessage ? (
-          <TouchableOpacity style={styles.errorBox} onPress={resetOtp}>
-            <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.error} />
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </TouchableOpacity>
+          <Animated.View entering={FadeInDown.duration(300)}>
+            <TouchableOpacity style={styles.errorBox} onPress={resetOtp}>
+              <FontAwesome5
+                name="exclamation-circle"
+                size={13}
+                color={COLORS.error}
+              />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </TouchableOpacity>
+          </Animated.View>
         ) : null}
 
         {/* Verify button */}
-        <TouchableOpacity
-          style={[STYLES.button, (!isComplete || isLoading) && { opacity: 0.5 }]}
-          onPress={handleSubmit}
-          disabled={!isComplete || isLoading}
+        <Animated.View
+          entering={FadeIn.delay(500).duration(300)}
+          style={{ width: "100%" }}
         >
-          {isLoading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.btnText}>Verify Code</Text>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              STYLES.button,
+              (!isComplete || isLoading) && { opacity: 0.5 },
+            ]}
+            onPress={handleSubmit}
+            disabled={!isComplete || isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.btnText}>Verify Code</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* Resend */}
         <View style={styles.resendRow}>
@@ -163,16 +261,23 @@ export const OTPVerificationView = ({
           )}
         </View>
 
-        <Text style={styles.hint}>
+        <Animated.Text
+          entering={FadeIn.delay(600).duration(300)}
+          style={styles.hint}
+        >
           Code expires in 5 minutes. Check your spam folder if not received.
-        </Text>
+        </Animated.Text>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, paddingHorizontal: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 24,
+  },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -180,19 +285,32 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignSelf: "flex-start",
   },
-  backText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: "600" },
-  content: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 60 },
-  iconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 24,
+  backText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
   },
-  title: { fontSize: 26, fontWeight: "800", color: COLORS.textPrimary, marginBottom: 8 },
-  subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: "center" },
+  content: {
+    flex: 1,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingBottom: 60,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+  },
   emailText: {
     fontSize: 15,
     fontWeight: "700",
@@ -204,11 +322,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: 24,
+    alignSelf: "center",
   },
   otpCell: {
-    width: 48,
-    height: 58,
-    borderRadius: 14,
+    width: 50,
+    height: 60,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: COLORS.border,
     backgroundColor: COLORS.surface,
@@ -236,13 +355,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     width: "100%",
   },
-  errorText: { color: COLORS.error, fontWeight: "600", fontSize: 13, flex: 1 },
+  errorText: {
+    color: COLORS.error,
+    fontWeight: "600",
+    fontSize: 13,
+    flex: 1,
+  },
   btnText: { color: "white", fontSize: 16, fontWeight: "700" },
   resendRow: {
     marginTop: 20,
     alignItems: "center",
     height: 32,
     justifyContent: "center",
+    alignSelf: "center",
   },
   resendTimer: { fontSize: 13, color: COLORS.textSecondary },
   resendBtn: {
@@ -256,11 +381,12 @@ const styles = StyleSheet.create({
   },
   resendLink: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
   hint: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textTertiary,
     textAlign: "center",
     marginTop: 24,
     lineHeight: 18,
     paddingHorizontal: 16,
+    alignSelf: "center",
   },
 });

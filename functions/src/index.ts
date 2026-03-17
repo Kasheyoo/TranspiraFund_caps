@@ -15,6 +15,23 @@ const MAX_ATTEMPTS  = 3;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Logs an audit event to both audit_logs and depwAuditTrails (Admin SDK) */
+async function logAudit(uid: string, email: string, action: string, details: string) {
+  const entry = {
+    uid,
+    email,
+    action,
+    details,
+    platform: "mobile",
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await Promise.all([
+    admin.firestore().collection("audit_logs").add(entry),
+    admin.firestore().collection("depwAuditTrails").add(entry),
+  ]);
+}
+
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -153,5 +170,58 @@ export const verifyMobileOTP = onCall(async (request) => {
 
   // ✓ Correct — delete OTP record, return success
   await otpRef.delete();
+  return { success: true };
+});
+
+// ─── completePasswordChange ──────────────────────────────────────────────────
+//
+//  Called by mobile app after user successfully changes their password
+//  via Firebase Auth (updatePassword). Sets mustChangePassword = false
+//  using Admin SDK (bypasses Firestore security rules).
+//
+export const completePasswordChange = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const uid = request.auth.uid;
+  const userRef = admin.firestore().doc(`users/${uid}`);
+  const userDoc = await userRef.get();
+
+  if (!userDoc.exists) {
+    throw new HttpsError("not-found", "User document not found.");
+  }
+
+  await userRef.update({ mustChangePassword: false });
+
+  // Log PASSWORD_CHANGE to both audit_logs and depwAuditTrails
+  const email = request.auth.token.email || "";
+  await logAudit(uid, email, "PASSWORD_CHANGE", "PROJ_ENG completed first-time password change");
+
+  return { success: true };
+});
+
+// ─── logMobileAudit ──────────────────────────────────────────────────────────
+//
+//  General-purpose audit logger for the mobile app.
+//  Writes to BOTH audit_logs (readable by PROJ_ENG, MIS, DEPW) and
+//  depwAuditTrails (readable by DEPW HEAD on web app).
+//  Uses Admin SDK to bypass Firestore security rules.
+//
+export const logMobileAudit = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const { action, details } = request.data as { action?: string; details?: string };
+  if (!action || !details) {
+    throw new HttpsError("invalid-argument", "action and details are required.");
+  }
+
+  const uid = request.auth.uid;
+  const email = request.auth.token.email || "";
+
+  await logAudit(uid, email, action, details);
+
   return { success: true };
 });

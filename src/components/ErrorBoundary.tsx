@@ -2,6 +2,7 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COLORS } from "../constants";
+import { logger } from "../utils/logger";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -25,9 +26,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     // Log error for debugging (production: send to error reporting service)
-    console.error("ErrorBoundary caught:", error.message);
+    logger.error("ErrorBoundary caught:", error.message);
     if (errorInfo.componentStack) {
-      console.error("Component stack:", errorInfo.componentStack);
+      logger.error("Component stack:", errorInfo.componentStack);
     }
   }
 

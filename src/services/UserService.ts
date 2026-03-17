@@ -6,6 +6,7 @@ import {
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import type { UserProfile } from "../types";
+import { logger } from "../utils/logger";
 
 export class UserService {
   static async getUserProfile(): Promise<UserProfile | null> {
@@ -21,7 +22,7 @@ export class UserService {
       }
       return null;
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      logger.error("Error fetching profile:", error);
       return null;
     }
   }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ProjectModel } from "../models/ProjectModel";
 import { AuditService } from "../services/AuditService";
 import type { AuditLog, DashboardStats } from "../types";
+import { logger } from "../utils/logger";
 
 export const useDashboardPresenter = (_navigationCallback?: () => void) => {
   const [stats, setStats] = useState<DashboardStats>({ progress: 0, done: 0, delay: 0 });
@@ -37,7 +38,7 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
       const logs = await AuditService.getAll();
       setRecentLogs(logs);
     } catch (error) {
-      console.error("Dashboard Load Error:", error);
+      logger.error("Dashboard Load Error:", error);
     } finally {
       setIsLoading(false);
     }

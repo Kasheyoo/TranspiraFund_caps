@@ -1,2 +1,2 @@
 export { COLORS } from "./colors";
-export { STYLES } from "./styles";
+export { STYLES, TIMING } from "./styles";

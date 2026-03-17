@@ -1,6 +1,13 @@
 import { Platform, StyleSheet } from "react-native";
 import { COLORS } from "./colors";
 
+export const TIMING = {
+  entrance: 500,
+  stagger: 80,
+  buttonPress: 150,
+  inputFocus: 200,
+} as const;
+
 export const STYLES = StyleSheet.create({
   container: {
     flex: 1,

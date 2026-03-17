@@ -11,7 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { COLORS, STYLES } from "../constants";
+import { PrimaryButton } from "../components/SharedComponents";
 import { isValidEmail, sanitizeInput } from "../utils/security";
 
 interface ForgotPasswordModalProps {
@@ -58,15 +60,11 @@ export const ForgotPasswordModal = ({
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalContainer}
         >
-          <View style={styles.card}>
+          <Animated.View
+            entering={FadeIn.duration(250)}
+            style={styles.card}
+          >
             <View style={styles.modalHeader}>
-              <View style={styles.iconCircle}>
-                <FontAwesome5
-                  name="envelope-open-text"
-                  size={20}
-                  color={COLORS.primary}
-                />
-              </View>
               <Text style={styles.modalTitle}>Reset Password</Text>
               <Text style={styles.modalSubtitle}>
                 A secure reset link will be sent to your registered email.
@@ -75,7 +73,11 @@ export const ForgotPasswordModal = ({
 
             {error ? (
               <View style={styles.errorBox}>
-                <FontAwesome5 name="exclamation-circle" size={12} color={COLORS.error} />
+                <FontAwesome5
+                  name="exclamation-circle"
+                  size={12}
+                  color={COLORS.error}
+                />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
@@ -97,22 +99,23 @@ export const ForgotPasswordModal = ({
               />
             </View>
 
-            <TouchableOpacity
-              style={[STYLES.button, isLoading && { opacity: 0.8 }]}
+            <PrimaryButton
+              title={isLoading ? "" : "Send Reset Link"}
               onPress={handleSend}
               disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={styles.btnText}>Send Reset Link</Text>
-              )}
-            </TouchableOpacity>
+              style={{ width: "100%" }}
+            />
+            {isLoading && (
+              <ActivityIndicator
+                color="white"
+                style={{ position: "absolute", bottom: 82, alignSelf: "center" }}
+              />
+            )}
 
             <TouchableOpacity onPress={handleClose} style={styles.cancelBtn}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -133,22 +136,19 @@ const styles = StyleSheet.create({
     padding: 24,
     elevation: 10,
   },
-  modalHeader: { alignItems: "center", marginBottom: 24 },
-  iconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
+  modalHeader: {
+    alignItems: "flex-start",
+    marginBottom: 24,
   },
-  modalTitle: { fontSize: 20, fontWeight: "800", color: COLORS.textPrimary },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+  },
   modalSubtitle: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    textAlign: "center",
-    marginTop: 4,
+    marginTop: 6,
     lineHeight: 20,
   },
   errorBox: {
@@ -173,7 +173,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 8,
   },
-  btnText: { color: "white", fontSize: 16, fontWeight: "700" },
   cancelBtn: { marginTop: 15, alignItems: "center" },
   cancelText: { color: COLORS.textTertiary, fontWeight: "600" },
 });

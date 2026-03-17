@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProjectModel } from "../models/ProjectModel";
 import type { Project } from "../types";
+import { logger } from "../utils/logger";
 
 export const useProjectListPresenter = (
   onSelectProject: (projectId: string) => void,
@@ -16,7 +17,7 @@ export const useProjectListPresenter = (
       const data = await ProjectModel.getAll();
       setProjects(data);
     } catch (error) {
-      console.error("Error loading projects:", error);
+      logger.error("Error loading projects:", error);
     } finally {
       setIsLoading(false);
     }
