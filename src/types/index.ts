@@ -56,7 +56,7 @@ export interface AppNotification {
   timestamp?: FirestoreTimestamp;
 }
 
-export interface AuditLog {
+export interface AuditTrail {
   id: string;
   action?: string;
   details?: string;

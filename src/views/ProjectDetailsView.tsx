@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   infoText: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#8E8E93",
     marginLeft: 10,
     fontWeight: "500",
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   milestoneHeading: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "800",
     color: "#8E8E93",
     marginBottom: 16,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   mTitle: { fontSize: 15, fontWeight: "700", color: "#1A1C1E", lineHeight: 20 },
   textLocked: { color: "#8E8E93" },
   mStatus: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#8E8E93",
     marginTop: 4,
     fontWeight: "600",

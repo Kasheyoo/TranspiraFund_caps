@@ -1,10 +1,11 @@
 import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, PermissionsAndroid, Platform } from "react-native";
+import { Alert, PermissionsAndroid } from "react-native";
 import { launchCamera } from "react-native-image-picker";
 import Geolocation from "react-native-geolocation-service";
 import { db, storage } from "../firebaseConfig";
+import { callFn } from "../services/CloudFunctionService";
 import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
 import { invalidateCache } from "../utils/cache";
@@ -16,7 +17,6 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg"];
 
 const requestLocationPermission = async (): Promise<boolean> => {
-  if (Platform.OS !== "android") return true;
   const granted = await PermissionsAndroid.request(
     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     {
@@ -145,6 +145,13 @@ export const useProjectDetailsPresenter = (
           proofs: arrayUnion(newProof),
           status: "Pending",
         });
+
+        // Audit: PROOF_UPLOAD syncs to DEPW HEAD (core field activity)
+        callFn("logMobileAuditTrail", {
+          action: "Proof Uploaded",
+          details: project?.projectTitle ?? "Project",
+          syncToDEPW: true,
+        }).catch(() => {}); // Non-blocking
 
         invalidateCache("projects_all");
         await loadProject();

@@ -4,7 +4,6 @@ import {
   Alert,
   Linking,
   PermissionsAndroid,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -15,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, STYLES } from "../constants";
+import { LogoutModal } from "../components/LogoutModal";
 
 interface SettingsViewProps {
   onLogout: () => void;
@@ -35,6 +35,7 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   const insets = useSafeAreaInsets();
   const { userProfile } = useAuth();
   const [isPushEnabled, setIsPushEnabled] = useState(false);
+  const [isLogoutVisible, setIsLogoutVisible] = useState(false);
 
   const displayName = userProfile?.firstName
     ? `${userProfile.firstName} ${userProfile.lastName || ""}`.trim()
@@ -50,31 +51,27 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
 
   useEffect(() => {
     (async () => {
-      if (Platform.OS === "android") {
-        const granted = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
-        );
-        setIsPushEnabled(granted);
-      }
+      const granted = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
+      );
+      setIsPushEnabled(granted);
     })();
   }, []);
 
   const handleToggleNotifications = async (value: boolean) => {
     if (value) {
-      if (Platform.OS === "android") {
-        const result = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
+      const result = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
+      );
+      if (result === PermissionsAndroid.RESULTS.GRANTED) {
+        setIsPushEnabled(true);
+      } else {
+        Alert.alert(
+          "Permission Denied",
+          "Please enable notifications in your device settings.",
+          [{ text: "Open Settings", onPress: () => Linking.openSettings() }],
         );
-        if (result === PermissionsAndroid.RESULTS.GRANTED) {
-          setIsPushEnabled(true);
-        } else {
-          Alert.alert(
-            "Permission Denied",
-            "Please enable notifications in your device settings.",
-            [{ text: "Open Settings", onPress: () => Linking.openSettings() }],
-          );
-          setIsPushEnabled(false);
-        }
+        setIsPushEnabled(false);
       }
     } else {
       setIsPushEnabled(false);
@@ -82,10 +79,12 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   };
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Log Out", style: "destructive", onPress: onLogout },
-    ]);
+    setIsLogoutVisible(true);
+  };
+
+  const confirmLogout = () => {
+    setIsLogoutVisible(false);
+    onLogout();
   };
 
   const SettingItem = ({
@@ -181,6 +180,15 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
           />
         </View>
 
+        <Text style={styles.sectionTitle}>ACTIVITY</Text>
+        <View style={styles.section}>
+          <SettingItem
+            icon="history"
+            label="Audit Trail"
+            onPress={() => onNavigate("AuditTrail")}
+          />
+        </View>
+
         <Text style={styles.sectionTitle}>ACCOUNT</Text>
         <View style={styles.section}>
           <SettingItem
@@ -193,6 +201,12 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
 
         <Text style={styles.versionText}>TranspiraFund v1.0.6</Text>
       </ScrollView>
+
+      <LogoutModal
+        visible={isLogoutVisible}
+        onClose={() => setIsLogoutVisible(false)}
+        onConfirm={confirmLogout}
+      />
     </View>
   );
 };
@@ -219,7 +233,7 @@ const styles = StyleSheet.create({
   avatarCircle: {
     width: 48,
     height: 48,
-    borderRadius: 16,
+    borderRadius: 24,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -227,7 +241,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: "#FFF", fontSize: 18, fontWeight: "800" },
   profileName: { fontSize: 16, fontWeight: "800", color: COLORS.textPrimary },
-  profileRole: { fontSize: 12, fontWeight: "600", color: COLORS.textSecondary, marginTop: 2 },
+  profileRole: { fontSize: 13, fontWeight: "600", color: COLORS.textSecondary, marginTop: 2 },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "800",

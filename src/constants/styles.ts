@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { COLORS } from "./colors";
 
 export const TIMING = {
@@ -6,6 +6,16 @@ export const TIMING = {
   stagger: 80,
   buttonPress: 150,
   inputFocus: 200,
+} as const;
+
+export const TYPOGRAPHY = {
+  h1: { fontSize: 28, fontWeight: "800" as const, color: COLORS.textPrimary, letterSpacing: -0.3 },
+  h2: { fontSize: 22, fontWeight: "700" as const, color: COLORS.textPrimary },
+  h3: { fontSize: 18, fontWeight: "700" as const, color: COLORS.textPrimary },
+  body: { fontSize: 16, color: COLORS.textSecondary, lineHeight: 24 },
+  label: { fontSize: 14, fontWeight: "700" as const, color: COLORS.textPrimary },
+  labelCaps: { fontSize: 12, fontWeight: "800" as const, color: COLORS.textTertiary, letterSpacing: 1.2 },
+  caption: { fontSize: 13, color: COLORS.textTertiary, lineHeight: 18 },
 } as const;
 
 export const STYLES = StyleSheet.create({
@@ -20,15 +30,8 @@ export const STYLES = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.5)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#64748B",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.06,
-        shadowRadius: 16,
-      },
-      android: { elevation: 3, shadowColor: "#64748B" },
-    }),
+    elevation: 3,
+    shadowColor: "#64748B",
   },
   input: {
     backgroundColor: COLORS.surface,
@@ -46,14 +49,6 @@ export const STYLES = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: { elevation: 4 },
-    }),
+    elevation: 4,
   },
 });

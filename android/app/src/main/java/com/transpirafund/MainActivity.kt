@@ -1,18 +1,16 @@
 package com.transpirafund
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
+import com.facebook.react.ReactRootView
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
 
-  /**
-   * Returns the name of the main component registered from JavaScript. This is used to schedule
-   * rendering of the component.
-   */
   override fun getMainComponentName(): String = "TranspiraFund"
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,12 +20,18 @@ class MainActivity : ReactActivity() {
       WindowManager.LayoutParams.FLAG_SECURE,
       WindowManager.LayoutParams.FLAG_SECURE
     )
+    // Force teal on every layer to eliminate any white flash
+    window.decorView.setBackgroundColor(Color.parseColor("#0F766E"))
+    window.statusBarColor = Color.parseColor("#0F766E")
+    window.navigationBarColor = Color.parseColor("#0F766E")
   }
 
-  /**
-   * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]
-   * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
-   */
   override fun createReactActivityDelegate(): ReactActivityDelegate =
-      DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+      object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
+        override fun createRootView(): ReactRootView {
+          val rootView = ReactRootView(this@MainActivity)
+          rootView.setBackgroundColor(Color.parseColor("#0F766E"))
+          return rootView
+        }
+      }
 }

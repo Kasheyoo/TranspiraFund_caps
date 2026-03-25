@@ -117,5 +117,5 @@ const styles = StyleSheet.create({
   },
   textContainer: { flex: 1, marginLeft: 16 },
   itemTitle: { fontSize: 15, fontWeight: "700", color: COLORS.textPrimary },
-  itemDesc: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  itemDesc: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
 });

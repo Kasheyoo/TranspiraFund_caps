@@ -2,7 +2,6 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   ScrollView,
   StatusBar,
@@ -23,12 +22,12 @@ import Animated, {
 } from "react-native-reanimated";
 import { COLORS } from "../constants";
 
-interface OTPVerificationViewProps {
+interface ForgotPasswordOTPViewProps {
   email: string;
   isLoading: boolean;
+  isSending: boolean;
   errorMessage: string;
   resendSeconds: number;
-  isSending: boolean;
   onSubmit: (code: string) => void;
   onResend: () => void;
   onBack: () => void;
@@ -101,16 +100,16 @@ const OTPCell = ({
   );
 };
 
-export const OTPVerificationView = ({
+export const ForgotPasswordOTPView = ({
   email,
   isLoading,
+  isSending,
   errorMessage,
   resendSeconds,
-  isSending,
   onSubmit,
   onResend,
   onBack,
-}: OTPVerificationViewProps) => {
+}: ForgotPasswordOTPViewProps) => {
   const insets = useSafeAreaInsets();
   const [otp, setOtp] = useState<string[]>(Array(CELL_COUNT).fill(""));
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -205,18 +204,12 @@ export const OTPVerificationView = ({
             entering={FadeIn.delay(100).duration(400)}
             style={styles.headerArea}
           >
-            <View style={styles.iconOuterRing}>
-              <View style={styles.logoClip}>
-                <Image
-                  source={require("../../assets/images/logo.png")}
-                  style={styles.logoImage}
-                  resizeMode="cover"
-                />
-              </View>
+            <View style={styles.iconCircle}>
+              <FontAwesome5 name="key" size={28} color="#FFFFFF" />
             </View>
-            <Text style={styles.headerTitle}>Verify Your Identity</Text>
+            <Text style={styles.headerTitle}>Check Your Email</Text>
             <Text style={styles.headerSubtitle}>
-              We sent a 6-digit code to
+              We sent a 6-digit reset code to
             </Text>
             <View style={styles.emailChip}>
               <FontAwesome5 name="envelope" size={11} color="rgba(255,255,255,0.9)" />
@@ -280,7 +273,7 @@ export const OTPVerificationView = ({
               ) : (
                 <>
                   <Text style={styles.verifyBtnText}>Verify Code</Text>
-                  <FontAwesome5 name="check-circle" size={15} color="#FFFFFF" />
+                  <FontAwesome5 name="arrow-right" size={14} color="#FFFFFF" />
                 </>
               )}
             </TouchableOpacity>
@@ -297,7 +290,7 @@ export const OTPVerificationView = ({
               {isSending ? (
                 <View style={styles.sendingRow}>
                   <ActivityIndicator size="small" color={COLORS.primary} />
-                  <Text style={styles.sendingText}>Sending code...</Text>
+                  <Text style={styles.sendingText}>Sending new code...</Text>
                 </View>
               ) : resendSeconds > 0 ? (
                 <Text style={styles.resendTimer}>
@@ -316,7 +309,7 @@ export const OTPVerificationView = ({
             <View style={styles.hintNote}>
               <FontAwesome5 name="clock" size={10} color={COLORS.textTertiary} />
               <Text style={styles.hintText}>
-                Code expires in 5 minutes · Check your spam folder
+                Code expires in 10 minutes · Check your spam folder
               </Text>
             </View>
           </Animated.View>
@@ -382,26 +375,16 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     width: "100%",
   },
-  iconOuterRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: "rgba(255,255,255,0.15)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
-  },
-  logoClip: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    overflow: "hidden",
-  },
-  logoImage: {
-    width: 56,
-    height: 56,
   },
   headerTitle: {
     fontSize: 26,

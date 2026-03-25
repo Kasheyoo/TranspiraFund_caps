@@ -12,15 +12,26 @@ import { AboutAppScreen } from "./screens/AboutAppScreen";
 import { HelpCenterScreen } from "./screens/HelpCenterScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
+import { AuditTrailScreen } from "./screens/AuditTrailScreen";
 import { ROUTES } from "./routes";
 
 const Tab = createBottomTabNavigator();
+const DashboardStack = createNativeStackNavigator();
 const ProjectsStack = createNativeStackNavigator();
 const SettingsStack = createNativeStackNavigator();
 
+function DashboardNavigator() {
+  return (
+    <DashboardStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+      <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
+      <DashboardStack.Screen name={ROUTES.AUDIT_TRAIL} component={AuditTrailScreen} />
+    </DashboardStack.Navigator>
+  );
+}
+
 function ProjectsNavigator() {
   return (
-    <ProjectsStack.Navigator screenOptions={{ headerShown: false }}>
+    <ProjectsStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
       <ProjectsStack.Screen name={ROUTES.PROJECT_LIST} component={ProjectListScreen} />
       <ProjectsStack.Screen name={ROUTES.PROJECT_DETAILS} component={ProjectDetailsScreen} />
     </ProjectsStack.Navigator>
@@ -29,11 +40,12 @@ function ProjectsNavigator() {
 
 function SettingsNavigator() {
   return (
-    <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
-      <SettingsStack.Screen name={ROUTES.SETTINGS} component={SettingsScreen} />
+    <SettingsStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+      <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name={ROUTES.PROFILE} component={ProfileScreen} />
       <SettingsStack.Screen name={ROUTES.HELP_CENTER} component={HelpCenterScreen} />
       <SettingsStack.Screen name={ROUTES.ABOUT_APP} component={AboutAppScreen} />
+      <SettingsStack.Screen name={ROUTES.AUDIT_TRAIL} component={AuditTrailScreen} />
     </SettingsStack.Navigator>
   );
 }
@@ -75,7 +87,7 @@ export function MainNavigator() {
         />
       )}
     >
-      <Tab.Screen name={ROUTES.DASHBOARD} component={DashboardScreen} />
+      <Tab.Screen name={ROUTES.DASHBOARD} component={DashboardNavigator} />
       <Tab.Screen name={ROUTES.PROJECTS} component={ProjectsNavigator} />
       <Tab.Screen name={ROUTES.NOTIFICATIONS} component={NotificationsScreen} />
       <Tab.Screen name={ROUTES.SETTINGS} component={SettingsNavigator} />

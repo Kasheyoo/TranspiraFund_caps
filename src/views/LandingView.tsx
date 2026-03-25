@@ -1,6 +1,15 @@
-import { Image, StatusBar, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
+import { useEffect } from "react";
+import { Dimensions, Image, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+  interpolate,
+} from "react-native-reanimated";
 import { PrimaryButton } from "../components/SharedComponents";
 import { COLORS } from "../constants";
 
@@ -8,94 +17,134 @@ interface LandingViewProps {
   onGetStarted: () => void;
 }
 
-const FEATURES = [
-  {
-    color: COLORS.primary,
-    title: "Secure Access",
-    desc: "End-to-end encrypted government portal",
-  },
-  {
-    color: COLORS.success,
-    title: "Geo-Tagged Evidence",
-    desc: "GPS-verified project documentation",
-  },
-  {
-    color: COLORS.warning,
-    title: "Real-Time Tracking",
-    desc: "Live budget and milestone monitoring",
-  },
+const PILLARS = [
+  { icon: "camera", label: "Proof Submission" },
+  { icon: "clipboard-check", label: "Site Oversight" },
+  { icon: "chart-bar", label: "Progress Reports" },
 ];
 
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const isSmall = SCREEN_HEIGHT < 700;
+
+const SPLASH_LOGO_SIZE = isSmall ? 140 : 160;
+
 export const LandingView = ({ onGetStarted }: LandingViewProps) => {
+  const insets = useSafeAreaInsets();
+
+  // Splash overlay fades OUT, landing content fades IN — crossfade
+  const splashOpacity = useSharedValue(1);
+  const contentOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    // Hold so user sees the splash logo, then fade out
+    splashOpacity.value = withDelay(
+      1000,
+      withTiming(0, { duration: 500, easing: Easing.in(Easing.quad) }),
+    );
+    // Landing content fades in slightly after splash starts fading
+    contentOpacity.value = withDelay(
+      1150,
+      withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) }),
+    );
+  }, [splashOpacity, contentOpacity]);
+
+  const splashStyle = useAnimatedStyle(() => ({
+    opacity: splashOpacity.value,
+    // Hide from touch once faded
+    pointerEvents: splashOpacity.value > 0.05 ? "auto" : "none",
+  }));
+
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: interpolate(contentOpacity.value, [0, 1], [10, 0]) }],
+  }));
+
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.backgroundDark} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <View style={styles.bgAccentTop} />
+      <View style={styles.bgAccentMid} />
+      <View style={styles.bgAccentBottom} />
 
-      {/* Dark Hero Section */}
-      <View style={styles.hero}>
-        {/* Decorative accent shape */}
-        <View style={styles.decorShape} />
+      {/* ── Landing page (always rendered, fades in) ── */}
+      <Animated.View style={[styles.content, contentStyle, {
+        paddingTop: insets.top + 24,
+        paddingBottom: insets.bottom + 24,
+      }]}>
+        <View style={styles.heroGroup}>
+          <View style={styles.badge}>
+            <FontAwesome5 name="landmark" size={8} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.badgeText}>REPUBLIC OF THE PHILIPPINES</Text>
+          </View>
 
-        <SafeAreaView edges={["top"]} style={styles.heroContent}>
-          <Animated.View entering={FadeIn.duration(600)} style={styles.logoClip}>
-            <Image
-              source={require("../../assets/images/logo.png")}
-              style={styles.logoImage}
-              resizeMode="cover"
-            />
-          </Animated.View>
+          <View style={styles.masthead}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require("../../assets/images/logo.png")}
+                style={styles.logoImage}
+                resizeMode="cover"
+              />
+            </View>
+            <Text style={styles.mastheadTitle}>TranspiraFund</Text>
+            <Text style={styles.mastheadSubtitle}>Project Engineer Portal</Text>
+          </View>
 
-          <Animated.Text
-            entering={FadeIn.delay(100).duration(500)}
-            style={styles.appName}
-          >
-            TranspiraFund
-          </Animated.Text>
+          <Text style={styles.tagline}>
+            Document and oversee{"\n"}city-funded barangay projects
+          </Text>
 
-          <Animated.Text
-            entering={FadeIn.delay(200).duration(500)}
-            style={styles.tagline}
-          >
-            Project Engineer Mobile App
-          </Animated.Text>
-        </SafeAreaView>
-      </View>
-
-      {/* White Content Card */}
-      <Animated.View
-        entering={FadeInDown.delay(250).duration(600).springify().damping(18)}
-        style={styles.card}
-      >
-        <View style={styles.cardInner}>
-          <Text style={styles.sectionLabel}>WHAT YOU CAN DO</Text>
-
-          {FEATURES.map((feature, index) => (
-            <Animated.View
-              key={feature.title}
-              entering={FadeIn.delay(400 + index * 100).duration(400)}
-              style={styles.featureRow}
-            >
-              <View style={[styles.featureDot, { backgroundColor: feature.color }]} />
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureDesc}>{feature.desc}</Text>
+          <View style={styles.pillarRow}>
+            {PILLARS.map((pillar) => (
+              <View key={pillar.label} style={styles.pillarChip}>
+                <View style={styles.pillarIconWrap}>
+                  <FontAwesome5 name={pillar.icon} size={14} color={COLORS.primary} />
+                </View>
+                <Text style={styles.pillarLabel}>{pillar.label}</Text>
               </View>
-            </Animated.View>
-          ))}
+            ))}
+          </View>
 
-          <View style={styles.divider} />
-
-          <Animated.View entering={FadeIn.delay(700).duration(400)}>
-            <PrimaryButton
-              title="Get Started"
-              onPress={onGetStarted}
-              icon="arrow-right"
-              style={{ width: "100%" }}
-            />
-          </Animated.View>
-
-          <Text style={styles.version}>v1.0.6 — Official Use Only</Text>
+          <View style={styles.trustRow}>
+            <View style={styles.trustItem}>
+              <FontAwesome5 name="lock" size={10} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.trustText}>256-bit Encrypted</Text>
+            </View>
+            <View style={styles.trustDot} />
+            <View style={styles.trustItem}>
+              <FontAwesome5 name="map-pin" size={10} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.trustText}>GPS Verified</Text>
+            </View>
+            <View style={styles.trustDot} />
+            <View style={styles.trustItem}>
+              <FontAwesome5 name="clock" size={10} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.trustText}>Real-Time</Text>
+            </View>
+          </View>
         </View>
+
+        <View style={styles.actionContainer}>
+          <PrimaryButton
+            title="Sign In to Portal"
+            onPress={onGetStarted}
+            icon="arrow-right"
+            iconPosition="right"
+            style={styles.primaryBtn}
+          />
+          <Text style={styles.version}>v1.0.0 · Authorized Personnel Only</Text>
+        </View>
+      </Animated.View>
+
+      {/* ── Splash overlay (absolutely positioned, fades out) ── */}
+      <Animated.View style={[styles.splashOverlay, splashStyle]}>
+        <View style={styles.splashLogoContainer}>
+          <Image
+            source={require("../../assets/images/logo.png")}
+            style={styles.splashLogoImage}
+            resizeMode="cover"
+          />
+        </View>
+        <Text style={styles.splashName}>TranspiraFund</Text>
+        <Text style={styles.splashSub}>Project Engineer Portal</Text>
       </Animated.View>
     </View>
   );
@@ -104,117 +153,222 @@ export const LandingView = ({ onGetStarted }: LandingViewProps) => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: COLORS.primary,
   },
-  hero: {
-    flex: 0.42,
-    backgroundColor: COLORS.backgroundDark,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  decorShape: {
+  bgAccentTop: {
     position: "absolute",
-    top: -40,
-    right: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 32,
-    backgroundColor: "rgba(20, 184, 166, 0.12)",
-    transform: [{ rotate: "45deg" }],
+    width: 420,
+    height: 420,
+    borderRadius: 210,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    top: -120,
+    right: -80,
   },
-  heroContent: {
-    alignItems: "center",
-    paddingTop: 24,
+  bgAccentMid: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    top: SCREEN_HEIGHT * 0.35,
+    left: -100,
   },
-  logoClip: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    overflow: "hidden",
-    alignItems: "center",
+  bgAccentBottom: {
+    position: "absolute",
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    bottom: -180,
+    left: -150,
+  },
+
+  // ── Landing layout ──
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
     justifyContent: "center",
+    alignItems: "center",
+  },
+  heroGroup: {
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 400,
+    marginBottom: 32,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    marginBottom: 16,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.9)",
+    letterSpacing: 1.8,
+  },
+  masthead: {
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 24,
+  },
+  logoContainer: {
+    width: isSmall ? 96 : 112,
+    height: isSmall ? 96 : 112,
+    borderRadius: isSmall ? 48 : 56,
+    overflow: "hidden",
     marginBottom: 16,
   },
   logoImage: {
-    width: 125,
-    height: 125,
+    width: isSmall ? 96 : 112,
+    height: isSmall ? 96 : 112,
   },
-  appName: {
-    fontSize: 28,
-    fontWeight: "800",
+  mastheadTitle: {
+    fontSize: isSmall ? 26 : 30,
+    fontWeight: "900",
     color: "#FFFFFF",
-    letterSpacing: -0.5,
-    marginBottom: 6,
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
+  mastheadSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "600",
+    marginTop: 4,
+    textAlign: "center",
+    letterSpacing: 0.5,
   },
   tagline: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: isSmall ? 15 : 17,
+    color: "rgba(255,255,255,0.85)",
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: isSmall ? 22 : 26,
+    marginBottom: 24,
     letterSpacing: 0.2,
   },
-  card: {
-    flex: 0.58,
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -24,
+  pillarRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 24,
+    width: "100%",
+  },
+  pillarChip: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  pillarIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  pillarLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+    letterSpacing: 0.2,
+  },
+  trustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  trustItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  trustText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.5)",
+    letterSpacing: 0.3,
+  },
+  trustDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  actionContainer: {
+    width: "100%",
+    maxWidth: 400,
+    alignItems: "center",
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  primaryBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: COLORS.textPrimary,
     elevation: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-  },
-  cardInner: {
-    flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 32,
-    paddingBottom: 24,
-    justifyContent: "space-between",
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: COLORS.textTertiary,
-    letterSpacing: 1.5,
-    marginBottom: 20,
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 18,
-  },
-  featureDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 6,
-    marginRight: 14,
-  },
-  featureText: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  featureDesc: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 8,
   },
   version: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
+    fontSize: 10,
+    color: "rgba(255,255,255,0.4)",
     textAlign: "center",
     marginTop: 16,
     fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+
+  // ── Splash overlay ──
+  splashOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  splashLogoContainer: {
+    width: SPLASH_LOGO_SIZE,
+    height: SPLASH_LOGO_SIZE,
+    borderRadius: SPLASH_LOGO_SIZE / 2,
+    overflow: "hidden",
+    marginBottom: 24,
+  },
+  splashLogoImage: {
+    width: SPLASH_LOGO_SIZE,
+    height: SPLASH_LOGO_SIZE,
+  },
+  splashName: {
+    fontSize: isSmall ? 30 : 36,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+    textAlign: "center",
+  },
+  splashSub: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.6)",
+    fontWeight: "600",
+    marginTop: 6,
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
 });

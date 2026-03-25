@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { ProjectModel } from "../models/ProjectModel";
-import { AuditService } from "../services/AuditService";
-import type { AuditLog, DashboardStats } from "../types";
+import { AuditTrailService } from "../services/AuditTrailService";
+import type { AuditTrail, DashboardStats } from "../types";
 import { logger } from "../utils/logger";
+import { useNavigation } from "@react-navigation/native";
+import { ROUTES } from "../navigation/routes";
 
 export const useDashboardPresenter = (_navigationCallback?: () => void) => {
   const [stats, setStats] = useState<DashboardStats>({ progress: 0, done: 0, delay: 0 });
-  const [recentLogs, setRecentLogs] = useState<AuditLog[]>([]);
+  const [recentLogs, setRecentLogs] = useState<AuditTrail[]>([]);
   const [engineerName, setEngineerName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const navigation = useNavigation<any>();
 
   const loadDashboard = useCallback(async () => {
     setIsLoading(true);
     try {
       const projects = await ProjectModel.getAll();
       if (projects.length > 0) {
-        setEngineerName(projects[0].engineer || "Lead Engineer");
+        setEngineerName(projects[0].engineer || "Project Engineer");
 
         let inProgress = 0;
         let completed = 0;
@@ -35,7 +38,7 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
         setStats({ progress: inProgress, done: completed, delay: delayed });
       }
 
-      const logs = await AuditService.getAll();
+      const logs = await AuditTrailService.getAll();
       setRecentLogs(logs);
     } catch (error) {
       logger.error("Dashboard Load Error:", error);
@@ -50,6 +53,9 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
 
   return {
     data: { stats, recentLogs, engineerName, isLoading },
-    actions: { onRefresh: loadDashboard },
+    actions: { 
+      onRefresh: loadDashboard,
+      onViewAllActivity: () => navigation.navigate(ROUTES.AUDIT_TRAIL),
+    },
   };
 };

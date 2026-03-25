@@ -4,8 +4,8 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -20,8 +20,8 @@ import Animated, {
   withTiming,
   interpolateColor,
 } from "react-native-reanimated";
-import { COLORS, STYLES } from "../constants";
-import { ForgotPasswordModal } from "./ForgotPasswordView";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../constants";
 
 interface LoginData {
   email: string;
@@ -29,7 +29,6 @@ interface LoginData {
   rememberMe: boolean;
   isLoading: boolean;
   errorMessage: string;
-  isResetModalVisible: boolean;
   lockoutSeconds?: number;
 }
 
@@ -38,8 +37,7 @@ interface LoginActions {
   setPassword: (password: string) => void;
   setRememberMe: (value: boolean) => void;
   onLogin: () => void;
-  onForgotPassword: (email: string) => void;
-  setIsResetModalVisible: (visible: boolean) => void;
+  onNavigateToForgotPassword?: () => void;
 }
 
 interface LoginViewProps {
@@ -47,15 +45,14 @@ interface LoginViewProps {
   actions: LoginActions;
 }
 
-/** Reusable animated input wrapper with focus border transition */
 const FocusInput = ({
   children,
   isFocused,
-  style,
+  hasError,
 }: {
   children: React.ReactNode;
   isFocused: boolean;
-  style?: object;
+  hasError?: boolean;
 }) => {
   const progress = useSharedValue(0);
   useEffect(() => {
@@ -63,16 +60,14 @@ const FocusInput = ({
   }, [isFocused, progress]);
 
   const borderStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      [COLORS.border, COLORS.primary],
-    ),
+    borderColor: hasError
+      ? COLORS.error
+      : interpolateColor(progress.value, [0, 1], [COLORS.border, COLORS.primary]),
     borderWidth: 1.5,
   }));
 
   return (
-    <Animated.View style={[styles.inputBase, style, borderStyle]}>
+    <Animated.View style={[styles.inputBase, borderStyle]}>
       {children}
     </Animated.View>
   );
@@ -85,7 +80,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
     rememberMe,
     isLoading,
     errorMessage,
-    isResetModalVisible,
     lockoutSeconds = 0,
   } = data || {};
 
@@ -94,13 +88,13 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
     setPassword,
     setRememberMe,
     onLogin,
-    onForgotPassword,
-    setIsResetModalVisible,
+    onNavigateToForgotPassword,
   } = actions || {};
 
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const isLocked = lockoutSeconds > 0;
+  const insets = useSafeAreaInsets();
 
   const handleLogin = useCallback(() => {
     if (!isLoading && !isLocked) onLogin?.();
@@ -108,262 +102,452 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={STYLES.container}
+      behavior="padding"
+      style={{ flex: 1, backgroundColor: COLORS.primary }}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header — centered with circular logo */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
-          <View style={styles.logoClip}>
-            <Image
-              source={require("../../assets/images/logo.png")}
-              style={styles.logoImage}
-              resizeMode="cover"
-            />
-          </View>
-          <Text style={styles.title}>TranspiraFund</Text>
-          <Text style={styles.subtitle}>Project Engineer Portal</Text>
-        </Animated.View>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-        {/* Form Card */}
-        <Animated.View
-          entering={FadeInDown.delay(150).duration(500).springify().damping(20)}
-          style={STYLES.card}
-        >
-          {errorMessage ? (
-            <View
-              style={[
-                styles.errorContainer,
-                isLocked && styles.lockoutContainer,
-              ]}
-            >
-              <FontAwesome5
-                name={isLocked ? "lock" : "exclamation-circle"}
-                size={14}
-                color={isLocked ? COLORS.warning : COLORS.error}
+      {/* Background accents */}
+      <View style={styles.bgAccentTop} />
+      <View style={styles.bgAccentBottom} />
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.centerWrapper}>
+
+          {/* ── Masthead ── */}
+          <Animated.View entering={FadeIn.duration(500)} style={styles.masthead}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require("../../assets/images/logo.png")}
+                style={styles.logoImage}
+                resizeMode="cover"
               />
-              <Text
-                style={[
-                  styles.errorText,
-                  isLocked && { color: COLORS.warning },
-                ]}
+            </View>
+            <Text style={styles.mastheadTitle}>TranspiraFund</Text>
+            <Text style={styles.mastheadSubtitle}>Project Engineer Portal</Text>
+          </Animated.View>
+
+          {/* ── Form card ── */}
+          <Animated.View
+            entering={FadeInDown.delay(150).duration(500)}
+            style={styles.card}
+          >
+            {/* Card header */}
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Welcome back</Text>
+              <Text style={styles.cardSubtitle}>Sign in to access your dashboard</Text>
+            </View>
+
+            {/* Error / lockout banner */}
+            {errorMessage ? (
+              <View style={[styles.alertBanner, isLocked && styles.lockoutBanner]}>
+                <FontAwesome5
+                  name={isLocked ? "lock" : "exclamation-circle"}
+                  size={13}
+                  color={isLocked ? COLORS.warning : COLORS.error}
+                />
+                <Text style={[styles.alertText, isLocked && styles.lockoutText]}>
+                  {errorMessage}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Email */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email address</Text>
+              <FocusInput
+                isFocused={focusedField === "email"}
+                hasError={!!errorMessage}
               >
-                {errorMessage}
+                <View style={styles.inputRow}>
+                  <FontAwesome5
+                    name="envelope"
+                    size={15}
+                    color={focusedField === "email" ? COLORS.primary : COLORS.textTertiary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.inputInner}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="name@lgu.gov.ph"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoCorrect={false}
+                    editable={!isLocked}
+                    onFocus={() => setFocusedField("email")}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                </View>
+              </FocusInput>
+            </View>
+
+            {/* Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <FocusInput
+                isFocused={focusedField === "password"}
+                hasError={!!errorMessage}
+              >
+                <View style={styles.inputRow}>
+                  <FontAwesome5
+                    name="lock"
+                    size={15}
+                    color={focusedField === "password" ? COLORS.primary : COLORS.textTertiary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.inputInner}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    placeholder="Enter your password"
+                    placeholderTextColor={COLORS.textTertiary}
+                    editable={!isLocked}
+                    onFocus={() => setFocusedField("password")}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <FontAwesome5
+                      name={showPassword ? "eye-slash" : "eye"}
+                      size={16}
+                      color={COLORS.textTertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </FocusInput>
+            </View>
+
+            {/* Remember me + Forgot password */}
+            <View style={styles.utilityRow}>
+              <TouchableOpacity
+                onPress={() => setRememberMe?.(!rememberMe)}
+                style={styles.checkRow}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                  {rememberMe && (
+                    <FontAwesome5 name="check" size={9} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.checkLabel}>Remember me</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onNavigateToForgotPassword}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotLink}>Forgot password?</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sign In button */}
+            <TouchableOpacity
+              style={[styles.signInBtn, (isLoading || isLocked) && styles.signInBtnDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading || isLocked}
+              activeOpacity={0.85}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.signInBtnText}>
+                    {isLocked ? `Try again in ${lockoutSeconds}s` : "Sign In"}
+                  </Text>
+                  {!isLocked && (
+                    <FontAwesome5
+                      name="arrow-right"
+                      size={15}
+                      color="#FFFFFF"
+                      style={styles.btnIcon}
+                    />
+                  )}
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Security note */}
+            <View style={styles.securityNote}>
+              <FontAwesome5 name="shield-alt" size={10} color={COLORS.textTertiary} />
+              <Text style={styles.securityText}>
+                End-to-end encrypted · Official access only
               </Text>
             </View>
-          ) : null}
+          </Animated.View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email Address</Text>
-            <FocusInput isFocused={focusedField === "email"}>
-              <TextInput
-                style={styles.inputInner}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="name@lgu.gov.ph"
-                placeholderTextColor={COLORS.textTertiary}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-                editable={!isLocked}
-                onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
-              />
-            </FocusInput>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <FocusInput
-              isFocused={focusedField === "password"}
-              style={styles.passwordRow}
-            >
-              <TextInput
-                style={[styles.inputInner, { flex: 1 }]}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={COLORS.textTertiary}
-                editable={!isLocked}
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField(null)}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-              >
-                <FontAwesome5
-                  name={showPassword ? "eye-slash" : "eye"}
-                  size={18}
-                  color={COLORS.textTertiary}
-                />
-              </TouchableOpacity>
-            </FocusInput>
-          </View>
-
-          <View style={styles.row}>
-            <TouchableOpacity
-              onPress={() => setRememberMe && setRememberMe(!rememberMe)}
-              style={styles.checkRow}
-            >
-              <View style={[styles.checkbox, rememberMe && styles.checked]}>
-                {rememberMe && (
-                  <FontAwesome5 name="check" size={10} color="white" />
-                )}
-              </View>
-              <Text style={styles.checkText}>Remember me</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setIsResetModalVisible?.(true)}>
-              <Text style={styles.link}>Forgot Password?</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              STYLES.button,
-              (isLoading || isLocked) && { opacity: 0.5 },
-            ]}
-            onPress={handleLogin}
-            disabled={isLoading || isLocked}
-            activeOpacity={0.85}
+          {/* Footer */}
+          <Animated.Text
+            entering={FadeIn.delay(350).duration(400)}
+            style={styles.footer}
           >
-            {isLoading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.btnText}>
-                {isLocked ? `Locked (${lockoutSeconds}s)` : "Sign In"}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
+            v1.0.0 · Construction Services Division, DEPW
+          </Animated.Text>
 
-        <Animated.Text
-          entering={FadeIn.delay(300).duration(300)}
-          style={styles.footer}
-        >
-          v1.0.6 — Official Access Only
-        </Animated.Text>
-
-        <ForgotPasswordModal
-          visible={isResetModalVisible}
-          onClose={() => setIsResetModalVisible?.(false)}
-          onSend={(resetEmail) => onForgotPassword?.(resetEmail)}
-          isLoading={isLoading}
-        />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
+  bgAccentTop: {
+    position: "absolute",
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    top: -160,
+    right: -120,
+  },
+  bgAccentBottom: {
+    position: "absolute",
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    bottom: -180,
+    left: -180,
+  },
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: 24,
     justifyContent: "center",
-    padding: 24,
   },
-  header: {
+  centerWrapper: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
     alignItems: "center",
-    marginBottom: 32,
   },
-  logoClip: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+
+  // ── Masthead ──
+  masthead: {
+    alignItems: "center",
+    marginBottom: 28,
+    width: "100%",
+  },
+  logoContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: 16,
   },
   logoImage: {
-    width: 112,
-    height: 112,
+    width: 88,
+    height: 88,
   },
-  title: {
+  mastheadTitle: {
     fontSize: 26,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    letterSpacing: -0.3,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+    textAlign: "center",
   },
-  subtitle: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
+  mastheadSubtitle: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "600",
     marginTop: 4,
-    fontWeight: "600",
+    textAlign: "center",
+    letterSpacing: 0.4,
   },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.errorSoft,
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  lockoutContainer: {
-    backgroundColor: COLORS.warningSoft,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontWeight: "600",
-    marginLeft: 10,
-    flex: 1,
-    fontSize: 14,
-  },
-  inputGroup: { marginBottom: 16 },
-  label: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  inputBase: {
+
+  // ── Card ──
+  card: {
+    width: "100%",
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    overflow: "hidden",
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
   },
-  inputInner: {
-    paddingHorizontal: 16,
-    height: 56,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-  },
-  passwordRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  eyeBtn: {
-    padding: 16,
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  cardHeader: {
     alignItems: "center",
     marginBottom: 24,
   },
-  checkRow: { flexDirection: "row", alignItems: "center" },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    letterSpacing: -0.3,
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+
+  // ── Alert banner ──
+  alertBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.errorSoft,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  lockoutBanner: {
+    backgroundColor: COLORS.warningSoft,
+  },
+  alertText: {
+    flex: 1,
+    color: COLORS.error,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  lockoutText: {
+    color: COLORS.warning,
+  },
+
+  // ── Inputs ──
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  inputBase: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 54,
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+    width: 18,
+    textAlign: "center",
+  },
+  inputInner: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    fontWeight: "500",
+  },
+  eyeBtn: {
+    padding: 4,
+    marginLeft: 8,
+  },
+
+  // ── Utility row ──
+  utilityRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
     borderRadius: 6,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
-    marginRight: 8,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
-  checked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkText: { color: COLORS.textSecondary, fontSize: 15 },
-  link: { color: COLORS.primary, fontWeight: "700", fontSize: 15 },
-  btnText: { color: "white", fontSize: 17, fontWeight: "700" },
-  footer: {
-    textAlign: "center",
-    color: COLORS.textTertiary,
-    fontSize: 12,
-    marginTop: 24,
+  checkboxActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
     fontWeight: "500",
+  },
+  forgotLink: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+
+  // ── Sign In button ──
+  signInBtn: {
+    flexDirection: "row",
+    backgroundColor: COLORS.primary,
+    height: 54,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    marginBottom: 20,
+    gap: 10,
+  },
+  signInBtnDisabled: {
+    opacity: 0.6,
+  },
+  signInBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  btnIcon: {
+    marginTop: 1,
+  },
+
+  // ── Security note ──
+  securityNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  securityText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+  },
+
+  // ── Footer ──
+  footer: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.5)",
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
 });

@@ -1,5 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 
@@ -27,7 +27,7 @@ export const BottomNavBar = ({
     <View
       style={[
         styles.container,
-        { paddingBottom: Math.max(insets.bottom, Platform.OS === "android" ? 12 : 20) },
+        { paddingBottom: Math.max(insets.bottom, 12) },
       ]}
     >
       <View style={styles.floatingBar}>
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   tab: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
     minWidth: 60,
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.2,
   },

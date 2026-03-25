@@ -18,7 +18,6 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [isResetModalVisible, setIsResetModalVisible] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
   useEffect(() => {
@@ -108,37 +107,6 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
     }
   };
 
-  const onForgotPassword = async (resetEmail?: string) => {
-    const targetEmail = sanitizeInput(resetEmail || email, 254);
-    if (!targetEmail) {
-      Alert.alert("Input Required", "Enter your email address to receive a link.");
-      return;
-    }
-    if (!isValidEmail(targetEmail)) {
-      Alert.alert("Invalid Email", "Please enter a valid email address.");
-      return;
-    }
-    setIsLoading(true);
-    try {
-      // Uses web app's sendPasswordReset Cloud Function — branded email via Gmail
-      await OTPService.sendPasswordReset(targetEmail);
-      setIsResetModalVisible(false);
-      Alert.alert(
-        "Reset Link Sent",
-        "If an account exists for this email, a password reset link has been sent.",
-      );
-    } catch {
-      // Always show generic message — don't reveal if email exists
-      setIsResetModalVisible(false);
-      Alert.alert(
-        "Request Processed",
-        "If an account exists for this email, a password reset link has been sent.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return {
     data: {
       email,
@@ -146,16 +114,14 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       rememberMe,
       isLoading,
       errorMessage,
-      isResetModalVisible,
       lockoutSeconds,
     },
     actions: {
       setEmail,
       setPassword,
       setRememberMe,
-      setIsResetModalVisible,
       onLogin,
-      onForgotPassword,
+      clearError: () => setErrorMessage(""),
     },
   };
 };

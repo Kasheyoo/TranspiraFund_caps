@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  filterText: { fontSize: 13, fontWeight: "700", color: COLORS.textSecondary },
+  filterText: { fontSize: 14, fontWeight: "700", color: COLORS.textSecondary },
   filterTextActive: { color: "white" },
   card: {
     flexDirection: "row",

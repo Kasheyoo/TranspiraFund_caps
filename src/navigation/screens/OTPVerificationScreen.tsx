@@ -2,31 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { auth } from "../../firebaseConfig";
+import { callFn } from "../../services/CloudFunctionService";
 import { OTPService } from "../../services/OTPService";
 import { sanitizeOTPError } from "../../utils/security";
 import { OTPVerificationView } from "../../views/OTPVerificationView";
 
-const BASE_URL =
-  "https://asia-southeast1-transpirafund-webapp.cloudfunctions.net";
-
-async function callFn(name: string, data: Record<string, unknown> = {}) {
-  const user = auth.currentUser;
-  if (!user) return;
-  const token = await user.getIdToken();
-  await fetch(`${BASE_URL}/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ data }),
-  });
-}
-
 const RESEND_COOLDOWN = 60;
 
 export function OTPVerificationScreen() {
-  const { setIsOTPVerified } = useAuth();
+  const { setIsOTPVerified, userProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -74,10 +58,12 @@ export function OTPVerificationScreen() {
     try {
       const success = await OTPService.verifyCode(code);
       if (success) {
-        // Log to both audit_logs and depwAuditTrails via Cloud Function
-        callFn("logMobileAudit", {
-          action: "LOGIN",
-          details: "PROJ_ENG signed in via mobile app",
+        // Log sign-in to projEngAuditTrails only (not DEPW — login is noise for them)
+        const firstName = userProfile?.firstName || userProfile?.name?.split(" ")[0] || "Engineer";
+        callFn("logMobileAuditTrail", {
+          action: "Signed In",
+          details: firstName,
+          syncToDEPW: false,
         }).catch(() => {}); // Non-blocking
 
         setIsOTPVerified(true); // AppNavigator proceeds to main app / force password change

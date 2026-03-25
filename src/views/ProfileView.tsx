@@ -6,7 +6,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -199,7 +198,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior="height"
             style={styles.modalContainer}
           >
             <View style={styles.modalContent}>
@@ -345,7 +344,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   userRole: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     color: COLORS.primary,
     marginTop: 4,

@@ -4,35 +4,8 @@ import { View } from "react-native";
 import { SuccessOverlay } from "../../components/SuccessOverlay";
 import { useAuth } from "../../context/AuthContext";
 import { auth } from "../../firebaseConfig";
+import { callFn } from "../../services/CloudFunctionService";
 import { NewPasswordView } from "../../views/NewPasswordView";
-
-const BASE_URL =
-  "https://asia-southeast1-transpirafund-webapp.cloudfunctions.net";
-
-/** Authenticated Cloud Function call */
-async function callFn(
-  name: string,
-  data: Record<string, unknown> = {},
-): Promise<Record<string, unknown>> {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Not authenticated.");
-
-  const token = await user.getIdToken(true);
-  const response = await fetch(`${BASE_URL}/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ data }),
-  });
-
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok || json.error) {
-    throw new Error(json?.error?.message || `Request failed (${response.status})`);
-  }
-  return (json.result ?? json) as Record<string, unknown>;
-}
 
 export function ForcePasswordChangeScreen() {
   const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +30,7 @@ export function ForcePasswordChangeScreen() {
       await updatePassword(user, newPassword);
 
       // Cloud Function sets mustChangePassword: false AND logs to
-      // both audit_logs + depwAuditTrails (Admin SDK)
+      // both projEngAuditTrails + depwAuditTrails (Admin SDK)
       await callFn("completePasswordChange");
 
       // Show branded success overlay

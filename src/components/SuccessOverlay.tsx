@@ -29,7 +29,7 @@ export const SuccessOverlay = ({
     <Modal transparent animationType="fade" visible={visible}>
       <View style={styles.backdrop}>
         <Animated.View
-          entering={FadeInDown.delay(100).duration(500).springify().damping(18)}
+          entering={FadeIn.delay(100).duration(350)}
           style={styles.card}
         >
           {/* Success icon */}
@@ -90,7 +90,9 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 24,
+    borderRadius: 16,
+    borderTopWidth: 4,
+    borderTopColor: COLORS.success,
     padding: 32,
     alignItems: "center",
     width: "100%",
@@ -102,16 +104,16 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
   },
   iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: COLORS.success,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
     color: COLORS.textPrimary,
     textAlign: "center",
@@ -119,10 +121,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   message: {
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 26,
     marginBottom: 24,
     paddingHorizontal: 8,
   },

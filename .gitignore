@@ -33,12 +33,15 @@ functions/lib/
 
 # Android build artifacts
 android/app/build/
+android/app/.cxx/
+android/app/debug.keystore
 android/.gradle/
 android/build/
 android/.idea/
 android/local.properties
 
-# iOS build artifacts
-ios/build/
-ios/Pods/
-ios/DerivedData/
+# iOS (not used — bare React Native Android only)
+ios/
+
+# Proguard (generated)
+android/app/proguard-rules.pro

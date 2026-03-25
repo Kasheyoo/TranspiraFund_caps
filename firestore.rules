@@ -81,13 +81,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // audit_logs/{logId}  →  MOBILE APP ACTIVITY LOG
-    //   PROJ_ENG writes their own actions from the mobile app
+    // projEngAuditTrails/{logId}  →  PROJECT ENGINEER AUDIT TRAILS
+    //   PROJ_ENG actions from the mobile app
     //   (e.g., logins, proof uploads, progress updates)
     //   DEPW and MIS can read to monitor PROJ_ENG field activity
     //   Append-only: no updates or deletes allowed
 
-    match /audit_logs/{logId} {
+    match /projEngAuditTrails/{logId} {
       allow read:   if hasRole(['MIS', 'DEPW', 'PROJ_ENG']);
       allow create: if hasRole(['PROJ_ENG']);
       allow update, delete: if false;
@@ -120,6 +120,10 @@ service cloud.firestore {
 
     match /passwordResetCooldowns/{docId} {
       allow read, write: if false;
+    }
+
+    match /passwordResetOtps/{docId} {
+      allow read, write: if false;  // Admin SDK only
     }
 
 

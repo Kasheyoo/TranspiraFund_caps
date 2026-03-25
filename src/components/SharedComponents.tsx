@@ -12,7 +12,7 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { COLORS } from "../constants";
 
@@ -21,6 +21,7 @@ interface PrimaryButtonProps {
   title: string;
   style?: ViewStyle;
   icon?: string;
+  iconPosition?: "left" | "right";
   disabled?: boolean;
 }
 
@@ -29,6 +30,7 @@ export const PrimaryButton = ({
   title,
   style,
   icon,
+  iconPosition = "left",
   disabled,
 }: PrimaryButtonProps) => {
   const scale = useSharedValue(1);
@@ -41,26 +43,26 @@ export const PrimaryButton = ({
     <Pressable
       onPressIn={() => {
         if (!disabled) {
-          scale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
+          scale.value = withTiming(0.97, { duration: 80 });
         }
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+        scale.value = withTiming(1, { duration: 100 });
       }}
       onPress={disabled ? undefined : onPress}
     >
       <Animated.View
         style={[styles.button, style, disabled && { opacity: 0.5 }, animatedStyle]}
       >
+        <Text style={styles.buttonText}>{title}</Text>
         {icon && (
           <FontAwesome5
             name={icon}
             size={16}
             color="white"
-            style={{ marginRight: 8 }}
+            style={{ position: "absolute", ...(iconPosition === "left" ? { left: 20 } : { right: 20 }) }}
           />
         )}
-        <Text style={styles.buttonText}>{title}</Text>
       </Animated.View>
     </Pressable>
   );
@@ -111,21 +113,20 @@ export const BlockInput = ({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary,
-    paddingVertical: 16,
-    borderRadius: 16,
+    height: 56,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
     elevation: 4,
+    position: "relative",
   },
   buttonText: {
+    flex: 1,
     color: "white",
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
+    textAlign: "center",
   },
   inputContainer: {
     flexDirection: "row",
@@ -141,7 +142,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: "100%",
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.textDark,
     paddingRight: 16,
   },

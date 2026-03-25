@@ -1,12 +1,10 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -18,10 +16,12 @@ import Animated, {
   FadeInDown,
   useAnimatedStyle,
   useDerivedValue,
+  useSharedValue,
   withTiming,
   interpolateColor,
 } from "react-native-reanimated";
-import { COLORS, STYLES } from "../constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../constants";
 import { validatePassword } from "../utils/security";
 
 interface NewPasswordActions {
@@ -31,18 +31,50 @@ interface NewPasswordActions {
 interface NewPasswordViewProps {
   actions: NewPasswordActions;
   isLoading?: boolean;
-  /** Show "Current Password" field for re-authentication */
   showCurrentPassword?: boolean;
   errorMessage?: string;
 }
 
-/** Animated strength bar that fills and changes color based on requirements met */
+// ─── Animated focus border wrapper ───────────────────────────────────────────
+const FocusInput = ({
+  children,
+  isFocused,
+  hasError,
+  isValid,
+}: {
+  children: React.ReactNode;
+  isFocused: boolean;
+  hasError?: boolean;
+  isValid?: boolean;
+}) => {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(isFocused ? 1 : 0, { duration: 200 });
+  }, [isFocused, progress]);
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: hasError
+      ? COLORS.error
+      : isValid
+        ? COLORS.success
+        : interpolateColor(progress.value, [0, 1], [COLORS.border, COLORS.primary]),
+    borderWidth: 1.5,
+  }));
+
+  return (
+    <Animated.View style={[styles.inputBase, borderStyle]}>
+      {children}
+    </Animated.View>
+  );
+};
+
+// ─── Animated strength bar ───────────────────────────────────────────────────
 const StrengthBar = ({ metCount }: { metCount: number }) => {
   const progress = useDerivedValue(() =>
-    withTiming(metCount / 5, { duration: 300 }),
+    withTiming(metCount / 5, { duration: 350 }),
   );
 
-  const barStyle = useAnimatedStyle(() => ({
+  const fillStyle = useAnimatedStyle(() => ({
     width: `${progress.value * 100}%`,
     backgroundColor: interpolateColor(
       progress.value,
@@ -52,20 +84,15 @@ const StrengthBar = ({ metCount }: { metCount: number }) => {
   }));
 
   const labels = ["", "Weak", "Weak", "Fair", "Good", "Strong"];
-  const labelColor =
-    metCount <= 2
-      ? COLORS.error
-      : metCount <= 3
-        ? COLORS.warning
-        : COLORS.success;
+  const labelColors = ["", COLORS.error, COLORS.error, COLORS.warning, COLORS.success, COLORS.success];
 
   return (
-    <View style={styles.strengthContainer}>
+    <View style={styles.strengthRow}>
       <View style={styles.strengthTrack}>
-        <Animated.View style={[styles.strengthFill, barStyle]} />
+        <Animated.View style={[styles.strengthFill, fillStyle]} />
       </View>
       {metCount > 0 && (
-        <Text style={[styles.strengthLabel, { color: labelColor }]}>
+        <Text style={[styles.strengthLabel, { color: labelColors[metCount] }]}>
           {labels[metCount]}
         </Text>
       )}
@@ -73,26 +100,25 @@ const StrengthBar = ({ metCount }: { metCount: number }) => {
   );
 };
 
+// ─── Main component ──────────────────────────────────────────────────────────
 export const NewPasswordView = ({
   actions,
   isLoading,
   showCurrentPassword = false,
   errorMessage,
 }: NewPasswordViewProps) => {
+  const insets = useSafeAreaInsets();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [focused, setFocused] = useState<string | null>(null);
 
-  const requirements = useMemo(
-    () => validatePassword(newPassword),
-    [newPassword],
-  );
-  const passwordsMatch =
-    newPassword.length > 0 && newPassword === confirmPassword;
-  const currentPasswordFilled =
-    !showCurrentPassword || currentPassword.length > 0;
-
+  const requirements = useMemo(() => validatePassword(newPassword), [newPassword]);
+  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+  const currentPasswordFilled = !showCurrentPassword || currentPassword.length > 0;
   const metCount = [
     requirements.minLength,
     requirements.hasUppercase,
@@ -101,236 +127,410 @@ export const NewPasswordView = ({
     requirements.hasSpecialChar,
   ].filter(Boolean).length;
 
+  const canSubmit = requirements.isValid && passwordsMatch && currentPasswordFilled && !isLoading;
+
   const handleUpdate = () => {
-    if (showCurrentPassword && !currentPassword) {
-      Alert.alert("Required", "Please enter your current password.");
-      return;
-    }
-    if (!requirements.isValid) {
-      Alert.alert("Weak Password", "Please meet all password requirements.");
-      return;
-    }
-    if (!passwordsMatch) {
-      Alert.alert("Mismatch", "Passwords do not match.");
-      return;
-    }
+    if (!canSubmit) return;
     actions.onConfirmNewPassword(currentPassword, newPassword);
   };
 
-  const RequirementRow = ({ met, label }: { met: boolean; label: string }) => (
-    <View style={styles.reqRow}>
-      <FontAwesome5
-        name={met ? "check-circle" : "circle"}
-        size={12}
-        color={met ? COLORS.success : COLORS.textTertiary}
-      />
-      <Text style={[styles.reqText, met && { color: COLORS.success }]}>
-        {label}
-      </Text>
+  const title = showCurrentPassword ? "Change Password" : "Set New Password";
+  const subtitle = showCurrentPassword
+    ? "Enter your current password to continue"
+    : "Almost done — create a strong password below";
+
+  const ReqItem = ({ met, label }: { met: boolean; label: string }) => (
+    <View style={styles.reqItem}>
+      <View style={[styles.reqDot, { backgroundColor: met ? COLORS.success : COLORS.border }]}>
+        <FontAwesome5 name={met ? "check" : "minus"} size={7} color="#FFFFFF" />
+      </View>
+      <Text style={[styles.reqText, met && styles.reqTextMet]}>{label}</Text>
     </View>
   );
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      behavior="padding"
+      style={{ flex: 1, backgroundColor: COLORS.primary }}
     >
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+      {/* Subtle background orbs */}
+      <View style={styles.bgOrbTop} />
+      <View style={styles.bgOrbBottom} />
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 32 },
+        ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        {/* Header — centered circular logo */}
-        <Animated.View
-          entering={FadeIn.duration(400)}
-          style={styles.header}
-        >
-          <View style={styles.logoClip}>
-            <Image
-              source={require("../../assets/images/logo.png")}
-              style={styles.logoImage}
-              resizeMode="cover"
-            />
-          </View>
-          <Text style={styles.title}>Set New Password</Text>
-          <Text style={styles.subtitle}>
-            Create a strong password for your account.
-          </Text>
-        </Animated.View>
+        <View style={styles.wrapper}>
 
-        <Animated.View
-          entering={FadeInDown.delay(150).duration(500).springify().damping(20)}
-          style={STYLES.card}
-        >
-          {showCurrentPassword && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Current Password</Text>
-              <TextInput
-                style={STYLES.input}
-                secureTextEntry
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                placeholder="Enter current password"
-                placeholderTextColor={COLORS.textTertiary}
-              />
+          {/* ── Header (on teal) ── */}
+          <Animated.View entering={FadeIn.delay(80).duration(400)} style={styles.header}>
+            <View style={styles.iconCircle}>
+              <FontAwesome5 name="lock" size={26} color="#FFFFFF" />
             </View>
-          )}
+            <Text style={styles.headerTitle}>{title}</Text>
+            <Text style={styles.headerSub}>{subtitle}</Text>
+          </Animated.View>
 
-          {errorMessage ? (
-            <Animated.View entering={FadeInDown.duration(250)}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </Animated.View>
-          ) : null}
+          {/* ── Card ── */}
+          <Animated.View entering={FadeInDown.delay(180).duration(440)} style={styles.card}>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>New Password</Text>
-            <View style={styles.passwordRow}>
-              <TextInput
-                style={[STYLES.input, { flex: 1, borderWidth: 0 }]}
-                secureTextEntry={!showPassword}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="Enter new password"
-                placeholderTextColor={COLORS.textTertiary}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-              >
-                <FontAwesome5
-                  name={showPassword ? "eye-slash" : "eye"}
-                  size={16}
-                  color={COLORS.textTertiary}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
+            {/* Error banner */}
+            {errorMessage ? (
+              <Animated.View entering={FadeInDown.duration(280)} style={styles.errorBanner}>
+                <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.error} />
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </Animated.View>
+            ) : null}
 
-          <View style={styles.inputGroup}>
-            <View style={styles.confirmLabelRow}>
-              <Text style={styles.label}>Confirm Password</Text>
-              {confirmPassword.length > 0 && passwordsMatch && (
-                <Animated.View entering={FadeIn.duration(200)}>
-                  <FontAwesome5
-                    name="check-circle"
-                    size={14}
-                    color={COLORS.success}
-                  />
-                </Animated.View>
-              )}
-            </View>
-            <TextInput
-              style={STYLES.input}
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter password"
-              placeholderTextColor={COLORS.textTertiary}
-            />
-          </View>
-
-          {/* Strength bar */}
-          {newPassword.length > 0 && <StrengthBar metCount={metCount} />}
-
-          <View style={styles.reqContainer}>
-            <Text style={styles.reqTitle}>PASSWORD REQUIREMENTS</Text>
-            <RequirementRow
-              met={requirements.minLength}
-              label="At least 8 characters"
-            />
-            <RequirementRow
-              met={requirements.hasUppercase}
-              label="One uppercase letter (A-Z)"
-            />
-            <RequirementRow
-              met={requirements.hasLowercase}
-              label="One lowercase letter (a-z)"
-            />
-            <RequirementRow
-              met={requirements.hasNumber}
-              label="One number (0-9)"
-            />
-            <RequirementRow
-              met={requirements.hasSpecialChar}
-              label="One special character (!@#$...)"
-            />
-            {confirmPassword.length > 0 && (
-              <RequirementRow met={passwordsMatch} label="Passwords match" />
+            {/* Current password (change-password mode only) */}
+            {showCurrentPassword && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Current Password</Text>
+                <FocusInput
+                  isFocused={focused === "current"}
+                  isValid={currentPassword.length > 0}
+                >
+                  <View style={styles.inputRow}>
+                    <FontAwesome5
+                      name="key"
+                      size={14}
+                      color={focused === "current" ? COLORS.primary : COLORS.textTertiary}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.inputText}
+                      secureTextEntry={!showCurrent}
+                      value={currentPassword}
+                      onChangeText={setCurrentPassword}
+                      placeholder="Enter current password"
+                      placeholderTextColor={COLORS.textTertiary}
+                      autoCapitalize="none"
+                      onFocus={() => setFocused("current")}
+                      onBlur={() => setFocused(null)}
+                      editable={!isLoading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowCurrent(v => !v)}
+                      style={styles.eyeBtn}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <FontAwesome5
+                        name={showCurrent ? "eye-slash" : "eye"}
+                        size={14}
+                        color={COLORS.textTertiary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </FocusInput>
+              </View>
             )}
-          </View>
 
-          <Animated.View entering={FadeIn.delay(400).duration(300)}>
+            {/* Divider if current password shown */}
+            {showCurrentPassword && (
+              <View style={styles.sectionDivider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerLabel}>NEW PASSWORD</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            )}
+
+            {/* New password */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>New Password</Text>
+              <FocusInput
+                isFocused={focused === "new"}
+                hasError={newPassword.length > 2 && !requirements.isValid && focused !== "new"}
+                isValid={requirements.isValid}
+              >
+                <View style={styles.inputRow}>
+                  <FontAwesome5
+                    name="lock"
+                    size={14}
+                    color={
+                      requirements.isValid
+                        ? COLORS.success
+                        : focused === "new"
+                          ? COLORS.primary
+                          : COLORS.textTertiary
+                    }
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.inputText}
+                    secureTextEntry={!showNew}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Create a strong password"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="none"
+                    onFocus={() => setFocused("new")}
+                    onBlur={() => setFocused(null)}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowNew(v => !v)}
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <FontAwesome5
+                      name={showNew ? "eye-slash" : "eye"}
+                      size={14}
+                      color={COLORS.textTertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </FocusInput>
+
+              {/* Strength bar */}
+              {newPassword.length > 0 && <StrengthBar metCount={metCount} />}
+            </View>
+
+            {/* Confirm password */}
+            <View style={styles.fieldGroup}>
+              <View style={styles.confirmLabelRow}>
+                <Text style={styles.fieldLabel}>Confirm Password</Text>
+                {confirmPassword.length > 0 && passwordsMatch && (
+                  <Animated.View entering={FadeIn.duration(200)} style={styles.matchBadge}>
+                    <FontAwesome5 name="check" size={9} color={COLORS.success} />
+                    <Text style={styles.matchBadgeText}>Passwords match</Text>
+                  </Animated.View>
+                )}
+              </View>
+              <FocusInput
+                isFocused={focused === "confirm"}
+                hasError={confirmPassword.length > 0 && !passwordsMatch && focused !== "confirm"}
+                isValid={passwordsMatch}
+              >
+                <View style={styles.inputRow}>
+                  <FontAwesome5
+                    name={passwordsMatch ? "check-circle" : "lock"}
+                    size={14}
+                    color={
+                      passwordsMatch
+                        ? COLORS.success
+                        : focused === "confirm"
+                          ? COLORS.primary
+                          : COLORS.textTertiary
+                    }
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.inputText}
+                    secureTextEntry={!showConfirm}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Re-enter your password"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="none"
+                    onFocus={() => setFocused("confirm")}
+                    onBlur={() => setFocused(null)}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirm(v => !v)}
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <FontAwesome5
+                      name={showConfirm ? "eye-slash" : "eye"}
+                      size={14}
+                      color={COLORS.textTertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </FocusInput>
+            </View>
+
+            {/* Requirements grid */}
+            <View style={styles.reqContainer}>
+              <Text style={styles.reqTitle}>Password requirements</Text>
+              <View style={styles.reqGrid}>
+                <View style={styles.reqCol}>
+                  <ReqItem met={requirements.minLength} label="8+ characters" />
+                  <ReqItem met={requirements.hasUppercase} label="Uppercase (A-Z)" />
+                  <ReqItem met={requirements.hasLowercase} label="Lowercase (a-z)" />
+                </View>
+                <View style={styles.reqCol}>
+                  <ReqItem met={requirements.hasNumber} label="Number (0-9)" />
+                  <ReqItem met={requirements.hasSpecialChar} label="Special (!@#...)" />
+                  {confirmPassword.length > 0 && (
+                    <ReqItem met={passwordsMatch} label="Passwords match" />
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Submit */}
             <TouchableOpacity
-              style={[
-                STYLES.button,
-                (!requirements.isValid ||
-                  !passwordsMatch ||
-                  !currentPasswordFilled ||
-                  isLoading) && { opacity: 0.5 },
-              ]}
+              style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
               onPress={handleUpdate}
-              disabled={
-                !requirements.isValid ||
-                !passwordsMatch ||
-                !currentPasswordFilled ||
-                isLoading
-              }
+              disabled={!canSubmit}
+              activeOpacity={0.85}
             >
               {isLoading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.btnText}>Set Password</Text>
+                <>
+                  <FontAwesome5 name="shield-alt" size={14} color="#FFFFFF" />
+                  <Text style={styles.submitBtnText}>
+                    {showCurrentPassword ? "Update Password" : "Set Password"}
+                  </Text>
+                </>
               )}
             </TouchableOpacity>
+
+            {/* Security note */}
+            <View style={styles.securityNote}>
+              <FontAwesome5 name="lock" size={9} color={COLORS.textTertiary} />
+              <Text style={styles.securityNoteText}>
+                Encrypted end-to-end · Never stored in plain text
+              </Text>
+            </View>
+
           </Animated.View>
-        </Animated.View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 24,
-    paddingTop: 60,
+  // ── Background ──
+  bgOrbTop: {
+    position: "absolute",
+    width: 480,
+    height: 480,
+    borderRadius: 240,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    top: -160,
+    right: -120,
   },
+  bgOrbBottom: {
+    position: "absolute",
+    width: 480,
+    height: 480,
+    borderRadius: 240,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    bottom: -180,
+    left: -180,
+  },
+
+  // ── Layout ──
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    justifyContent: "center",
+  },
+  wrapper: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+    alignItems: "center",
+  },
+
+  // ── Header ──
   header: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 28,
+    width: "100%",
   },
-  logoClip: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    overflow: "hidden",
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  headerSub: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.75)",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 21,
+  },
+
+  // ── Card ──
+  card: {
+    width: "100%",
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+
+  // ── Error banner ──
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.errorSoft,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.15)",
+  },
+  errorBannerText: {
+    flex: 1,
+    color: COLORS.error,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+  // ── Section divider ──
+  sectionDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.textTertiary,
+    letterSpacing: 1.2,
+  },
+
+  // ── Fields ──
+  fieldGroup: {
     marginBottom: 16,
   },
-  logoImage: {
-    width: 100,
-    height: 100,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 6,
-    lineHeight: 22,
-    textAlign: "center",
-  },
-  inputGroup: { marginBottom: 16 },
-  label: {
+  fieldLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
     marginBottom: 8,
+    letterSpacing: 0.2,
   },
   confirmLabelRow: {
     flexDirection: "row",
@@ -338,62 +538,162 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 8,
   },
-  passwordRow: {
+  matchBadge: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
+    gap: 5,
+    backgroundColor: COLORS.successSoft,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
   },
-  eyeBtn: { padding: 16 },
-  strengthContainer: {
+  matchBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.success,
+  },
+
+  // ── Input ──
+  inputBase: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    height: 54,
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+    width: 16,
+    textAlign: "center",
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    fontWeight: "500",
+  },
+  eyeBtn: {
+    padding: 8,
+    marginLeft: 4,
+  },
+
+  // ── Strength bar ──
+  strengthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
     gap: 10,
   },
   strengthTrack: {
     flex: 1,
-    height: 4,
+    height: 5,
     backgroundColor: COLORS.border,
-    borderRadius: 2,
+    borderRadius: 3,
     overflow: "hidden",
   },
   strengthFill: {
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 3,
   },
   strengthLabel: {
     fontSize: 12,
     fontWeight: "700",
-    minWidth: 44,
+    minWidth: 36,
+    textAlign: "right",
   },
-  reqContainer: { marginBottom: 20, paddingHorizontal: 4 },
+
+  // ── Requirements ──
+  reqContainer: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
   reqTitle: {
-    fontSize: 10,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "700",
     color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
     marginBottom: 10,
+    textTransform: "uppercase",
   },
-  reqRow: {
+  reqGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  reqCol: {
+    flex: 1,
+    gap: 6,
+  },
+  reqItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    gap: 8,
+  },
+  reqDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   reqText: {
     fontSize: 12,
-    marginLeft: 10,
-    color: COLORS.textSecondary,
+    color: COLORS.textTertiary,
+    fontWeight: "500",
+    flex: 1,
+  },
+  reqTextMet: {
+    color: COLORS.success,
     fontWeight: "600",
   },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 12,
+
+  // ── Submit button ──
+  submitBtn: {
+    backgroundColor: COLORS.primary,
+    height: 54,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    marginBottom: 16,
+  },
+  submitBtnDisabled: {
+    opacity: 0.4,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  submitBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+
+  // ── Security note ──
+  securityNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  securityNoteText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontWeight: "500",
     textAlign: "center",
   },
-  btnText: { color: "white", fontSize: 16, fontWeight: "700" },
 });

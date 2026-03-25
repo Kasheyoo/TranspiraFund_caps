@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   copyright: {
     position: "absolute",
     bottom: 40,
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textTertiary,
   },
 });

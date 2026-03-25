@@ -4,27 +4,46 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
-import type { AuditLog, DashboardStats } from "../types";
+import type { AuditTrail, DashboardStats } from "../types";
 
 interface DashboardData {
   stats: DashboardStats;
-  recentLogs: AuditLog[];
+  recentLogs: AuditTrail[];
   engineerName: string;
   isLoading: boolean;
 }
 
 interface DashboardActions {
   onRefresh: () => void;
+  onViewAllActivity: () => void;
 }
 
 interface DashboardViewProps {
   data: DashboardData;
   actions: DashboardActions;
 }
+
+const getActionIcon = (action = ""): { name: string; color: string; bg: string } => {
+  const a = action.toLowerCase();
+  if (a.includes("sign") && a.includes("in"))
+    return { name: "sign-in-alt", color: COLORS.primary, bg: COLORS.primarySoft };
+  if (a.includes("sign") && a.includes("out"))
+    return { name: "sign-out-alt", color: "#6B7280", bg: "#F3F4F6" };
+  if (a.includes("password"))
+    return { name: "key", color: "#7C3AED", bg: "#EDE9FE" };
+  if (a.includes("proof") || a.includes("upload"))
+    return { name: "cloud-upload-alt", color: "#0891B2", bg: "#E0F2FE" };
+  if (a.includes("delay"))
+    return { name: "exclamation-triangle", color: COLORS.error, bg: COLORS.error + "15" };
+  if (a.includes("status") || a.includes("update"))
+    return { name: "pen", color: "#D97706", bg: "#FEF3C7" };
+  return { name: "history", color: COLORS.primary, bg: COLORS.primarySoft };
+};
 
 const getGreeting = (): string => {
   const hour = new Date().getHours();
@@ -33,20 +52,17 @@ const getGreeting = (): string => {
   return "Good Evening";
 };
 
-const getRelativeTime = (seconds: number): string => {
-  const now = Date.now();
-  const diff = now - seconds * 1000;
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(seconds * 1000).toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-  });
+const formatTimestamp = (seconds: number): string => {
+  const date = new Date(seconds * 1000);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const timeStr = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return `Today · ${timeStr}`;
+  if (isYesterday) return `Yesterday · ${timeStr}`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ` · ${timeStr}`;
 };
 
 export const DashboardView = ({ data, actions }: DashboardViewProps) => {
@@ -113,24 +129,20 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
           </View>
         </View>
 
-        <Text style={styles.sectionHeading}>RECENT ACTIVITY</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeading}>RECENT ACTIVITY</Text>
+          <TouchableOpacity onPress={actions.onViewAllActivity} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
 
         {recentLogs && recentLogs.length > 0 ? (
           recentLogs.map((log) => {
-            const isDelayed = log.action?.toLowerCase() === "delayed";
+            const icon = getActionIcon(log.action);
             return (
               <View key={log.id} style={styles.activityCard}>
-                <View
-                  style={[
-                    styles.activityIcon,
-                    isDelayed && { backgroundColor: COLORS.error + "15" },
-                  ]}
-                >
-                  <FontAwesome5
-                    name={isDelayed ? "exclamation-circle" : "history"}
-                    size={12}
-                    color={isDelayed ? COLORS.error : COLORS.primary}
-                  />
+                <View style={[styles.activityIcon, { backgroundColor: icon.bg }]}>
+                  <FontAwesome5 name={icon.name} size={12} color={icon.color} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.activityMessage}>
@@ -138,7 +150,7 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
                   </Text>
                   <Text style={styles.activityTime}>
                     {log.timestamp?.seconds
-                      ? getRelativeTime(log.timestamp.seconds)
+                      ? formatTimestamp(log.timestamp.seconds)
                       : "Recently"}
                   </Text>
                 </View>
@@ -161,7 +173,7 @@ const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
   headerSection: { marginTop: 20, marginBottom: 24, paddingHorizontal: 4 },
-  greetingText: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
+  greetingText: { fontSize: 15, fontWeight: "600", color: COLORS.textSecondary },
   engineerText: {
     fontSize: 24,
     fontWeight: "900",
@@ -201,8 +213,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.03)",
   },
   statIconBox: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     backgroundColor: COLORS.primary + "20",
     alignItems: "center",
@@ -211,20 +223,30 @@ const styles = StyleSheet.create({
   },
   statNumber: { fontSize: 22, fontWeight: "900" },
   statLabel: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "800",
     color: COLORS.textSecondary,
     marginTop: 4,
     letterSpacing: 0.3,
     textAlign: "center",
   },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
   sectionHeading: {
     fontSize: 12,
     fontWeight: "800",
     color: COLORS.textSecondary,
-    marginBottom: 16,
     letterSpacing: 1,
-    paddingHorizontal: 4,
+  },
+  seeAllText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
   activityCard: {
     flexDirection: "row",
@@ -246,7 +268,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   activityMessage: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     color: COLORS.textPrimary,
     lineHeight: 18,
@@ -261,7 +283,7 @@ const styles = StyleSheet.create({
   emptyText: {
     color: COLORS.textTertiary,
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: 15,
     marginTop: 12,
   },
   emptySubText: {
