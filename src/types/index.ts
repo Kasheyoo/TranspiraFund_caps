@@ -28,9 +28,15 @@ export interface Project {
   title?: string;
   engineer?: string;
   location?: string;
+  startDate?: string;
   completionDate?: string;
   status?: string;
   progress?: number;
+  budget?: number;
+  contractAmount?: number;
+  contractor?: string;
+  description?: string;
+  projectCode?: string;
   milestones?: Milestone[];
 }
 

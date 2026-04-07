@@ -1,7 +1,6 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import {
   Alert,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,255 +27,524 @@ interface ProjectDetailsViewProps {
   onBack: () => void;
 }
 
+const STATUS_COLORS: Record<string, { accent: string; bg: string; text: string }> = {
+  "In Progress": { accent: COLORS.primary, bg: COLORS.primarySoft, text: COLORS.primary },
+  "Completed":   { accent: COLORS.success, bg: COLORS.successSoft, text: COLORS.success },
+  "Delayed":     { accent: COLORS.error,   bg: COLORS.errorSoft,   text: COLORS.error   },
+  "Pending":     { accent: COLORS.warning, bg: COLORS.warningSoft, text: COLORS.warning },
+};
+const DEFAULT_STATUS = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary };
+
+const formatBudget = (amount?: number): string => {
+  if (!amount) return "—";
+  if (amount >= 1_000_000) return `₱${(amount / 1_000_000).toFixed(2)}M`;
+  if (amount >= 1_000) return `₱${(amount / 1_000).toFixed(1)}K`;
+  return `₱${amount.toLocaleString()}`;
+};
+
+interface InfoRowProps {
+  icon: string;
+  label: string;
+  value?: string;
+  iconColor?: string;
+}
+
+const InfoRow = ({ icon, label, value, iconColor = COLORS.textTertiary }: InfoRowProps) => (
+  <View style={infoStyles.row}>
+    <View style={infoStyles.iconBox}>
+      <FontAwesome5 name={icon} size={12} color={iconColor} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={infoStyles.label}>{label}</Text>
+      <Text style={infoStyles.value}>{value || "—"}</Text>
+    </View>
+  </View>
+);
+
+const infoStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 10,
+  },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  value: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+  },
+});
+
 export const ProjectDetailsView = ({
   data,
   actions,
   onBack,
 }: ProjectDetailsViewProps) => {
   const insets = useSafeAreaInsets();
-  const { project, isLoading } = data;
+  const { project } = data;
 
   if (!project) return null;
 
+  const status = project.status || "Pending";
+  const sc = STATUS_COLORS[status] || DEFAULT_STATUS;
+  const progress = project.progress || 0;
+  const completedMilestones = project.milestones?.filter(
+    (m) => m.status?.toString().toLowerCase() === "completed",
+  ).length ?? 0;
+  const totalMilestones = project.milestones?.length ?? 0;
+
   return (
-    <View style={[styles.mainContainer, { paddingTop: insets.top }]}>
-      <View style={styles.navHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.iconButton}>
-          <FontAwesome5 name="arrow-left" size={18} color="#1A1C1E" />
+    <View style={styles.root}>
+      {/* Teal hero header */}
+      <View style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+        {/* Decorative orbs */}
+        <View style={styles.orb1} />
+        <View style={styles.orb2} />
+
+        <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.8}>
+          <FontAwesome5 name="arrow-left" size={15} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.navTitle}>Project Overview</Text>
+
+        <View style={styles.heroContent}>
+          <View style={[styles.heroIconBox, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
+            <FontAwesome5 name="hard-hat" size={22} color="#fff" />
+          </View>
+
+          <Text style={styles.heroTitle} numberOfLines={3}>
+            {project.projectTitle || project.title || "Untitled Project"}
+          </Text>
+
+          {project.projectCode ? (
+            <Text style={styles.heroCode}>{project.projectCode}</Text>
+          ) : null}
+
+          <View style={[styles.heroBadge, { backgroundColor: sc.bg }]}>
+            <View style={[styles.heroBadgeDot, { backgroundColor: sc.accent }]} />
+            <Text style={[styles.heroBadgeText, { color: sc.text }]}>{status}</Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={actions.onRefresh}
-            tintColor={COLORS.primary}
-          />
-        }
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.infoCard}>
-          <Text style={styles.projectMainTitle}>
-            {project.projectTitle || "Untitled Project"}
-          </Text>
-
-          <View style={styles.infoRow}>
-            <FontAwesome5 name="user-tie" size={12} color="#8E8E93" />
-            <Text style={styles.infoText}>
-              Engineer: {project.engineer || "Unassigned"}
-            </Text>
+        {/* Progress card */}
+        <View style={styles.card}>
+          <View style={styles.progressHeader}>
+            <View>
+              <Text style={styles.sectionLabel}>OVERALL PROGRESS</Text>
+              <Text style={styles.milestoneCaption}>
+                {completedMilestones} of {totalMilestones} milestones completed
+              </Text>
+            </View>
+            <Text style={[styles.progressPct, { color: sc.accent }]}>{progress}%</Text>
           </View>
 
-          <View style={styles.infoRow}>
-            <FontAwesome5 name="map-marker-alt" size={12} color="#8E8E93" />
-            <Text style={styles.infoText}>
-              Location: {project.location || "Not specified"}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <FontAwesome5 name="calendar-alt" size={12} color="#8E8E93" />
-            <Text style={styles.infoText}>
-              Target: {project.completionDate || "TBD"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.progressCard}>
-          <View style={styles.progressTextRow}>
-            <Text style={styles.completionLabel}>PROGRESS</Text>
-            <Text style={styles.completionValue}>{project.progress || 0}%</Text>
-          </View>
-          <View style={styles.progressBarTrack}>
+          <View style={styles.progressTrack}>
             <View
               style={[
-                styles.progressBarThumb,
-                { width: `${project.progress || 0}%` },
+                styles.progressFill,
+                { width: `${progress}%`, backgroundColor: sc.accent },
               ]}
             />
           </View>
         </View>
 
-        <Text style={styles.milestoneHeading}>MILESTONES</Text>
-
-        {project.milestones?.map((m, index) => {
-          const isFirst = index === 0;
-          const prevStatus = project.milestones![index - 1]?.status
-            ?.toString()
-            .toLowerCase();
-          const isUnlocked = isFirst || prevStatus === "completed";
-          const isDone = m.status?.toString().toLowerCase() === "completed";
-          const isLocked = !isUnlocked;
-
-          return (
-            <TouchableOpacity
-              key={m.id || index}
-              style={[styles.milestoneCard, isLocked && styles.milestoneLocked]}
-              onPress={() =>
-                isLocked
-                  ? Alert.alert("Locked", "Complete the previous step first.")
-                  : actions.onSelectMilestone(m)
-              }
-              activeOpacity={isLocked ? 1 : 0.7}
-            >
-              <View
-                style={[
-                  styles.statusIconBox,
-                  isLocked
-                    ? styles.bgLocked
-                    : isDone
-                      ? styles.bgDone
-                      : styles.bgPending,
-                ]}
-              >
-                <FontAwesome5
-                  name={isLocked ? "lock" : isDone ? "check" : "clock"}
-                  size={12}
-                  color={isDone ? "#FFF" : isLocked ? "#999" : COLORS.primary}
-                />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.mTitle, isLocked && styles.textLocked]}>
-                  {m.title}
-                </Text>
-                <Text
-                  style={[styles.mStatus, isDone && { color: COLORS.success }]}
-                >
-                  {isLocked ? "Locked" : m.status || "Pending"}
+        {/* Budget card */}
+        {(project.budget || project.contractAmount) ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>FINANCIALS</Text>
+            <View style={styles.budgetRow}>
+              <View style={styles.budgetItem}>
+                <View style={[styles.budgetIconBox, { backgroundColor: COLORS.primarySoft }]}>
+                  <FontAwesome5 name="file-contract" size={14} color={COLORS.primary} />
+                </View>
+                <Text style={styles.budgetLabel}>Contract Amount</Text>
+                <Text style={[styles.budgetValue, { color: COLORS.primary }]}>
+                  {formatBudget(project.contractAmount || project.budget)}
                 </Text>
               </View>
 
-              {!isLocked && (
-                <FontAwesome5 name="chevron-right" size={12} color="#C7C7CC" />
-              )}
-            </TouchableOpacity>
-          );
-        })}
+              {project.budget && project.contractAmount && project.budget !== project.contractAmount ? (
+                <View style={styles.budgetDivider} />
+              ) : null}
+
+              {project.budget && project.contractAmount && project.budget !== project.contractAmount ? (
+                <View style={styles.budgetItem}>
+                  <View style={[styles.budgetIconBox, { backgroundColor: COLORS.successSoft }]}>
+                    <FontAwesome5 name="coins" size={14} color={COLORS.success} />
+                  </View>
+                  <Text style={styles.budgetLabel}>Budget Allocated</Text>
+                  <Text style={[styles.budgetValue, { color: COLORS.success }]}>
+                    {formatBudget(project.budget)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {project.contractor ? (
+              <View style={[styles.contractorRow]}>
+                <FontAwesome5 name="building" size={11} color={COLORS.textTertiary} />
+                <Text style={styles.contractorText}>Contractor: {project.contractor}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Project info card */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>PROJECT INFORMATION</Text>
+          <View style={styles.divider} />
+
+          <InfoRow icon="user-tie"       label="Engineer"          value={project.engineer}        iconColor={COLORS.primary} />
+          <View style={styles.rowDivider} />
+          <InfoRow icon="map-marker-alt" label="Location"          value={project.location}        iconColor={COLORS.error} />
+          <View style={styles.rowDivider} />
+          <InfoRow icon="calendar-plus"  label="Start Date"        value={project.startDate}       iconColor={COLORS.success} />
+          <View style={styles.rowDivider} />
+          <InfoRow icon="calendar-check" label="Completion Target" value={project.completionDate}  iconColor={COLORS.warning} />
+
+          {project.description ? (
+            <>
+              <View style={styles.rowDivider} />
+              <InfoRow icon="align-left" label="Description" value={project.description} iconColor={COLORS.textTertiary} />
+            </>
+          ) : null}
+        </View>
+
+        {/* Milestones */}
+        {totalMilestones > 0 ? (
+          <View style={styles.milestonesWrap}>
+            <View style={styles.milestonesHeader}>
+              <Text style={styles.sectionLabel}>MILESTONES</Text>
+              <Text style={styles.milestoneCount}>
+                {completedMilestones}/{totalMilestones}
+              </Text>
+            </View>
+
+            {project.milestones!.map((m, index) => {
+              const isFirst = index === 0;
+              const prevStatus = project.milestones![index - 1]?.status?.toString().toLowerCase();
+              const isUnlocked = isFirst || prevStatus === "completed";
+              const isDone = m.status?.toString().toLowerCase() === "completed";
+              const isActive = isUnlocked && !isDone;
+              const isLocked = !isUnlocked;
+
+              return (
+                <View key={m.id || index} style={styles.milestoneWrapper}>
+                  {/* Connector line */}
+                  {index < totalMilestones - 1 ? (
+                    <View
+                      style={[
+                        styles.connector,
+                        { backgroundColor: isDone ? COLORS.success : COLORS.border },
+                      ]}
+                    />
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.milestoneCard,
+                      isLocked && styles.milestoneLocked,
+                      isDone && styles.milestoneDone,
+                    ]}
+                    onPress={() =>
+                      isLocked
+                        ? Alert.alert(
+                            "Milestone Locked",
+                            "Complete the previous milestone first to unlock this one.",
+                          )
+                        : actions.onSelectMilestone(m)
+                    }
+                    activeOpacity={isLocked ? 1 : 0.82}
+                  >
+                    {/* Status indicator */}
+                    <View
+                      style={[
+                        styles.msIconBox,
+                        isDone
+                          ? { backgroundColor: COLORS.success }
+                          : isActive
+                            ? { backgroundColor: COLORS.primarySoft, borderWidth: 2, borderColor: COLORS.primary }
+                            : { backgroundColor: COLORS.track, borderWidth: 1, borderColor: COLORS.border },
+                      ]}
+                    >
+                      <FontAwesome5
+                        name={isDone ? "check" : isLocked ? "lock" : "clock"}
+                        size={11}
+                        color={isDone ? "#fff" : isActive ? COLORS.primary : COLORS.textTertiary}
+                      />
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.msTitle,
+                          isLocked && { color: COLORS.textTertiary },
+                          isDone && { color: COLORS.textPrimary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {m.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.msStatus,
+                          isDone && { color: COLORS.success },
+                          isActive && { color: COLORS.primary },
+                        ]}
+                      >
+                        {isLocked ? "Locked · Complete previous first" : m.status || "Pending"}
+                      </Text>
+                    </View>
+
+                    {!isLocked && (
+                      <FontAwesome5
+                        name="angle-right"
+                        size={16}
+                        color={isDone ? COLORS.success : COLORS.textTertiary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: "#F8F9FA" },
-  navHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+  root: { flex: 1, backgroundColor: COLORS.background },
+
+  // Hero
+  hero: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingBottom: 28,
+    overflow: "hidden",
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#FFF",
+  orb1: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    top: -40,
+    right: -40,
+  },
+  orb2: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    bottom: -30,
+    left: 20,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 1,
+    marginBottom: 16,
   },
-  navTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1A1C1E",
-    marginLeft: 15,
-  },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
-  infoCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 15,
-    marginTop: 10,
-  },
-  projectMainTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#1A1C1E",
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: "row",
+  heroContent: { gap: 8 },
+  heroIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: "center",
-    marginBottom: 6,
+    justifyContent: "center",
+    marginBottom: 4,
   },
-  infoText: {
-    fontSize: 14,
-    color: "#8E8E93",
-    marginLeft: 10,
-    fontWeight: "500",
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    lineHeight: 28,
   },
-  progressCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 30,
-  },
-  progressTextRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  completionLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#8E8E93",
+  heroCode: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.65)",
     letterSpacing: 0.5,
   },
-  completionValue: { fontSize: 14, fontWeight: "800", color: COLORS.primary },
-  progressBarTrack: {
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginTop: 2,
+  },
+  heroBadgeDot: { width: 6, height: 6, borderRadius: 3 },
+  heroBadgeText: { fontSize: 12, fontWeight: "800" },
+
+  // Scroll
+  scroll: { paddingHorizontal: 20, paddingTop: 20, gap: 14 },
+
+  // Cards
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: COLORS.textTertiary,
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  divider: { height: 1, backgroundColor: COLORS.border, marginBottom: 4 },
+  rowDivider: { height: 1, backgroundColor: COLORS.border, marginLeft: 44 },
+
+  // Progress
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+  milestoneCaption: { fontSize: 12, color: COLORS.textSecondary, fontWeight: "500", marginTop: 2 },
+  progressPct: { fontSize: 26, fontWeight: "900" },
+  progressTrack: {
     height: 8,
-    backgroundColor: "#F2F2F7",
+    backgroundColor: COLORS.track,
     borderRadius: 4,
     overflow: "hidden",
   },
-  progressBarThumb: {
-    height: "100%",
-    backgroundColor: COLORS.primary,
-    borderRadius: 4,
+  progressFill: { height: "100%", borderRadius: 4 },
+
+  // Budget
+  budgetRow: { flexDirection: "row", gap: 0 },
+  budgetItem: { flex: 1, alignItems: "center", gap: 8, paddingVertical: 6 },
+  budgetDivider: { width: 1, backgroundColor: COLORS.border, marginVertical: 4 },
+  budgetIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  milestoneHeading: {
+  budgetLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  budgetValue: { fontSize: 20, fontWeight: "900" },
+  contractorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  contractorText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: "600" },
+
+  // Milestones
+  milestonesWrap: { gap: 0 },
+  milestonesHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  milestoneCount: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#8E8E93",
-    marginBottom: 16,
-    letterSpacing: 1,
+    color: COLORS.textSecondary,
+  },
+  milestoneWrapper: { position: "relative" },
+  connector: {
+    position: "absolute",
+    left: 16,
+    top: 50,
+    width: 2,
+    height: 18,
+    zIndex: 1,
   },
   milestoneCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFF",
-    borderRadius: 20,
-    marginBottom: 12,
+    gap: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#F2F2F7",
+    borderColor: COLORS.border,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
   milestoneLocked: {
-    backgroundColor: "rgba(242, 242, 247, 0.6)",
-    borderColor: "transparent",
-    opacity: 0.6,
+    opacity: 0.55,
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+    elevation: 0,
   },
-  statusIconBox: {
+  milestoneDone: { borderColor: "#A7F3D0" },
+  msIconBox: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 16,
+    flexShrink: 0,
   },
-  bgPending: { backgroundColor: COLORS.primary + "15" },
-  bgDone: { backgroundColor: COLORS.success },
-  bgLocked: { backgroundColor: "#E5E5EA" },
-  mTitle: { fontSize: 15, fontWeight: "700", color: "#1A1C1E", lineHeight: 20 },
-  textLocked: { color: "#8E8E93" },
-  mStatus: {
-    fontSize: 13,
-    color: "#8E8E93",
-    marginTop: 4,
+  msTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    lineHeight: 19,
+    marginBottom: 3,
+  },
+  msStatus: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
     fontWeight: "600",
-    textTransform: "uppercase",
+    textTransform: "capitalize",
   },
 });

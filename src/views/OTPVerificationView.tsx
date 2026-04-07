@@ -1,5 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -14,12 +14,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
   FadeInUp,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSequence,
 } from "react-native-reanimated";
 import { COLORS } from "../constants";
 
@@ -29,9 +31,12 @@ interface OTPVerificationViewProps {
   errorMessage: string;
   resendSeconds: number;
   isSending: boolean;
+  showResendSuccess: boolean;
   onSubmit: (code: string) => void;
   onResend: () => void;
   onBack: () => void;
+  onClearError: () => void;
+  onResendSuccessDone: () => void;
 }
 
 const CELL_COUNT = 6;
@@ -90,7 +95,7 @@ const OTPCell = ({
           onKeyPress={({ nativeEvent }) => onKeyPress(nativeEvent.key)}
           onFocus={onFocus}
           keyboardType="numeric"
-          maxLength={6}
+          maxLength={1}
           selectTextOnFocus
           autoFocus={index === 0}
           editable={!isLoading}
@@ -107,34 +112,78 @@ export const OTPVerificationView = ({
   errorMessage,
   resendSeconds,
   isSending,
+  showResendSuccess,
   onSubmit,
   onResend,
   onBack,
+  onClearError,
+  onResendSuccessDone,
 }: OTPVerificationViewProps) => {
   const insets = useSafeAreaInsets();
   const [otp, setOtp] = useState<string[]>(Array(CELL_COUNT).fill(""));
   const [focusedIndex, setFocusedIndex] = useState(0);
   const inputRefs = useRef<(TextInput | null)[]>(Array(CELL_COUNT).fill(null));
 
+  // Error shake animation
+  const shake = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }],
+  }));
+
+  // Resend success toast animation
+  const toastY = useSharedValue(-120);
+  const toastOpacity = useSharedValue(0);
+  const toastStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: toastY.value }],
+    opacity: toastOpacity.value,
+  }));
+
+  useEffect(() => {
+    if (!showResendSuccess) return;
+    toastY.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.back(1.2)) });
+    toastOpacity.value = withTiming(1, { duration: 300 });
+    const slideOut = setTimeout(() => {
+      toastY.value = withTiming(-120, { duration: 350, easing: Easing.in(Easing.quad) });
+      toastOpacity.value = withTiming(0, { duration: 280 });
+    }, 2800);
+    const done = setTimeout(() => onResendSuccessDone(), 3200);
+    return () => { clearTimeout(slideOut); clearTimeout(done); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showResendSuccess]);
+
+  // When error appears: shake, auto-clear cells, refocus, auto-dismiss after 4s
+  useEffect(() => {
+    if (!errorMessage) return;
+    shake.value = withSequence(
+      withTiming(-10, { duration: 55 }),
+      withTiming(10, { duration: 55 }),
+      withTiming(-8, { duration: 55 }),
+      withTiming(8, { duration: 55 }),
+      withTiming(-4, { duration: 55 }),
+      withTiming(0, { duration: 55 }),
+    );
+    setOtp(Array(CELL_COUNT).fill(""));
+    setFocusedIndex(0);
+    const focusTimer = setTimeout(() => inputRefs.current[0]?.focus(), 80);
+    const dismissTimer = setTimeout(() => onClearError(), 4000);
+    return () => {
+      clearTimeout(focusTimer);
+      clearTimeout(dismissTimer);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errorMessage]);
+
   const handleChange = (text: string, index: number) => {
-    if (text.length > 1) {
-      const digits = text.replace(/\D/g, "").split("").slice(0, CELL_COUNT);
-      const next = [...Array(CELL_COUNT).fill("")];
-      digits.forEach((d, i) => { next[i] = d; });
-      setOtp(next);
-      const lastFilled = Math.min(digits.length, CELL_COUNT - 1);
-      inputRefs.current[lastFilled]?.focus();
-      setFocusedIndex(lastFilled);
-      return;
-    }
-    const digit = text.replace(/\D/g, "");
+    const digit = text.replace(/\D/g, "").slice(0, 1);
     const next = [...otp];
     next[index] = digit;
     setOtp(next);
+    // Advance to next cell only if a digit was typed and not already on last cell
     if (digit && index < CELL_COUNT - 1) {
       inputRefs.current[index + 1]?.focus();
       setFocusedIndex(index + 1);
     }
+    // Last cell (index 5): stay put — no cycling back to first box
   };
 
   const handleKeyPress = (key: string, index: number) => {
@@ -173,6 +222,17 @@ export const OTPVerificationView = ({
       {/* Background accents */}
       <View style={styles.bgAccentTop} />
       <View style={styles.bgAccentBottom} />
+
+      {/* ── Resend success toast ── */}
+      <Animated.View style={[styles.successToast, toastStyle, { top: insets.top + 12 }]}>
+        <View style={styles.successToastIconBox}>
+          <FontAwesome5 name="check" size={13} color={COLORS.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.successToastTitle}>Code Sent</Text>
+          <Text style={styles.successToastSubtitle}>A new 6-digit code has been sent to your email</Text>
+        </View>
+      </Animated.View>
 
       {/* Back button */}
       <Animated.View
@@ -238,7 +298,7 @@ export const OTPVerificationView = ({
             </View>
 
             {/* OTP cells */}
-            <View style={styles.otpRow}>
+            <Animated.View style={[styles.otpRow, shakeStyle]}>
               {otp.map((digit, index) => (
                 <OTPCell
                   key={index}
@@ -253,15 +313,13 @@ export const OTPVerificationView = ({
                   isLoading={isLoading}
                 />
               ))}
-            </View>
+            </Animated.View>
 
             {/* Error banner */}
             {errorMessage ? (
-              <Animated.View entering={FadeInDown.duration(300)}>
-                <TouchableOpacity style={styles.alertBanner} onPress={resetOtp} activeOpacity={0.8}>
-                  <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.error} />
-                  <Text style={styles.alertText}>{errorMessage} · Tap to clear</Text>
-                </TouchableOpacity>
+              <Animated.View entering={FadeInDown.duration(250)} style={styles.alertBanner}>
+                <FontAwesome5 name="exclamation-circle" size={14} color={COLORS.error} />
+                <Text style={styles.alertText}>Incorrect code · Please try again</Text>
               </Animated.View>
             ) : null}
 
@@ -345,6 +403,47 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.08)",
     bottom: -180,
     left: -180,
+  },
+
+  // ── Resend success toast ──
+  successToast: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    zIndex: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  successToastIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  successToastTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  successToastSubtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: COLORS.textSecondary,
   },
 
   // ── Nav ──

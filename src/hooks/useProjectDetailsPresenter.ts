@@ -1,6 +1,6 @@
 import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, PermissionsAndroid } from "react-native";
 import { launchCamera } from "react-native-image-picker";
 import Geolocation from "react-native-geolocation-service";
@@ -8,7 +8,6 @@ import { db, storage } from "../firebaseConfig";
 import { callFn } from "../services/CloudFunctionService";
 import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
-import { invalidateCache } from "../utils/cache";
 import { sanitizeInput } from "../utils/security";
 import { logger } from "../utils/logger";
 import type { Milestone, Project } from "../types";
@@ -34,39 +33,34 @@ export const useProjectDetailsPresenter = (
 ) => {
   const [project, setProject] = useState<Project | null>(null);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const selectedMilestoneRef = useRef(selectedMilestone);
+  selectedMilestoneRef.current = selectedMilestone;
 
-  const loadProject = useCallback(async () => {
+  // Real-time subscription to this project + its milestones
+  useEffect(() => {
     if (!projectId) return;
     setIsLoading(true);
-    try {
-      const data = await ProjectModel.getById(projectId);
 
-      if (data && data.milestones && data.milestones.length > 0) {
-        const total = data.milestones.length;
-        const completedCount = data.milestones.filter(
-          (m) => m.status?.toString().toLowerCase() === "completed",
-        ).length;
-
-        data.progress = Math.round((completedCount / total) * 100);
-
-        if (selectedMilestone) {
-          const freshMilestone = data.milestones.find(
-            (m) => m.id === selectedMilestone.id,
+    const unsubscribe = ProjectModel.subscribeToProject(
+      projectId,
+      (data) => {
+        if (data && data.milestones && selectedMilestoneRef.current) {
+          const fresh = data.milestones.find(
+            (m) => m.id === selectedMilestoneRef.current?.id,
           );
-          if (freshMilestone) setSelectedMilestone(freshMilestone);
+          if (fresh) setSelectedMilestone(fresh);
         }
-      }
-      setProject(data);
-    } catch (e) {
-      logger.error("Load Project Error:", e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId, selectedMilestone]);
+        setProject(data);
+        setIsLoading(false);
+      },
+      (err) => {
+        logger.error("Project detail subscription error:", err);
+        setIsLoading(false);
+      },
+    );
 
-  useEffect(() => {
-    loadProject();
+    return unsubscribe;
   }, [projectId]);
 
   const handleAddProof = async (m: Milestone) => {
@@ -153,8 +147,7 @@ export const useProjectDetailsPresenter = (
           syncToDEPW: true,
         }).catch(() => {}); // Non-blocking
 
-        invalidateCache("projects_all");
-        await loadProject();
+        // Real-time listener auto-refreshes — no manual reload needed
         Alert.alert("Success", "Evidence and GPS coordinates saved.");
       }
     } catch (error) {
@@ -168,7 +161,7 @@ export const useProjectDetailsPresenter = (
   return {
     data: { project, selectedMilestone, isLoading },
     actions: {
-      onRefresh: loadProject,
+      onRefresh: () => {}, // No-op — real-time listener handles updates automatically
       goBack: onBackCallback,
       onSelectMilestone: setSelectedMilestone,
       onAddProof: handleAddProof,

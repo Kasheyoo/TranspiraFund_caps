@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { auth } from "../../firebaseConfig";
 import { callFn } from "../../services/CloudFunctionService";
@@ -14,6 +13,7 @@ export function OTPVerificationScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [resendSuccess, setResendSuccess] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(RESEND_COOLDOWN);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -34,7 +34,6 @@ export function OTPVerificationScreen() {
   };
 
   useEffect(() => {
-    // Send OTP as soon as this screen mounts (right after login)
     const sendInitial = async () => {
       setIsSending(true);
       try {
@@ -42,7 +41,7 @@ export function OTPVerificationScreen() {
         startResendTimer();
       } catch (e: unknown) {
         setErrorMessage(sanitizeOTPError(e, "send") + " Tap 'Resend Code' to try again.");
-        setResendSeconds(0); // Allow immediate resend
+        setResendSeconds(0);
       } finally {
         setIsSending(false);
       }
@@ -58,17 +57,15 @@ export function OTPVerificationScreen() {
     try {
       const success = await OTPService.verifyCode(code);
       if (success) {
-        // Log sign-in to projEngAuditTrails only (not DEPW — login is noise for them)
         const firstName = userProfile?.firstName || userProfile?.name?.split(" ")[0] || "Engineer";
         callFn("logMobileAuditTrail", {
           action: "Signed In",
           details: firstName,
           syncToDEPW: false,
-        }).catch(() => {}); // Non-blocking
-
-        setIsOTPVerified(true); // AppNavigator proceeds to main app / force password change
+        }).catch(() => {});
+        setIsOTPVerified(true);
       } else {
-        setErrorMessage("Invalid or expired code. Tap the error to clear and try again.");
+        setErrorMessage("Invalid or expired code.");
       }
     } catch (e: unknown) {
       setErrorMessage(sanitizeOTPError(e, "verify"));
@@ -83,7 +80,7 @@ export function OTPVerificationScreen() {
     try {
       await OTPService.sendCode();
       startResendTimer();
-      Alert.alert("Code Sent", "A new 6-digit code has been sent to your email.");
+      setResendSuccess(true); // Show in-app toast instead of system Alert
     } catch (e: unknown) {
       setErrorMessage(sanitizeOTPError(e, "send"));
     } finally {
@@ -92,7 +89,6 @@ export function OTPVerificationScreen() {
   };
 
   const handleBack = () => {
-    // Sign out — AppNavigator will return to AuthNavigator (Landing/Login)
     auth.signOut();
   };
 
@@ -103,9 +99,12 @@ export function OTPVerificationScreen() {
       isSending={isSending}
       errorMessage={errorMessage}
       resendSeconds={resendSeconds}
+      showResendSuccess={resendSuccess}
       onSubmit={handleSubmit}
       onResend={handleResend}
       onBack={handleBack}
+      onClearError={() => setErrorMessage("")}
+      onResendSuccessDone={() => setResendSuccess(false)}
     />
   );
 }

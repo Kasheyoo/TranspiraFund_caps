@@ -1,19 +1,15 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  Alert,
-  Linking,
-  PermissionsAndroid,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
-import { COLORS, STYLES } from "../constants";
+import { COLORS } from "../constants";
 import { LogoutModal } from "../components/LogoutModal";
 
 interface SettingsViewProps {
@@ -21,20 +17,9 @@ interface SettingsViewProps {
   onNavigate: (screen: string) => void;
 }
 
-interface SettingItemProps {
-  icon: string;
-  label: string;
-  onPress?: () => void;
-  isSwitch?: boolean;
-  switchValue?: boolean;
-  onSwitchChange?: (value: boolean) => void;
-  danger?: boolean;
-}
-
 export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   const insets = useSafeAreaInsets();
   const { userProfile } = useAuth();
-  const [isPushEnabled, setIsPushEnabled] = useState(false);
   const [isLogoutVisible, setIsLogoutVisible] = useState(false);
 
   const displayName = userProfile?.firstName
@@ -49,154 +34,115 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   const roleDisplay =
     userProfile?.role === "PROJ_ENG" ? "Project Engineer" : userProfile?.role || "Engineer";
 
-  useEffect(() => {
-    (async () => {
-      const granted = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
-      );
-      setIsPushEnabled(granted);
-    })();
-  }, []);
-
-  const handleToggleNotifications = async (value: boolean) => {
-    if (value) {
-      const result = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS as any,
-      );
-      if (result === PermissionsAndroid.RESULTS.GRANTED) {
-        setIsPushEnabled(true);
-      } else {
-        Alert.alert(
-          "Permission Denied",
-          "Please enable notifications in your device settings.",
-          [{ text: "Open Settings", onPress: () => Linking.openSettings() }],
-        );
-        setIsPushEnabled(false);
-      }
-    } else {
-      setIsPushEnabled(false);
-    }
-  };
-
-  const handleLogout = () => {
-    setIsLogoutVisible(true);
-  };
-
-  const confirmLogout = () => {
-    setIsLogoutVisible(false);
-    onLogout();
-  };
-
-  const SettingItem = ({
-    icon,
-    label,
-    onPress,
-    isSwitch,
-    switchValue,
-    onSwitchChange,
-    danger,
-  }: SettingItemProps) => (
-    <TouchableOpacity
-      style={styles.item}
-      activeOpacity={isSwitch ? 1 : 0.7}
-      onPress={!isSwitch ? onPress : undefined}
-    >
-      <View style={[styles.iconBox, danger && { backgroundColor: COLORS.errorSoft }]}>
-        <FontAwesome5
-          name={icon}
-          size={14}
-          color={danger ? COLORS.error : COLORS.textSecondary}
-        />
-      </View>
-      <Text style={[styles.label, danger && { color: COLORS.error }]}>{label}</Text>
-
-      {isSwitch ? (
-        <Switch
-          value={switchValue}
-          onValueChange={onSwitchChange}
-          trackColor={{ false: "#D1D1D6", true: COLORS.primary }}
-          thumbColor="#FFFFFF"
-        />
-      ) : (
-        <FontAwesome5
-          name="chevron-right"
-          size={12}
-          color={COLORS.textTertiary}
-        />
-      )}
-    </TouchableOpacity>
-  );
-
   return (
-    <View style={STYLES.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <Text style={styles.title}>Settings</Text>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Page title */}
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Settings</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }}>
-        {/* User profile card */}
-        <TouchableOpacity
-          style={styles.profileCard}
-          onPress={() => onNavigate("ProfileView")}
-          activeOpacity={0.8}
-        >
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>{displayName}</Text>
-            <Text style={styles.profileRole}>{roleDisplay}</Text>
-          </View>
-          <FontAwesome5 name="chevron-right" size={12} color={COLORS.textTertiary} />
-        </TouchableOpacity>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Profile Hero ─────────────────────────────────── */}
+        <View style={styles.profileCard}>
+          {/* Teal background panel */}
+          <View style={styles.profileBanner}>
+            {/* Decorative orbs */}
+            <View style={styles.orbA} />
+            <View style={styles.orbB} />
 
-        <Text style={styles.sectionTitle}>GENERAL</Text>
-        <View style={styles.section}>
-          <SettingItem
-            icon="user"
-            label="Account Information"
+            {/* Avatar */}
+            <View style={styles.avatarRing}>
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+            </View>
+
+            {/* Name + role */}
+            <Text style={styles.heroName}>{displayName}</Text>
+            <View style={styles.roleBadge}>
+              <FontAwesome5 name="hard-hat" size={10} color="#FFFFFF" />
+              <Text style={styles.roleText}>{roleDisplay}</Text>
+            </View>
+          </View>
+
+          {/* White info panel */}
+          <View style={styles.profileInfoPanel}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconBox}>
+                <FontAwesome5 name="tools" size={13} color={COLORS.primary} />
+              </View>
+              <Text style={styles.infoLabel}>Construction Division</Text>
+            </View>
+
+            <View style={styles.infoDivider} />
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconBox}>
+                <FontAwesome5 name="landmark" size={13} color={COLORS.primary} />
+              </View>
+              <Text style={styles.infoLabel}>
+                Dept. of Public Works{" "}
+                <Text style={styles.infoLabelBold}>(DEPW)</Text>
+              </Text>
+            </View>
+
+            {userProfile?.email ? (
+              <>
+                <View style={styles.infoDivider} />
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconBox}>
+                    <FontAwesome5 name="envelope" size={13} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.infoLabel} numberOfLines={1}>
+                    {userProfile.email}
+                  </Text>
+                </View>
+              </>
+            ) : null}
+          </View>
+
+          {/* View Profile button */}
+          <TouchableOpacity
+            style={styles.viewProfileBtn}
             onPress={() => onNavigate("ProfileView")}
-          />
-          <SettingItem
-            icon="bell"
-            label="Push Notifications"
-            isSwitch={true}
-            switchValue={isPushEnabled}
-            onSwitchChange={handleToggleNotifications}
-          />
+            activeOpacity={0.7}
+          >
+            <FontAwesome5 name="user-circle" size={14} color={COLORS.primary} />
+            <Text style={styles.viewProfileText}>View Full Profile</Text>
+            <FontAwesome5 name="angle-right" size={14} color={COLORS.primary} />
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>SUPPORT</Text>
-        <View style={styles.section}>
-          <SettingItem
-            icon="question-circle"
-            label="Help Center"
-            onPress={() => onNavigate("HelpCenterView")}
-          />
-          <SettingItem
-            icon="info-circle"
-            label="About App"
-            onPress={() => onNavigate("AboutAppView")}
-          />
-        </View>
-
-        <Text style={styles.sectionTitle}>ACTIVITY</Text>
-        <View style={styles.section}>
-          <SettingItem
-            icon="history"
-            label="Audit Trail"
+        {/* ── Action Items ─────────────────────────────────── */}
+        <View style={styles.actionsGroup}>
+          <TouchableOpacity
+            style={styles.actionItem}
             onPress={() => onNavigate("AuditTrail")}
-          />
-        </View>
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: "#EDE9FE" }]}>
+              <FontAwesome5 name="history" size={15} color="#7C3AED" />
+            </View>
+            <Text style={styles.actionLabel}>Audit Trail</Text>
+            <FontAwesome5 name="angle-right" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>ACCOUNT</Text>
-        <View style={styles.section}>
-          <SettingItem
-            icon="sign-out-alt"
-            label="Log Out"
-            onPress={handleLogout}
-            danger
-          />
+          <View style={styles.actionDivider} />
+
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => setIsLogoutVisible(true)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: COLORS.errorSoft }]}>
+              <FontAwesome5 name="sign-out-alt" size={15} color={COLORS.error} />
+            </View>
+            <Text style={[styles.actionLabel, { color: COLORS.error }]}>Log Out</Text>
+            <FontAwesome5 name="angle-right" size={16} color={COLORS.error + "80"} />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.versionText}>TranspiraFund v1.0.6</Text>
@@ -205,86 +151,207 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
       <LogoutModal
         visible={isLogoutVisible}
         onClose={() => setIsLogoutVisible(false)}
-        onConfirm={confirmLogout}
+        onConfirm={() => { setIsLogoutVisible(false); onLogout(); }}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  header: {
+  container: { flex: 1, backgroundColor: COLORS.background },
+  pageHeader: {
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
-  title: { fontSize: 28, fontWeight: "900", color: COLORS.textPrimary },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: COLORS.textPrimary,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 120,
+  },
+
+  // ── Profile Hero ───────────────────────────────────────────
   profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.surface,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 24,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-  },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  avatarText: { color: "#FFF", fontSize: 18, fontWeight: "800" },
-  profileName: { fontSize: 16, fontWeight: "800", color: COLORS.textPrimary },
-  profileRole: { fontSize: 13, fontWeight: "600", color: COLORS.textSecondary, marginTop: 2 },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: COLORS.textTertiary,
-    marginBottom: 8,
-    marginTop: 8,
-    letterSpacing: 0.5,
-  },
-  section: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 8,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
   },
-  item: {
-    flexDirection: "row",
+  profileBanner: {
+    backgroundColor: COLORS.primary,
     alignItems: "center",
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.background,
+    paddingTop: 32,
+    paddingBottom: 28,
+    overflow: "hidden",
   },
-  iconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
+  orbA: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    top: -60,
+    right: -40,
+  },
+  orbB: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "rgba(0,0,0,0.06)",
+    bottom: -60,
+    left: -30,
+  },
+  avatarRing: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginBottom: 14,
   },
-  label: {
+  avatarCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: COLORS.primary,
+    fontSize: 26,
+    fontWeight: "900",
+  },
+  heroName: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  roleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  roleText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+  },
+
+  // ── Info panel ────────────────────────────────────────────
+  profileInfoPanel: {
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 12,
+  },
+  infoIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  infoLabelBold: {
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginLeft: 46,
+  },
+
+  // ── View Profile button ───────────────────────────────────
+  viewProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.primarySoft,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+  },
+  viewProfileText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+
+  // ── Action items ──────────────────────────────────────────
+  actionsGroup: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 20,
+  },
+  actionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    gap: 14,
+  },
+  actionIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionLabel: {
     flex: 1,
     fontSize: 15,
     fontWeight: "600",
     color: COLORS.textPrimary,
   },
+  actionDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginLeft: 70,
+  },
+
   versionText: {
     textAlign: "center",
     color: COLORS.textTertiary,
     fontSize: 12,
     fontWeight: "500",
-    marginTop: 24,
   },
 });
