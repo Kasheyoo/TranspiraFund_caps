@@ -42,7 +42,11 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-const FILTERS = ["All", "In Progress", "Completed", "Delayed", "Pending"];
+// Pre-active statuses (web app workflow) — display as In Progress on mobile
+const PRE_ACTIVE: Record<string, true> = { "Draft": true, "For Mayor": true };
+const displayStatus = (raw: string) => PRE_ACTIVE[raw] ? "In Progress" : raw;
+
+const FILTERS = ["All", "In Progress", "Completed", "Delayed"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number) => {
@@ -55,13 +59,11 @@ const formatBudget = (v?: number) => {
 // ── Summary stats bar ─────────────────────────────────────────────────────────
 const StatsBar = ({ projects }: { projects: Project[] }) => {
   const counts = useMemo(() => {
-    const c: Record<string, number> = {
-      "In Progress": 0, "Completed": 0, "Delayed": 0, "Pending": 0,
-    };
+    const c: Record<string, number> = { "In Progress": 0, "Completed": 0, "Delayed": 0 };
     projects.forEach((p) => {
       const s = p.status ?? "";
       // Draft / For Mayor are pre-active — count as In Progress while sync is pending
-      if (s === "Draft" || s === "For Mayor") {
+      if (s === "Draft" || s === "For Mayor" || s === "Pending") {
         c["In Progress"]++;
       } else if (c[s] !== undefined) {
         c[s]++;
@@ -72,7 +74,7 @@ const StatsBar = ({ projects }: { projects: Project[] }) => {
 
   return (
     <View style={statsStyles.row}>
-      {(["In Progress", "Completed", "Delayed", "Pending"] as const).map((s) => {
+      {(["In Progress", "Completed", "Delayed"] as const).map((s) => {
         const sc = STATUS_MAP[s];
         return (
           <View key={s} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
@@ -105,7 +107,7 @@ const statsStyles = StyleSheet.create({
 
 // ── Project card ──────────────────────────────────────────────────────────────
 const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) => {
-  const status = item.status || "Pending";
+  const status = displayStatus(item.status || "Pending");
   const sc     = STATUS_MAP[status] || DEFAULT_SC;
   const progress = item.progress || 0;
   const budget   = formatBudget(item.contractAmount ?? item.budget);

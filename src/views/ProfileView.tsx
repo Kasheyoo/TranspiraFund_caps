@@ -167,7 +167,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
             <View style={styles.infoTextGroup}>
               <Text style={styles.infoCaption}>Division</Text>
               <Text style={styles.infoValue}>
-                {userProfile?.department || "Construction Division"}
+                {userProfile?.department || "Construction Services Division"}
               </Text>
             </View>
           </View>
@@ -193,8 +193,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
             <View style={styles.infoTextGroup}>
               <Text style={styles.infoCaption}>Organization</Text>
               <Text style={styles.infoValue}>
-                Dept. of Public Works{" "}
-                <Text style={styles.infoValueBold}>(DEPW)</Text>
+                Construction Services Division
               </Text>
             </View>
           </View>

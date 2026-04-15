@@ -22,92 +22,122 @@ interface AuditTrailViewProps {
 const getActionIcon = (action = ""): { name: string; color: string; bg: string } => {
   const a = action.toLowerCase();
   if (a.includes("sign") && a.includes("in"))
-    return { name: "sign-in-alt", color: COLORS.primary, bg: COLORS.primarySoft };
+    return { name: "sign-in-alt",        color: COLORS.primary,  bg: COLORS.primarySoft };
   if (a.includes("sign") && a.includes("out"))
-    return { name: "sign-out-alt", color: "#6B7280", bg: "#F3F4F6" };
+    return { name: "sign-out-alt",        color: "#6B7280",       bg: "#F3F4F6" };
   if (a.includes("password"))
-    return { name: "key", color: "#7C3AED", bg: "#EDE9FE" };
+    return { name: "key",                 color: "#7C3AED",       bg: "#EDE9FE" };
   if (a.includes("proof") || a.includes("upload"))
-    return { name: "cloud-upload-alt", color: "#0891B2", bg: "#E0F2FE" };
+    return { name: "cloud-upload-alt",    color: "#0891B2",       bg: "#E0F2FE" };
+  if (a.includes("milestone"))
+    return { name: "layer-group",         color: COLORS.warning,  bg: COLORS.warningSoft };
   if (a.includes("delay"))
-    return { name: "exclamation-triangle", color: COLORS.error, bg: COLORS.error + "15" };
+    return { name: "exclamation-circle",  color: COLORS.error,    bg: COLORS.errorSoft };
   if (a.includes("status") || a.includes("update"))
-    return { name: "pen", color: "#D97706", bg: "#FEF3C7" };
+    return { name: "pen",                 color: "#D97706",       bg: "#FEF3C7" };
   return { name: "history", color: COLORS.primary, bg: COLORS.primarySoft };
 };
 
 const formatTimestamp = (seconds: number): string => {
-  const date = new Date(seconds * 1000);
-  const dateStr = date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timeStr = date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${dateStr} · ${timeStr}`;
+  const date      = new Date(seconds * 1000);
+  const now       = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const timeStr = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString())       return `Today · ${timeStr}`;
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday · ${timeStr}`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ` · ${timeStr}`;
 };
 
-export const AuditTrailView = ({
-  logs,
-  isLoading,
-  onRefresh,
-  onBack,
-}: AuditTrailViewProps) => {
+export const AuditTrailView = ({ logs, isLoading, onRefresh, onBack }: AuditTrailViewProps) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.mainContainer, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <FontAwesome5 name="arrow-left" size={18} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Audit Trail</Text>
-        <View style={{ width: 40 }} />
+    <View style={S.root}>
+
+      {/* ══ HERO ══════════════════════════════════════════════════ */}
+      <View style={[S.hero, { paddingTop: insets.top + 16 }]}>
+        <View style={S.orb1} /><View style={S.orb2} />
+
+        <View style={S.heroRow}>
+          {/* Back button */}
+          <TouchableOpacity style={S.backBtn} onPress={onBack} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <FontAwesome5 name="arrow-left" size={15} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Title block */}
+          <View style={S.heroCenter}>
+            <Text style={S.heroTitle}>Audit Trail</Text>
+            <Text style={S.heroSub}>Your field activity log</Text>
+          </View>
+
+          {/* Count chip */}
+          {logs.length > 0 && (
+            <View style={S.countChip}>
+              <Text style={S.countText}>{logs.length}</Text>
+            </View>
+          )}
+          {logs.length === 0 && <View style={{ width: 44 }} />}
+        </View>
       </View>
 
+      {/* ══ CONTENT ═══════════════════════════════════════════════ */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isLoading}
             onRefresh={onRefresh}
             tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
           />
         }
       >
-        <Text style={styles.sectionHeading}>ALL ACTIVITY</Text>
-
+        {/* Loading initial state */}
         {isLoading && logs.length === 0 ? (
-          <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+          <View style={S.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
         ) : logs.length > 0 ? (
-          logs.map((log) => {
-            const icon = getActionIcon(log.action);
-            return (
-              <View key={log.id || Math.random().toString()} style={styles.activityCard}>
-                <View style={[styles.activityIcon, { backgroundColor: icon.bg }]}>
-                  <FontAwesome5 name={icon.name} size={14} color={icon.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.activityMessage}>
-                    {log.action}: {log.details}
-                  </Text>
-                  <Text style={styles.activityTime}>
-                    {log.timestamp?.seconds
-                      ? formatTimestamp(log.timestamp.seconds)
-                      : "Recently"}
-                  </Text>
-                </View>
-              </View>
-            );
-          })
+          <>
+            <Text style={S.sectionLabel}>ALL ACTIVITY</Text>
+            <View style={S.logCard}>
+              {logs.map((log, i) => {
+                const icon   = getActionIcon(log.action);
+                const isLast = i === logs.length - 1;
+                return (
+                  <View key={log.id || i.toString()}>
+                    <View style={[S.logRow, isLast && S.logRowLast]}>
+                      {/* Icon */}
+                      <View style={[S.logIcon, { backgroundColor: icon.bg }]}>
+                        <FontAwesome5 name={icon.name} size={13} color={icon.color} />
+                      </View>
+
+                      {/* Text */}
+                      <View style={S.logBody}>
+                        <Text style={S.logAction}>{log.action}</Text>
+                        {log.details ? (
+                          <Text style={S.logDetail} numberOfLines={2}>{log.details}</Text>
+                        ) : null}
+                        <Text style={S.logTime}>
+                          {log.timestamp?.seconds ? formatTimestamp(log.timestamp.seconds) : "Recently"}
+                        </Text>
+                      </View>
+                    </View>
+                    {!isLast && <View style={S.rowDivider} />}
+                  </View>
+                );
+              })}
+            </View>
+          </>
         ) : (
-          <View style={styles.emptyState}>
-            <FontAwesome5 name="clipboard-list" size={36} color={COLORS.border} />
-            <Text style={styles.emptyText}>No activity found.</Text>
-            <Text style={styles.emptySubText}>Pull down to refresh</Text>
+          <View style={S.emptyBox}>
+            <View style={S.emptyIconBox}>
+              <FontAwesome5 name="clipboard-list" size={22} color={COLORS.textTertiary} />
+            </View>
+            <Text style={S.emptyTitle}>No Activity Yet</Text>
+            <Text style={S.emptyBody}>Your field actions will appear here.</Text>
           </View>
         )}
       </ScrollView>
@@ -115,78 +145,88 @@ export const AuditTrailView = ({
   );
 };
 
-const styles = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+// ── Styles ─────────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.background },
+
+  // ── Hero ──────────────────────────────────────────────────────
+  hero: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    overflow: "hidden",
+  },
+  orb1: {
+    position: "absolute", width: 180, height: 180, borderRadius: 90,
+    backgroundColor: "rgba(255,255,255,0.06)", top: -50, right: -40,
+  },
+  orb2: {
+    position: "absolute", width: 100, height: 100, borderRadius: 50,
+    backgroundColor: "rgba(255,255,255,0.04)", bottom: -30, left: -15,
+  },
+  heroRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   backBtn: {
-    padding: 8,
-    width: 40,
-    alignItems: "center",
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.28)",
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
+  heroCenter: { flex: 1, alignItems: "center" },
+  heroTitle:  { fontSize: 18, fontWeight: "900", color: "#fff" },
+  heroSub:    { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.7)", marginTop: 2 },
+  countChip: {
+    width: 44, height: 40, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.28)",
   },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 100, paddingTop: 16 },
-  sectionHeading: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: COLORS.textSecondary,
-    marginBottom: 16,
-    letterSpacing: 1,
-    paddingHorizontal: 4,
+  countText: { fontSize: 13, fontWeight: "900", color: "#fff" },
+
+  // ── Content ───────────────────────────────────────────────────
+  scroll:      { paddingHorizontal: 18, paddingTop: 20 },
+  sectionLabel:{
+    fontSize: 10, fontWeight: "900", color: COLORS.textTertiary,
+    letterSpacing: 1, marginBottom: 10, paddingHorizontal: 2,
   },
-  activityCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
+
+  logCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1, borderColor: COLORS.border,
+    overflow: "hidden",
+    elevation: 1, shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4,
   },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
+  logRow: {
+    flexDirection: "row", alignItems: "flex-start",
+    paddingHorizontal: 16, paddingVertical: 14, gap: 14,
   },
-  activityMessage: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    lineHeight: 20,
+  logRowLast: { paddingBottom: 16 },
+  rowDivider: { height: 1, backgroundColor: COLORS.border, marginLeft: 70 },
+
+  logIcon: {
+    width: 40, height: 40, borderRadius: 13,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  activityTime: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 4,
-    fontWeight: "600",
+  logBody:   { flex: 1 },
+  logAction: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 19 },
+  logDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2, fontWeight: "500", lineHeight: 16 },
+  logTime:   { fontSize: 11, color: COLORS.textTertiary, marginTop: 5, fontWeight: "600" },
+
+  // ── Loading ───────────────────────────────────────────────────
+  loadingBox: { paddingTop: 60, alignItems: "center" },
+
+  // ── Empty state ───────────────────────────────────────────────
+  emptyBox:     { alignItems: "center", paddingTop: 60, gap: 8 },
+  emptyIconBox: {
+    width: 60, height: 60, borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1, borderColor: COLORS.border,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 4,
   },
-  emptyState: { paddingVertical: 50, alignItems: "center" },
-  emptyText: {
-    color: COLORS.textTertiary,
-    fontWeight: "600",
-    fontSize: 15,
-    marginTop: 12,
-  },
-  emptySubText: {
-    color: COLORS.textTertiary,
-    fontSize: 12,
-    marginTop: 4,
-  },
+  emptyTitle: { fontSize: 15, fontWeight: "700", color: COLORS.textPrimary },
+  emptyBody:  { fontSize: 12, color: COLORS.textSecondary, textAlign: "center" },
 });

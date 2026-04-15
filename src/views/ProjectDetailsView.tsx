@@ -9,8 +9,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useState } from "react";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
+import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal";
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 interface ProjectDetailsData {
@@ -41,6 +43,10 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
   "For Mayor":   { accent: "#7C3AED",      bg: "#EDE9FE",           text: "#7C3AED",      icon: "user-tie"           },
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
+
+// Pre-active statuses set by the web app workflow — always display as In Progress on mobile
+const PRE_ACTIVE: Record<string, true> = { "Draft": true, "For Mayor": true };
+const displayStatus = (raw: string) => PRE_ACTIVE[raw] ? "In Progress" : raw;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number): string => {
@@ -163,7 +169,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
   if (!project) return null;
 
-  const status   = project.status || "Pending";
+  const status   = displayStatus(project.status || "Pending");
   const sc       = STATUS_MAP[status] || DEFAULT_SC;
   const progress = Math.min(100, Math.max(0, project.progress || 0));
 
@@ -185,16 +191,8 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const initials = displayEngineer
     ?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() ?? "PE";
 
-  const handleGenerate = () => {
-    Alert.alert(
-      "Generate Standard Milestones",
-      "This will create 8 standard construction-phase milestones for this project. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Generate", style: "default", onPress: actions.onGenerateMilestones },
-      ],
-    );
-  };
+  const [milestoneModalVisible, setMilestoneModalVisible] = useState(false);
+  const handleGenerate = () => setMilestoneModalVisible(true);
 
   return (
     <View style={D.root}>
@@ -454,9 +452,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
             <TouchableOpacity
               style={[D.generateBtn, totalMs > 0 && D.generateBtnDone]}
-              onPress={totalMs === 0 ? handleGenerate : () =>
-                Alert.alert("Already Generated", "Milestones have already been created for this project.")
-              }
+              onPress={handleGenerate}
               activeOpacity={0.8}
             >
               {isLoading ? (
@@ -510,6 +506,11 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         </View>
 
       </ScrollView>
+
+      <MilestoneGenerationModal
+        visible={milestoneModalVisible}
+        onClose={() => setMilestoneModalVisible(false)}
+      />
     </View>
   );
 };
