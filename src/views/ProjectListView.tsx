@@ -33,14 +33,16 @@ interface ProjectListViewProps {
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; icon: string }> = {
-  "In Progress": { accent: COLORS.primary,  bg: COLORS.primarySoft, text: COLORS.primary,  icon: "spinner"         },
-  "Completed":   { accent: COLORS.success,  bg: COLORS.successSoft, text: COLORS.success,  icon: "check-circle"    },
+  "In Progress": { accent: COLORS.primary,  bg: COLORS.primarySoft, text: COLORS.primary,  icon: "spinner"            },
+  "Completed":   { accent: COLORS.success,  bg: COLORS.successSoft, text: COLORS.success,  icon: "check-circle"       },
   "Delayed":     { accent: COLORS.error,    bg: COLORS.errorSoft,   text: COLORS.error,    icon: "exclamation-circle" },
-  "Pending":     { accent: COLORS.warning,  bg: COLORS.warningSoft, text: COLORS.warning,  icon: "clock"           },
+  "Pending":     { accent: COLORS.warning,  bg: COLORS.warningSoft, text: COLORS.warning,  icon: "clock"              },
+  "Draft":       { accent: "#64748B",       bg: "#F1F5F9",          text: "#64748B",       icon: "file-alt"           },
+  "For Mayor":   { accent: "#7C3AED",       bg: "#EDE9FE",          text: "#7C3AED",       icon: "user-tie"           },
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-const FILTERS = ["All", "In Progress", "Completed", "Delayed", "Pending"];
+const FILTERS = ["All", "In Progress", "Completed", "Delayed", "Pending", "Draft", "For Mayor"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number) => {
@@ -53,19 +55,33 @@ const formatBudget = (v?: number) => {
 // ── Summary stats bar ─────────────────────────────────────────────────────────
 const StatsBar = ({ projects }: { projects: Project[] }) => {
   const counts = useMemo(() => {
-    const c = { "In Progress": 0, Completed: 0, Delayed: 0, Pending: 0 };
-    projects.forEach((p) => { if (p.status && c[p.status as keyof typeof c] !== undefined) c[p.status as keyof typeof c]++; });
+    const c: Record<string, number> = {
+      "In Progress": 0, "Completed": 0, "Delayed": 0, "Pending": 0, "Draft": 0, "For Mayor": 0,
+    };
+    projects.forEach((p) => {
+      if (p.status && c[p.status] !== undefined) c[p.status]++;
+    });
     return c;
   }, [projects]);
 
+  // Only show stat tiles that have a count > 0 (plus always show In Progress + Completed)
+  const tiles: Array<{ key: string; label: string }> = [
+    { key: "In Progress", label: "Active"    },
+    { key: "Completed",   label: "Done"      },
+    { key: "Delayed",     label: "Delayed"   },
+    { key: "Draft",       label: "Draft"     },
+    { key: "For Mayor",   label: "For Mayor" },
+    { key: "Pending",     label: "Pending"   },
+  ].filter((t) => t.key === "In Progress" || t.key === "Completed" || counts[t.key] > 0);
+
   return (
     <View style={statsStyles.row}>
-      {(["In Progress", "Completed", "Delayed", "Pending"] as const).map((s) => {
-        const sc = STATUS_MAP[s];
+      {tiles.map((t) => {
+        const sc = STATUS_MAP[t.key];
         return (
-          <View key={s} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
-            <Text style={[statsStyles.num, { color: sc.accent }]}>{counts[s]}</Text>
-            <Text style={statsStyles.label}>{s === "In Progress" ? "Active" : s}</Text>
+          <View key={t.key} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
+            <Text style={[statsStyles.num, { color: sc.accent }]}>{counts[t.key]}</Text>
+            <Text style={statsStyles.label}>{t.label}</Text>
           </View>
         );
       })}
@@ -208,7 +224,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
         <View style={S.heroContent}>
           <View style={S.heroRow}>
             <View>
-              <Text style={S.heroLabel}>HCSD · CONSTRUCTION SERVICES</Text>
+              <Text style={S.heroLabel}>CONSTRUCTION SERVICES DIVISION</Text>
               <Text style={S.heroTitle}>Projects</Text>
             </View>
             <View style={S.liveChip}>

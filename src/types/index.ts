@@ -92,6 +92,8 @@ export interface DashboardStats {
   progress: number;  // in-progress / ongoing projects
   done: number;      // completed projects
   delay: number;     // delayed projects
+  draft?: number;    // draft projects (not yet active)
+  forMayor?: number; // projects awaiting mayor-level approval
   // Additional web stats (available but not required by mobile dashboard)
   engineerCount?: number;
   departmentCount?: number;

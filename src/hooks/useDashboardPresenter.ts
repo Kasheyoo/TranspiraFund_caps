@@ -7,7 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import { ROUTES } from "../navigation/routes";
 
 export const useDashboardPresenter = (_navigationCallback?: () => void) => {
-  const [stats, setStats] = useState<DashboardStats>({ progress: 0, done: 0, delay: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ progress: 0, done: 0, delay: 0, draft: 0, forMayor: 0 });
   const [recentLogs, setRecentLogs] = useState<AuditTrail[]>([]);
   const [engineerName, setEngineerName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -23,19 +23,19 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
         let inProgress = 0;
         let completed = 0;
         let delayed = 0;
+        let draft = 0;
+        let forMayor = 0;
 
         projects.forEach((proj) => {
           const s = proj.status?.toLowerCase();
-          if (s === "completed") {
-            completed++;
-          } else if (s === "delayed") {
-            delayed++;
-          } else if (s === "in progress") {
-            inProgress++;
-          }
+          if (s === "completed")        completed++;
+          else if (s === "delayed")     delayed++;
+          else if (s === "in progress") inProgress++;
+          else if (s === "draft")       draft++;
+          else if (s === "for mayor")   forMayor++;
         });
 
-        setStats({ progress: inProgress, done: completed, delay: delayed });
+        setStats({ progress: inProgress, done: completed, delay: delayed, draft, forMayor });
       }
 
       const logs = await AuditTrailService.getAll();

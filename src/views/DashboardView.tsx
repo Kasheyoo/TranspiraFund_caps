@@ -82,7 +82,7 @@ const StatCard = ({ icon, count, label, color, bg }: StatCardProps) => (
 export const DashboardView = ({ data, actions }: DashboardViewProps) => {
   const insets = useSafeAreaInsets();
   const { stats, recentLogs, engineerName, isLoading } = data;
-  const total = (stats.progress || 0) + (stats.done || 0) + (stats.delay || 0);
+  const total = (stats.progress || 0) + (stats.done || 0) + (stats.delay || 0) + (stats.draft || 0) + (stats.forMayor || 0);
   const firstName = engineerName?.split(" ")[0] || "Engineer";
 
   return (
@@ -120,7 +120,7 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
             {/* Role chip */}
             <View style={S.roleChip}>
               <FontAwesome5 name="hard-hat" size={10} color="rgba(255,255,255,0.8)" />
-              <Text style={S.roleText}>Project Engineer · HCSD</Text>
+              <Text style={S.roleText}>Project Engineer · Const. Services Div.</Text>
             </View>
           </View>
         </View>
@@ -139,35 +139,28 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
           )}
 
           <View style={S.statsRow}>
-            <StatCard
-              icon="spinner"
-              count={stats.progress || 0}
-              label="IN PROGRESS"
-              color={COLORS.primary}
-              bg={COLORS.primarySoft}
-            />
-            <StatCard
-              icon="check-circle"
-              count={stats.done || 0}
-              label="COMPLETED"
-              color={COLORS.success}
-              bg={COLORS.successSoft}
-            />
-            <StatCard
-              icon="exclamation-circle"
-              count={stats.delay || 0}
-              label="DELAYED"
-              color={COLORS.error}
-              bg={COLORS.errorSoft}
-            />
+            <StatCard icon="spinner"            count={stats.progress  || 0} label="IN PROGRESS" color={COLORS.primary} bg={COLORS.primarySoft} />
+            <StatCard icon="check-circle"       count={stats.done      || 0} label="COMPLETED"   color={COLORS.success} bg={COLORS.successSoft} />
+            <StatCard icon="exclamation-circle" count={stats.delay     || 0} label="DELAYED"     color={COLORS.error}   bg={COLORS.errorSoft}   />
           </View>
+          {/* Draft / For Mayor — only shown when count > 0 */}
+          {((stats.draft || 0) + (stats.forMayor || 0)) > 0 && (
+            <View style={[S.statsRow, { marginTop: 8 }]}>
+              {(stats.draft || 0) > 0 && (
+                <StatCard icon="file-alt"  count={stats.draft     || 0} label="DRAFT"     color="#64748B" bg="#F1F5F9" />
+              )}
+              {(stats.forMayor || 0) > 0 && (
+                <StatCard icon="user-tie"  count={stats.forMayor  || 0} label="FOR MAYOR" color="#7C3AED" bg="#EDE9FE" />
+              )}
+            </View>
+          )}
         </View>
 
         {/* ══ QUICK INFO STRIP ═══════════════════════════════════ */}
         <View style={S.infoStrip}>
           <View style={S.infoItem}>
             <FontAwesome5 name="building" size={12} color={COLORS.primary} />
-            <Text style={S.infoText}>HCSD — Construction Services Division</Text>
+            <Text style={S.infoText}>Construction Services Division</Text>
           </View>
           <View style={S.infoDot} />
           <View style={S.infoItem}>

@@ -37,6 +37,8 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
   "Completed":   { accent: COLORS.success, bg: COLORS.successSoft,  text: COLORS.success, icon: "check-circle"       },
   "Delayed":     { accent: COLORS.error,   bg: COLORS.errorSoft,    text: COLORS.error,   icon: "exclamation-circle" },
   "Pending":     { accent: COLORS.warning, bg: COLORS.warningSoft,  text: COLORS.warning, icon: "clock"              },
+  "Draft":       { accent: "#64748B",      bg: "#F1F5F9",           text: "#64748B",      icon: "file-alt"           },
+  "For Mayor":   { accent: "#7C3AED",      bg: "#EDE9FE",           text: "#7C3AED",      icon: "user-tie"           },
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
@@ -215,7 +217,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         </View>
 
         {/* HCSD label */}
-        <Text style={D.heroLabel}>HCSD · CONSTRUCTION SERVICES DIVISION</Text>
+        <Text style={D.heroLabel}>CONSTRUCTION SERVICES DIVISION</Text>
 
         {/* Project title */}
         <Text style={D.heroTitle} numberOfLines={3}>{displayTitle}</Text>
