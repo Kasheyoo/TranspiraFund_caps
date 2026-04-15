@@ -138,6 +138,56 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
   return { success: true, count: STANDARD_MILESTONES.length };
 });
 
+// ─── markProjectOngoing ──────────────────────────────────────────────────────
+//
+//  Called automatically by the mobile app when a project assigned to this
+//  PROJ_ENG still carries a pre-active status ("Draft" or "For Mayor").
+//  Updates the project status to "In Progress" via Admin SDK, bypassing
+//  the Firestore rule that blocks PROJ_ENG from writing to project docs.
+//
+export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const { projectId } = (request.data ?? {}) as { projectId?: string };
+  if (!projectId) {
+    throw new HttpsError("invalid-argument", "projectId is required.");
+  }
+
+  const projectRef = admin.firestore().doc(`projects/${projectId}`);
+  const projectSnap = await projectRef.get();
+
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found.");
+  }
+
+  const projectData = projectSnap.data() as { status?: string };
+  const currentStatus = (projectData?.status ?? "").toLowerCase();
+
+  // Only update if still in a pre-active workflow state
+  const preActive = ["draft", "for mayor"];
+  if (!preActive.includes(currentStatus)) {
+    return { success: true, skipped: true }; // Already ongoing — nothing to do
+  }
+
+  await projectRef.update({
+    status: "In Progress",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const uid   = request.auth.uid;
+  const email = request.auth.token.email || "";
+  await logAuditTrail(
+    uid, email,
+    "Project Status Updated",
+    `Project ${projectId}: "${projectData.status}" → "In Progress" (engineer assigned)`,
+    true, // sync to HCSD audit trail
+  );
+
+  return { success: true };
+});
+
 // ─── completePasswordChange ──────────────────────────────────────────────────
 //
 //  Called by mobile app after user successfully changes their password

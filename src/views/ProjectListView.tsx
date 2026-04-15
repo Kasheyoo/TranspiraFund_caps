@@ -42,7 +42,7 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-const FILTERS = ["All", "In Progress", "Completed", "Delayed", "Pending", "Draft", "For Mayor"];
+const FILTERS = ["All", "In Progress", "Completed", "Delayed", "Pending"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number) => {
@@ -56,32 +56,28 @@ const formatBudget = (v?: number) => {
 const StatsBar = ({ projects }: { projects: Project[] }) => {
   const counts = useMemo(() => {
     const c: Record<string, number> = {
-      "In Progress": 0, "Completed": 0, "Delayed": 0, "Pending": 0, "Draft": 0, "For Mayor": 0,
+      "In Progress": 0, "Completed": 0, "Delayed": 0, "Pending": 0,
     };
     projects.forEach((p) => {
-      if (p.status && c[p.status] !== undefined) c[p.status]++;
+      const s = p.status ?? "";
+      // Draft / For Mayor are pre-active — count as In Progress while sync is pending
+      if (s === "Draft" || s === "For Mayor") {
+        c["In Progress"]++;
+      } else if (c[s] !== undefined) {
+        c[s]++;
+      }
     });
     return c;
   }, [projects]);
 
-  // Only show stat tiles that have a count > 0 (plus always show In Progress + Completed)
-  const tiles: Array<{ key: string; label: string }> = [
-    { key: "In Progress", label: "Active"    },
-    { key: "Completed",   label: "Done"      },
-    { key: "Delayed",     label: "Delayed"   },
-    { key: "Draft",       label: "Draft"     },
-    { key: "For Mayor",   label: "For Mayor" },
-    { key: "Pending",     label: "Pending"   },
-  ].filter((t) => t.key === "In Progress" || t.key === "Completed" || counts[t.key] > 0);
-
   return (
     <View style={statsStyles.row}>
-      {tiles.map((t) => {
-        const sc = STATUS_MAP[t.key];
+      {(["In Progress", "Completed", "Delayed", "Pending"] as const).map((s) => {
+        const sc = STATUS_MAP[s];
         return (
-          <View key={t.key} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
-            <Text style={[statsStyles.num, { color: sc.accent }]}>{counts[t.key]}</Text>
-            <Text style={statsStyles.label}>{t.label}</Text>
+          <View key={s} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
+            <Text style={[statsStyles.num, { color: sc.accent }]}>{counts[s]}</Text>
+            <Text style={statsStyles.label}>{s === "In Progress" ? "Active" : s}</Text>
           </View>
         );
       })}
