@@ -158,6 +158,24 @@ export const useProjectDetailsPresenter = (
     }
   };
 
+  const handleGenerateMilestones = async () => {
+    try {
+      requireAuth();
+      setIsLoading(true);
+      await callFn("generateMilestones", { projectId });
+      // Real-time listener will auto-update with the new milestones
+    } catch (error: any) {
+      if (error?.message?.includes("already-exists")) {
+        Alert.alert("Already Set", "Milestones already exist for this project.");
+      } else {
+        logger.error("Generate milestones error:", error);
+        Alert.alert("Error", "Failed to generate milestones. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     data: { project, selectedMilestone, isLoading },
     actions: {
@@ -165,6 +183,7 @@ export const useProjectDetailsPresenter = (
       goBack: onBackCallback,
       onSelectMilestone: setSelectedMilestone,
       onAddProof: handleAddProof,
+      onGenerateMilestones: handleGenerateMilestones,
     },
   };
 };

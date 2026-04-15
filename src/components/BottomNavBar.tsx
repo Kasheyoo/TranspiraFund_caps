@@ -9,6 +9,13 @@ interface BottomNavBarProps {
   notificationCount?: number;
 }
 
+const TABS = [
+  { name: "Dashboard",     icon: "home",         label: "Home"      },
+  { name: "Projects",      icon: "hard-hat",     label: "Projects"  },
+  { name: "Notifications", icon: "bell",         label: "Alerts"    },
+  { name: "Settings",      icon: "user-circle",  label: "Account"   },
+];
+
 export const BottomNavBar = ({
   currentScreen,
   onNavigate,
@@ -16,53 +23,44 @@ export const BottomNavBar = ({
 }: BottomNavBarProps) => {
   const insets = useSafeAreaInsets();
 
-  const tabs = [
-    { name: "Dashboard", icon: "home", label: "Home" },
-    { name: "Projects", icon: "folder", label: "Projects" },
-    { name: "Notifications", icon: "bell", label: "Alerts" },
-    { name: "Settings", icon: "cog", label: "Settings" },
-  ];
-
   return (
-    <View
-      style={[
-        styles.container,
-        { paddingBottom: Math.max(insets.bottom, 12) },
-      ]}
-    >
-      <View style={styles.floatingBar}>
-        {tabs.map((tab) => {
-          const active = currentScreen === tab.name;
-          const showBadge = tab.name === "Notifications" && notificationCount > 0;
+    <View style={[S.outer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={S.bar}>
+        {TABS.map((tab) => {
+          const active    = currentScreen === tab.name;
+          const hasBadge  = tab.name === "Notifications" && notificationCount > 0;
 
           return (
             <TouchableOpacity
               key={tab.name}
-              style={[styles.tab, active && styles.activeTab]}
+              style={S.tab}
               onPress={() => onNavigate(tab.name)}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <View style={styles.iconWrapper}>
+              {/* Active indicator pill at top */}
+              <View style={[S.indicator, active && S.indicatorActive]} />
+
+              {/* Icon container */}
+              <View style={[S.iconWrap, active && S.iconWrapActive]}>
                 <FontAwesome5
                   name={tab.icon}
-                  size={18}
+                  size={20}
                   color={active ? COLORS.primary : COLORS.textTertiary}
-                  solid={active}
                 />
-                {showBadge && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
+
+                {/* Notification badge */}
+                {hasBadge && (
+                  <View style={S.badge}>
+                    <Text style={S.badgeText}>
                       {notificationCount > 9 ? "9+" : notificationCount}
                     </Text>
                   </View>
                 )}
               </View>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: active ? COLORS.primary : COLORS.textTertiary },
-                ]}
-              >
+
+              {/* Label */}
+              <Text style={[S.label, active && S.labelActive]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -73,67 +71,102 @@ export const BottomNavBar = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const S = StyleSheet.create({
+  outer: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     alignItems: "center",
+    backgroundColor: "transparent",
   },
-  floatingBar: {
+
+  bar: {
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
-    borderRadius: 28,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderRadius: 26,
     width: "92%",
+    paddingTop: 6,
+    paddingBottom: 10,
+    paddingHorizontal: 8,
     justifyContent: "space-around",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
+    alignItems: "flex-start",
+
+    // Shadow — feels like it's floating
+    shadowColor: "#0F766E",
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowRadius: 20,
+    elevation: 14,
+
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.04)",
+    borderColor: "rgba(15,118,110,0.08)",
   },
+
   tab: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 4,
+    minHeight: 56,
+    gap: 4,
+  },
+
+  // Top indicator line
+  indicator: {
+    height: 3,
+    width: 20,
+    borderRadius: 2,
+    backgroundColor: "transparent",
+    marginBottom: 6,
+  },
+  indicatorActive: {
+    backgroundColor: COLORS.primary,
+    width: 28,
+  },
+
+  // Icon pill
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    minWidth: 60,
+    position: "relative",
   },
-  activeTab: {
+  iconWrapActive: {
     backgroundColor: COLORS.primarySoft,
   },
-  iconWrapper: {
-    position: "relative",
-    marginBottom: 2,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: "700",
+
+  // Label
+  label: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: COLORS.textTertiary,
     letterSpacing: 0.2,
   },
+  labelActive: {
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+
+  // Notification badge
   badge: {
     position: "absolute",
-    top: -6,
-    right: -10,
+    top: 4,
+    right: 4,
     backgroundColor: COLORS.error,
-    borderRadius: 10,
+    borderRadius: 9,
     minWidth: 16,
     height: 16,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     borderWidth: 1.5,
     borderColor: "#FFFFFF",
   },
   badgeText: {
     color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "800",
+    fontSize: 8,
+    fontWeight: "900",
   },
 });

@@ -70,6 +70,74 @@ async function logAuditTrail(
   await Promise.all(writes);
 }
 
+// ─── generateMilestones ───────────────────────────────────────────────────────
+//
+//  Called by PROJ_ENG from the mobile app when a project has no milestones.
+//  Creates standard construction-phase milestones as a subcollection under
+//  projects/{projectId}/milestones — uses Admin SDK to bypass client rules.
+//
+const STANDARD_MILESTONES = [
+  { title: "Site Clearing & Preparation",     sequence: 1 },
+  { title: "Foundation Works",                sequence: 2 },
+  { title: "Structural / Framing Works",      sequence: 3 },
+  { title: "Masonry & Concrete Works",        sequence: 4 },
+  { title: "Roofing Works",                   sequence: 5 },
+  { title: "Plumbing & Electrical Rough-In",  sequence: 6 },
+  { title: "Finishing Works",                 sequence: 7 },
+  { title: "Final Inspection & Turnover",     sequence: 8 },
+];
+
+export const generateMilestones = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const { projectId } = (request.data ?? {}) as { projectId?: string };
+  if (!projectId) {
+    throw new HttpsError("invalid-argument", "projectId is required.");
+  }
+
+  // Verify project exists
+  const projectRef = admin.firestore().doc(`projects/${projectId}`);
+  const projectSnap = await projectRef.get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found.");
+  }
+
+  // Check if milestones already exist — prevent duplicates
+  const existingSnap = await admin.firestore()
+    .collection(`projects/${projectId}/milestones`)
+    .limit(1)
+    .get();
+
+  if (!existingSnap.empty) {
+    throw new HttpsError("already-exists", "Milestones already exist for this project.");
+  }
+
+  // Batch-create all standard milestones
+  const batch = admin.firestore().batch();
+  const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
+
+  STANDARD_MILESTONES.forEach((m) => {
+    const docRef = msCollection.doc();
+    batch.set(docRef, {
+      ...m,
+      status: "Pending",
+      proofs: [],
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+
+  await batch.commit();
+
+  // Audit trail
+  const uid   = request.auth.uid;
+  const email = request.auth.token.email || "";
+  await logAuditTrail(uid, email, "Milestones Generated", `Project: ${projectId}`, true);
+
+  return { success: true, count: STANDARD_MILESTONES.length };
+});
+
 // ─── completePasswordChange ──────────────────────────────────────────────────
 //
 //  Called by mobile app after user successfully changes their password

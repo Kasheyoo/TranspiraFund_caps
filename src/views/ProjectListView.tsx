@@ -31,125 +31,132 @@ interface ProjectListViewProps {
   actions: ProjectListActions;
 }
 
-const STATUS_COLORS: Record<string, { accent: string; bg: string; text: string }> = {
-  "In Progress": { accent: COLORS.primary,   bg: COLORS.primarySoft,  text: COLORS.primary   },
-  "Completed":   { accent: COLORS.success,   bg: COLORS.successSoft,  text: COLORS.success   },
-  "Delayed":     { accent: COLORS.error,     bg: COLORS.errorSoft,    text: COLORS.error     },
-  "Pending":     { accent: COLORS.warning,   bg: COLORS.warningSoft,  text: COLORS.warning   },
+// ── Status config ─────────────────────────────────────────────────────────────
+const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; icon: string }> = {
+  "In Progress": { accent: COLORS.primary,  bg: COLORS.primarySoft, text: COLORS.primary,  icon: "spinner"         },
+  "Completed":   { accent: COLORS.success,  bg: COLORS.successSoft, text: COLORS.success,  icon: "check-circle"    },
+  "Delayed":     { accent: COLORS.error,    bg: COLORS.errorSoft,   text: COLORS.error,    icon: "exclamation-circle" },
+  "Pending":     { accent: COLORS.warning,  bg: COLORS.warningSoft, text: COLORS.warning,  icon: "clock"           },
 };
-
-const DEFAULT_STATUS = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary };
+const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
 const FILTERS = ["All", "In Progress", "Completed", "Delayed", "Pending"];
 
-const formatBudget = (amount?: number): string => {
-  if (!amount) return null as unknown as string;
-  if (amount >= 1_000_000) return `₱${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `₱${(amount / 1_000).toFixed(0)}K`;
-  return `₱${amount.toLocaleString()}`;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const formatBudget = (v?: number) => {
+  if (!v) return null;
+  if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000)     return `₱${(v / 1_000).toFixed(1)}K`;
+  return `₱${v.toLocaleString()}`;
 };
 
-const ProjectCard = ({
-  item,
-  onPress,
-}: {
-  item: Project;
-  onPress: () => void;
-}) => {
-  const status = item.status || "Pending";
-  const sc = STATUS_COLORS[status] || DEFAULT_STATUS;
-  const progress = item.progress || 0;
-  const budget = formatBudget(item.budget || item.contractAmount);
-  const completedMilestones = item.milestones?.filter(
-    (m) => m.status?.toString().toLowerCase() === "completed",
-  ).length ?? 0;
-  const totalMilestones = item.milestones?.length ?? 0;
+// ── Summary stats bar ─────────────────────────────────────────────────────────
+const StatsBar = ({ projects }: { projects: Project[] }) => {
+  const counts = useMemo(() => {
+    const c = { "In Progress": 0, Completed: 0, Delayed: 0, Pending: 0 };
+    projects.forEach((p) => { if (p.status && c[p.status as keyof typeof c] !== undefined) c[p.status as keyof typeof c]++; });
+    return c;
+  }, [projects]);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={0.88}
-    >
-      {/* Left accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: sc.accent }]} />
+    <View style={statsStyles.row}>
+      {(["In Progress", "Completed", "Delayed", "Pending"] as const).map((s) => {
+        const sc = STATUS_MAP[s];
+        return (
+          <View key={s} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
+            <Text style={[statsStyles.num, { color: sc.accent }]}>{counts[s]}</Text>
+            <Text style={statsStyles.label}>{s === "In Progress" ? "Active" : s}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
 
-      <View style={styles.cardInner}>
-        {/* Header row */}
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconBox, { backgroundColor: sc.bg }]}>
-            <FontAwesome5 name="hard-hat" size={18} color={sc.accent} />
+const statsStyles = StyleSheet.create({
+  row: { flexDirection: "row", marginHorizontal: 24, marginBottom: 14, gap: 8 },
+  cell: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderTopWidth: 3,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  num:   { fontSize: 20, fontWeight: "900", color: COLORS.textPrimary },
+  label: { fontSize: 10, fontWeight: "700", color: COLORS.textTertiary, marginTop: 2 },
+});
+
+// ── Project card ──────────────────────────────────────────────────────────────
+const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) => {
+  const status = item.status || "Pending";
+  const sc     = STATUS_MAP[status] || DEFAULT_SC;
+  const progress = item.progress || 0;
+  const budget   = formatBudget(item.contractAmount ?? item.budget);
+
+  const completedMs = item.milestones?.filter(
+    (m) => m.status?.toString().toLowerCase() === "completed",
+  ).length ?? 0;
+  const totalMs = item.milestones?.length ?? 0;
+
+  return (
+    <TouchableOpacity style={S.card} onPress={onPress} activeOpacity={0.85}>
+      {/* Status accent bar */}
+      <View style={[S.accentBar, { backgroundColor: sc.accent }]} />
+
+      <View style={S.cardBody}>
+        {/* ── Top row: icon + title + badge ── */}
+        <View style={S.topRow}>
+          <View style={[S.iconBox, { backgroundColor: sc.bg }]}>
+            <FontAwesome5 name="hard-hat" size={17} color={sc.accent} />
           </View>
 
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              {item.projectTitle || item.title || "Untitled Project"}
+          <View style={S.titleCol}>
+            <Text style={S.cardTitle} numberOfLines={2}>
+              {item.title || item.projectName || "Untitled Project"}
             </Text>
-            <View style={styles.metaRow}>
-              <FontAwesome5 name="user-tie" size={10} color={COLORS.textTertiary} />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {item.engineer || "Unassigned"}
-              </Text>
-            </View>
+            {item.engineer ? (
+              <View style={S.engineerRow}>
+                <FontAwesome5 name="user-hard-hat" size={10} color={COLORS.textTertiary} />
+                <Text style={S.engineerText} numberOfLines={1}>{item.engineer}</Text>
+              </View>
+            ) : null}
           </View>
 
-          <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-            <Text style={[styles.statusText, { color: sc.text }]}>
-              {status}
-            </Text>
+          <View style={[S.badge, { backgroundColor: sc.bg }]}>
+            <Text style={[S.badgeText, { color: sc.text }]}>{status}</Text>
           </View>
         </View>
 
-        {/* Info chips row */}
-        <View style={styles.chipsRow}>
+        {/* ── Meta chips ── */}
+        <View style={S.chipsRow}>
           {item.location ? (
-            <View style={styles.chip}>
-              <FontAwesome5 name="map-marker-alt" size={9} color={COLORS.textTertiary} />
-              <Text style={styles.chipText} numberOfLines={1}>{item.location}</Text>
-            </View>
+            <Chip icon="map-marker-alt" label={item.location} maxWidth={130} />
           ) : null}
-
-          {item.completionDate ? (
-            <View style={styles.chip}>
-              <FontAwesome5 name="calendar-check" size={9} color={COLORS.textTertiary} />
-              <Text style={styles.chipText}>{item.completionDate}</Text>
-            </View>
+          {item.fundingSource ? (
+            <Chip icon="hand-holding-usd" label={item.fundingSource} maxWidth={120} color={COLORS.primary} soft />
           ) : null}
-
           {budget ? (
-            <View style={[styles.chip, styles.budgetChip]}>
-              <FontAwesome5 name="coins" size={9} color={COLORS.primary} />
-              <Text style={[styles.chipText, { color: COLORS.primary, fontWeight: "800" }]}>
-                {budget}
-              </Text>
-            </View>
+            <Chip icon="coins" label={budget} color={COLORS.success} soft />
+          ) : null}
+          {item.completionDate ? (
+            <Chip icon="calendar-check" label={item.completionDate} />
           ) : null}
         </View>
 
-        {/* Progress row */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressLabelRow}>
-            <View style={styles.milestoneRow}>
-              <FontAwesome5 name="tasks" size={9} color={COLORS.textTertiary} />
-              <Text style={styles.milestoneText}>
-                {completedMilestones}/{totalMilestones} milestones
-              </Text>
+        {/* ── Progress ── */}
+        <View style={S.progressSection}>
+          <View style={S.progressLabelRow}>
+            <View style={S.msRow}>
+              <FontAwesome5 name="layer-group" size={9} color={COLORS.textTertiary} />
+              <Text style={S.msText}>{completedMs}/{totalMs} milestones</Text>
             </View>
-            <Text style={[styles.progressPct, { color: sc.accent }]}>
-              {progress}%
-            </Text>
+            <Text style={[S.pctText, { color: sc.accent }]}>{progress}%</Text>
           </View>
-
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${progress}%`,
-                  backgroundColor: sc.accent,
-                },
-              ]}
-            />
+          <View style={S.track}>
+            <View style={[S.fill, { width: `${progress}%`, backgroundColor: sc.accent }]} />
           </View>
         </View>
       </View>
@@ -157,134 +164,125 @@ const ProjectCard = ({
   );
 };
 
+// ── Inline chip component ─────────────────────────────────────────────────────
+const Chip = ({
+  icon, label, color, soft, maxWidth,
+}: { icon: string; label: string; color?: string; soft?: boolean; maxWidth?: number }) => (
+  <View style={[
+    S.chip,
+    soft && { backgroundColor: (color || COLORS.textTertiary) + "18", borderColor: (color || COLORS.textTertiary) + "40" },
+    maxWidth ? { maxWidth } : {},
+  ]}>
+    <FontAwesome5 name={icon} size={9} color={color || COLORS.textTertiary} />
+    <Text style={[S.chipText, color && { color }]} numberOfLines={1}>{label}</Text>
+  </View>
+);
+
+// ── Main view ─────────────────────────────────────────────────────────────────
 export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   const insets = useSafeAreaInsets();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [search, setSearch] = useState("");
 
-  const searchedProjects = useMemo(() => {
-    const base =
-      data.activeFilter === "All"
-        ? data.projects
-        : data.projects.filter((p) => p.status === data.activeFilter);
-    if (!searchQuery.trim()) return base;
-    const q = searchQuery.toLowerCase();
-    return base.filter(
-      (p) =>
-        (p.projectTitle || p.title || "").toLowerCase().includes(q) ||
-        (p.engineer || "").toLowerCase().includes(q) ||
-        (p.location || "").toLowerCase().includes(q),
+  const filtered = useMemo(() => {
+    const base = data.activeFilter === "All"
+      ? data.projects
+      : data.projects.filter((p) => p.status === data.activeFilter);
+    if (!search.trim()) return base;
+    const q = search.toLowerCase();
+    return base.filter((p) =>
+      (p.title || p.projectName || "").toLowerCase().includes(q) ||
+      (p.engineer || "").toLowerCase().includes(q) ||
+      (p.location || p.barangay || "").toLowerCase().includes(q) ||
+      (p.fundingSource || "").toLowerCase().includes(q),
     );
-  }, [data.projects, data.activeFilter, searchQuery]);
+  }, [data.projects, data.activeFilter, search]);
 
   return (
-    <View style={[styles.root, { backgroundColor: COLORS.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.headerTitle}>Projects</Text>
-          <View style={styles.liveChip}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>Live</Text>
+    <View style={[S.root, { backgroundColor: COLORS.background }]}>
+
+      {/* ── Header ── */}
+      <View style={[S.header, { paddingTop: insets.top + 18 }]}>
+        <View style={S.headerRow}>
+          <View>
+            <Text style={S.headerTitle}>Projects</Text>
+            <Text style={S.headerSub}>{data.projects.length} total · real-time sync</Text>
+          </View>
+          <View style={S.liveChip}>
+            <View style={S.liveDot} />
+            <Text style={S.liveText}>LIVE</Text>
           </View>
         </View>
-        <Text style={styles.headerSub}>
-          {data.projects.length} project{data.projects.length !== 1 ? "s" : ""} · synced from web
-        </Text>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
+      {/* ── Stats bar ── */}
+      <StatsBar projects={data.projects} />
+
+      {/* ── Search ── */}
+      <View style={S.searchWrap}>
+        <View style={S.searchBar}>
           <FontAwesome5 name="search" size={13} color={COLORS.textTertiary} />
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search by title, engineer, location…"
+            style={S.searchInput}
+            placeholder="Search title, engineer, location, fund…"
             placeholderTextColor={COLORS.textTertiary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+            value={search}
+            onChangeText={setSearch}
             autoCorrect={false}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <FontAwesome5 name="times-circle" size={14} color={COLORS.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* Filter tabs */}
-      <View style={styles.filterWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
+      {/* ── Filter tabs ── */}
+      <View style={S.filterWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterScroll}>
           {FILTERS.map((f) => {
-            const isActive = data.activeFilter === f;
-            const sc = STATUS_COLORS[f];
+            const active = data.activeFilter === f;
+            const sc = STATUS_MAP[f];
             return (
               <TouchableOpacity
                 key={f}
                 onPress={() => actions.setFilter(f)}
-                style={[
-                  styles.filterTab,
-                  isActive && {
-                    backgroundColor: sc ? sc.accent : COLORS.primary,
-                    borderColor: sc ? sc.accent : COLORS.primary,
-                  },
-                ]}
+                style={[S.tab, active && { backgroundColor: sc ? sc.accent : COLORS.primary, borderColor: sc ? sc.accent : COLORS.primary }]}
                 activeOpacity={0.8}
               >
                 {f !== "All" && sc && (
-                  <View
-                    style={[
-                      styles.filterDot,
-                      { backgroundColor: isActive ? "rgba(255,255,255,0.8)" : sc.accent },
-                    ]}
-                  />
+                  <View style={[S.tabDot, { backgroundColor: active ? "rgba(255,255,255,0.85)" : sc.accent }]} />
                 )}
-                <Text
-                  style={[
-                    styles.filterText,
-                    isActive && { color: "#fff", fontWeight: "800" },
-                  ]}
-                >
-                  {f}
-                </Text>
+                <Text style={[S.tabText, active && { color: "#fff", fontWeight: "800" }]}>{f}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </View>
 
-      {/* List */}
+      {/* ── List ── */}
       {data.isLoading && data.projects.length === 0 ? (
-        <View style={styles.loadingState}>
+        <View style={S.loadingBox}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading projects…</Text>
+          <Text style={S.loadingText}>Loading projects…</Text>
         </View>
       ) : (
         <FlatList
-          data={searchedProjects}
-          keyExtractor={(item) => item.id}
+          data={filtered}
+          keyExtractor={(p) => p.id}
           renderItem={({ item }) => (
-            <ProjectCard
-              item={item}
-              onPress={() => actions.onSelectProject(item.id)}
-            />
+            <ProjectCard item={item} onPress={() => actions.onSelectProject(item.id)} />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={S.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconBox}>
+            <View style={S.emptyBox}>
+              <View style={S.emptyIconBox}>
                 <FontAwesome5 name="folder-open" size={28} color={COLORS.textTertiary} />
               </View>
-              <Text style={styles.emptyTitle}>No Projects Found</Text>
-              <Text style={styles.emptyBody}>
-                {searchQuery
-                  ? "No results match your search."
-                  : `No projects with status "${data.activeFilter}".`}
+              <Text style={S.emptyTitle}>No Projects Found</Text>
+              <Text style={S.emptyBody}>
+                {search ? "Try a different search term." : `No "${data.activeFilter}" projects yet.`}
               </Text>
             </View>
           }
@@ -294,173 +292,103 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   );
 };
 
-const styles = StyleSheet.create({
+// ── Styles ────────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
   root: { flex: 1 },
 
   // Header
-  header: { paddingHorizontal: 24, marginBottom: 16 },
-  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  headerTitle: { fontSize: 30, fontWeight: "900", color: COLORS.textPrimary },
+  header:    { paddingHorizontal: 24, marginBottom: 14 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  headerTitle: { fontSize: 28, fontWeight: "900", color: COLORS.textPrimary },
+  headerSub:   { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
   liveChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: COLORS.successSoft,
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#6EE7B7",
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: COLORS.successSoft, borderRadius: 20,
+    paddingHorizontal: 9, paddingVertical: 5,
+    borderWidth: 1, borderColor: "#6EE7B7", marginTop: 4,
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.success },
-  liveText: { fontSize: 11, fontWeight: "800", color: COLORS.success },
-  headerSub: { fontSize: 13, color: COLORS.textSecondary, fontWeight: "500" },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.success },
+  liveText: { fontSize: 10, fontWeight: "900", color: COLORS.success, letterSpacing: 0.5 },
 
   // Search
-  searchWrap: { paddingHorizontal: 24, marginBottom: 12 },
+  searchWrap: { paddingHorizontal: 24, marginBottom: 10 },
   searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 46,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: COLORS.surface, borderRadius: 14,
+    paddingHorizontal: 14, height: 46,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    paddingVertical: 0,
-  },
+  searchInput: { flex: 1, fontSize: 14, color: COLORS.textPrimary, paddingVertical: 0 },
 
-  // Filters
-  filterWrap: { marginBottom: 8 },
-  filterScroll: { paddingHorizontal: 24, gap: 8 },
-  filterTab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+  // Filter tabs
+  filterWrap:   { marginBottom: 6 },
+  filterScroll: { paddingHorizontal: 24, gap: 7 },
+  tab: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20,
+    backgroundColor: COLORS.surface, borderWidth: 1.5, borderColor: COLORS.border,
   },
-  filterDot: { width: 6, height: 6, borderRadius: 3 },
-  filterText: { fontSize: 13, fontWeight: "700", color: COLORS.textSecondary },
+  tabDot:  { width: 6, height: 6, borderRadius: 3 },
+  tabText: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
 
   // List
-  listContent: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 110 },
+  listContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 110 },
 
   // Card
   card: {
-    flexDirection: "row",
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    marginBottom: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    flexDirection: "row", backgroundColor: COLORS.surface,
+    borderRadius: 18, marginBottom: 12, overflow: "hidden",
+    borderWidth: 1, borderColor: COLORS.border,
+    elevation: 2, shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8,
   },
-  accentBar: { width: 4, borderRadius: 0 },
-  cardInner: { flex: 1, padding: 16 },
+  accentBar: { width: 4 },
+  cardBody:  { flex: 1, padding: 15 },
 
-  cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  topRow:    { flexDirection: "row", alignItems: "flex-start", gap: 11, marginBottom: 10 },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+    width: 42, height: 42, borderRadius: 12,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-    marginBottom: 4,
+  titleCol:    { flex: 1 },
+  cardTitle:   { fontSize: 14, fontWeight: "800", color: COLORS.textPrimary, lineHeight: 19, marginBottom: 3 },
+  engineerRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  engineerText: { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600", flex: 1 },
+  badge: {
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, flexShrink: 0,
   },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  metaText: { fontSize: 12, color: COLORS.textTertiary, fontWeight: "600", flex: 1 },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    flexShrink: 0,
-  },
-  statusText: { fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.3 },
+  badgeText: { fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
 
   // Chips
-  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 },
   chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    maxWidth: 160,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: COLORS.background, borderRadius: 7,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  budgetChip: {
-    backgroundColor: COLORS.primarySoft,
-    borderColor: COLORS.accentBorder,
-  },
-  chipText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-    flexShrink: 1,
-  },
+  chipText: { fontSize: 10, color: COLORS.textSecondary, fontWeight: "600", flexShrink: 1 },
 
   // Progress
   progressSection: {},
   progressLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6,
   },
-  milestoneRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  milestoneText: { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600" },
-  progressPct: { fontSize: 13, fontWeight: "800" },
-  progressTrack: {
-    height: 5,
-    backgroundColor: COLORS.track,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressFill: { height: "100%", borderRadius: 3 },
+  msRow:    { flexDirection: "row", alignItems: "center", gap: 5 },
+  msText:   { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600" },
+  pctText:  { fontSize: 13, fontWeight: "900" },
+  track:    { height: 5, backgroundColor: COLORS.track, borderRadius: 3, overflow: "hidden" },
+  fill:     { height: "100%", borderRadius: 3 },
 
-  // Loading
-  loadingState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  // Loading / empty
+  loadingBox:  { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: "600" },
-
-  // Empty
-  emptyState: { alignItems: "center", paddingTop: 60, paddingHorizontal: 24 },
+  emptyBox:    { alignItems: "center", paddingTop: 64, paddingHorizontal: 32 },
   emptyIconBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
+    width: 72, height: 72, borderRadius: 22,
+    backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border,
+    alignItems: "center", justifyContent: "center", marginBottom: 16,
   },
   emptyTitle: { fontSize: 17, fontWeight: "800", color: COLORS.textPrimary, marginBottom: 6 },
-  emptyBody: { fontSize: 14, color: COLORS.textSecondary, textAlign: "center", lineHeight: 20 },
+  emptyBody:  { fontSize: 14, color: COLORS.textSecondary, textAlign: "center", lineHeight: 20 },
 });

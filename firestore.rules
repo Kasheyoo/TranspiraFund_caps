@@ -38,13 +38,13 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════
 
     match /projects/{projectId} {
-      allow read: if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
+      allow read: if hasRole(['MIS', 'HCSD', 'CPDO', 'PROJ_ENG']);
       allow create, update, delete: if false;
 
       // Milestones live as a subcollection under each project
       // PROJ_ENG can update (add geotagged proofs) — no create/delete from client
       match /milestones/{milestoneId} {
-        allow read:   if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
+        allow read:   if hasRole(['MIS', 'HCSD', 'CPDO', 'PROJ_ENG']);
         allow update: if hasRole(['PROJ_ENG']);
         allow create, delete: if false;
       }
@@ -82,8 +82,8 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════
 
     match /notifications/{notifId} {
-      allow read:   if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
-      allow update: if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
+      allow read:   if hasRole(['MIS', 'HCSD', 'CPDO', 'PROJ_ENG']);
+      allow update: if hasRole(['MIS', 'HCSD', 'CPDO', 'PROJ_ENG']);
       allow create, delete: if false;
     }
 
