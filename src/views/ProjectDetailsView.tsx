@@ -32,13 +32,13 @@ interface ProjectDetailsViewProps {
 }
 
 // ── Status config ─────────────────────────────────────────────────────────────
-const STATUS_MAP: Record<string, { accent: string; bg: string; text: string }> = {
-  "In Progress": { accent: COLORS.primary, bg: COLORS.primarySoft, text: COLORS.primary },
-  "Completed":   { accent: COLORS.success, bg: COLORS.successSoft, text: COLORS.success },
-  "Delayed":     { accent: COLORS.error,   bg: COLORS.errorSoft,   text: COLORS.error   },
-  "Pending":     { accent: COLORS.warning, bg: COLORS.warningSoft, text: COLORS.warning },
+const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; icon: string }> = {
+  "In Progress": { accent: COLORS.primary, bg: COLORS.primarySoft,  text: COLORS.primary, icon: "spinner"            },
+  "Completed":   { accent: COLORS.success, bg: COLORS.successSoft,  text: COLORS.success, icon: "check-circle"       },
+  "Delayed":     { accent: COLORS.error,   bg: COLORS.errorSoft,    text: COLORS.error,   icon: "exclamation-circle" },
+  "Pending":     { accent: COLORS.warning, bg: COLORS.warningSoft,  text: COLORS.warning, icon: "clock"              },
 };
-const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary };
+const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number): string => {
@@ -48,37 +48,6 @@ const formatBudget = (v?: number): string => {
   return `₱${v.toLocaleString()}`;
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-const SLabel = ({ title }: { title: string }) => (
-  <Text style={D.sectionLabel}>{title}</Text>
-);
-
-const HDivider = () => <View style={D.divider} />;
-const RowDiv   = () => <View style={D.rowDivider} />;
-
-interface FieldRowProps {
-  icon: string;
-  label: string;
-  value?: string | number | null;
-  iconColor?: string;
-  valueStyle?: object;
-}
-
-const FieldRow = ({ icon, label, value, iconColor = COLORS.textTertiary, valueStyle }: FieldRowProps) => {
-  if (value === undefined || value === null || value === "") return null;
-  return (
-    <View style={D.fieldRow}>
-      <View style={[D.fieldIcon, { borderColor: iconColor + "30", backgroundColor: iconColor + "10" }]}>
-        <FontAwesome5 name={icon} size={11} color={iconColor} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={D.fieldLabel}>{label}</Text>
-        <Text style={[D.fieldValue, valueStyle]}>{String(value)}</Text>
-      </View>
-    </View>
-  );
-};
-
 // ── Milestone card ────────────────────────────────────────────────────────────
 interface MilestoneCardProps {
   m: Milestone;
@@ -86,40 +55,31 @@ interface MilestoneCardProps {
   isFirst: boolean;
   prevDone: boolean;
   isLast: boolean;
-  sc: { accent: string; bg: string; text: string };
   onSelect: () => void;
   onProof: () => void;
 }
 
-const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, sc, onSelect, onProof }: MilestoneCardProps) => {
+const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof }: MilestoneCardProps) => {
   const isUnlocked = isFirst || prevDone;
   const isDone     = m.status?.toString().toLowerCase() === "completed";
+  const isDelayed  = m.status?.toString().toLowerCase() === "delayed";
   const isActive   = isUnlocked && !isDone;
   const isLocked   = !isUnlocked;
-
   const proofCount = m.proofs?.length ?? 0;
 
-  const stepBg = isDone
-    ? COLORS.success
-    : isActive
-      ? COLORS.primary
-      : "#D1D5DB";
-
-  const cardBorder = isDone
-    ? "#A7F3D0"
-    : isActive
-      ? COLORS.accentBorder
-      : COLORS.border;
+  // State colors
+  const circleColor = isDone ? COLORS.success : isDelayed ? COLORS.error : isActive ? COLORS.primary : "#CBD5E1";
+  const cardBg      = isDone ? COLORS.successSoft : isActive ? "#F8FFFE" : COLORS.surface;
+  const borderColor = isDone ? "#A7F3D0" : isDelayed ? COLORS.errorSoft : isActive ? COLORS.accentBorder : COLORS.border;
+  const lineColor   = isDone ? COLORS.success : COLORS.border;
 
   return (
     <View style={D.msWrapper}>
-      {/* Connector line */}
-      {!isLast && (
-        <View style={[D.connector, { backgroundColor: isDone ? COLORS.success : COLORS.border }]} />
-      )}
+      {/* Vertical connector line */}
+      {!isLast && <View style={[D.connector, { backgroundColor: lineColor }]} />}
 
       <TouchableOpacity
-        style={[D.msCard, { borderColor: cardBorder }, isLocked && D.msCardLocked]}
+        style={[D.msCard, { backgroundColor: cardBg, borderColor }]}
         onPress={() =>
           isLocked
             ? Alert.alert("Milestone Locked", "Complete the previous milestone to unlock this one.")
@@ -127,75 +87,68 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, sc, onSelect, onPr
         }
         activeOpacity={isLocked ? 1 : 0.82}
       >
-        {/* Step circle */}
-        <View style={[D.stepCircle, { backgroundColor: stepBg }]}>
+        {/* Left: step indicator */}
+        <View style={[D.stepCircle, { backgroundColor: circleColor }]}>
           <FontAwesome5
-            name={isDone ? "check" : isLocked ? "lock" : "clock"}
-            size={12}
+            name={isDone ? "check" : isDelayed ? "exclamation" : isLocked ? "lock" : "dot-circle"}
+            size={isDone ? 13 : 11}
             color="#fff"
           />
         </View>
 
-        {/* Content */}
-        <View style={{ flex: 1 }}>
-          {/* Sequence + title */}
+        {/* Center: content */}
+        <View style={D.msContent}>
           <View style={D.msTitleRow}>
-            <View style={[D.seqPill, { backgroundColor: isLocked ? COLORS.track : sc.bg }]}>
-              <Text style={[D.seqText, { color: isLocked ? COLORS.textTertiary : sc.accent }]}>
-                {m.sequence ?? index + 1}
-              </Text>
-            </View>
-            <Text
-              style={[D.msTitle, isLocked && { color: COLORS.textTertiary }]}
-              numberOfLines={2}
-            >
-              {m.title}
-            </Text>
-          </View>
-
-          {/* Status + proof count */}
-          <View style={D.msMetaRow}>
-            <View style={[D.msStatusChip, {
-              backgroundColor: isDone ? COLORS.successSoft : isActive ? COLORS.primarySoft : COLORS.track,
-            }]}>
-              <View style={[D.msStatusDot, {
-                backgroundColor: isDone ? COLORS.success : isActive ? COLORS.primary : COLORS.textTertiary,
-              }]} />
-              <Text style={[D.msStatusText, {
-                color: isDone ? COLORS.success : isActive ? COLORS.primary : COLORS.textTertiary,
-              }]}>
-                {isLocked ? "Locked" : isDone ? "Completed" : m.status || "Pending"}
-              </Text>
-            </View>
-
+            <Text style={D.msPhase}>Phase {m.sequence ?? index + 1}</Text>
             {proofCount > 0 && (
-              <View style={D.proofCountChip}>
+              <View style={D.proofBadge}>
                 <FontAwesome5 name="camera" size={8} color={COLORS.primary} />
-                <Text style={D.proofCountText}>{proofCount} proof{proofCount !== 1 ? "s" : ""}</Text>
+                <Text style={D.proofBadgeText}>{proofCount}</Text>
               </View>
             )}
           </View>
+          <Text
+            style={[D.msTitle, isLocked && { color: COLORS.textTertiary }]}
+            numberOfLines={2}
+          >
+            {m.title}
+          </Text>
+          <View style={D.msStatusRow}>
+            <View style={[D.msStatusPill, { backgroundColor: circleColor + "18" }]}>
+              <View style={[D.msStatusDot, { backgroundColor: circleColor }]} />
+              <Text style={[D.msStatusText, { color: circleColor }]}>
+                {isLocked ? "Locked" : isDone ? "Completed" : isDelayed ? "Delayed" : m.status || "Pending"}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* Right actions */}
+        {/* Right: action buttons */}
         {!isLocked ? (
           <View style={D.msActions}>
-            {/* Camera / Proof button — inline, no navigation needed */}
             {!isDone && (
               <TouchableOpacity
                 style={D.cameraBtn}
                 onPress={(e) => { e.stopPropagation?.(); onProof(); }}
                 activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
                 <FontAwesome5 name="camera" size={13} color="#fff" />
               </TouchableOpacity>
             )}
-            {/* View details chevron */}
-            <TouchableOpacity style={D.chevronBtn} onPress={onSelect} activeOpacity={0.7}>
-              <FontAwesome5 name="angle-right" size={16} color={isDone ? COLORS.success : COLORS.textTertiary} />
-            </TouchableOpacity>
+            <View style={D.chevronWrap}>
+              <FontAwesome5
+                name="chevron-right"
+                size={12}
+                color={isDone ? COLORS.success : COLORS.textTertiary}
+              />
+            </View>
           </View>
-        ) : null}
+        ) : (
+          <View style={D.lockWrap}>
+            <FontAwesome5 name="lock" size={12} color={COLORS.textTertiary} />
+          </View>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -218,12 +171,17 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const totalMs = project.milestones?.length ?? 0;
 
   const displayTitle    = project.projectName    ?? project.title    ?? "Untitled Project";
-  const displayEngineer = project.projectEngineer ?? project.engineer;
+  const displayEngineer = project.projectEngineer ?? project.engineer ?? null;
   const displayLocation = project.barangay
     ? project.sitioStreet ? `${project.sitioStreet}, ${project.barangay}` : project.barangay
-    : project.location;
-  const displayStart      = project.officialDateStarted    ?? project.startDate;
-  const displayCompletion = project.originalDateCompletion ?? project.completionDate;
+    : project.location ?? null;
+  const displayStart      = project.officialDateStarted    ?? project.startDate    ?? null;
+  const displayCompletion = project.originalDateCompletion ?? project.completionDate ?? null;
+  const displayBudget     = formatBudget(project.contractAmount ?? project.budget);
+
+  // Engineer initials
+  const initials = displayEngineer
+    ?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() ?? "PE";
 
   const handleGenerate = () => {
     Alert.alert(
@@ -243,163 +201,272 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
       <View style={[D.hero, { paddingTop: insets.top + 10 }]}>
         <View style={D.orb1} /><View style={D.orb2} /><View style={D.orb3} />
 
-        <TouchableOpacity onPress={onBack} style={D.backBtn} activeOpacity={0.8}>
-          <FontAwesome5 name="arrow-left" size={14} color="#fff" />
-        </TouchableOpacity>
-
-        <View style={D.heroIconBox}>
-          <FontAwesome5 name="hard-hat" size={24} color="#fff" />
-        </View>
-
-        <Text style={D.heroTitle} numberOfLines={3}>{displayTitle}</Text>
-
-        <View style={D.heroBadgeRow}>
-          <View style={[D.heroBadge, { backgroundColor: sc.bg }]}>
-            <View style={[D.heroBadgeDot, { backgroundColor: sc.accent }]} />
-            <Text style={[D.heroBadgeText, { color: sc.text }]}>{status}</Text>
-          </View>
+        {/* Top bar: back + code chip */}
+        <View style={D.heroTopBar}>
+          <TouchableOpacity onPress={onBack} style={D.backBtn} activeOpacity={0.8}>
+            <FontAwesome5 name="arrow-left" size={14} color="#fff" />
+          </TouchableOpacity>
           {project.projectCode ? (
             <View style={D.codeChip}>
               <FontAwesome5 name="hashtag" size={9} color="rgba(255,255,255,0.7)" />
               <Text style={D.codeText}>{project.projectCode}</Text>
             </View>
           ) : null}
-          {project.accountCode ? (
-            <View style={D.codeChip}>
-              <FontAwesome5 name="barcode" size={9} color="rgba(255,255,255,0.7)" />
-              <Text style={D.codeText}>{project.accountCode}</Text>
+        </View>
+
+        {/* HCSD label */}
+        <Text style={D.heroLabel}>HCSD · CONSTRUCTION SERVICES DIVISION</Text>
+
+        {/* Project title */}
+        <Text style={D.heroTitle} numberOfLines={3}>{displayTitle}</Text>
+
+        {/* Engineer row */}
+        {displayEngineer ? (
+          <View style={D.engineerRow}>
+            <View style={D.engineerAvatar}>
+              <Text style={D.engineerInitials}>{initials}</Text>
+            </View>
+            <View>
+              <Text style={D.engineerName}>{displayEngineer}</Text>
+              <Text style={D.engineerRole}>Project Engineer</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Status + location row */}
+        <View style={D.heroBadgeRow}>
+          <View style={[D.statusBadge, { backgroundColor: sc.bg }]}>
+            <FontAwesome5 name={sc.icon} size={10} color={sc.accent} />
+            <Text style={[D.statusBadgeText, { color: sc.text }]}>{status}</Text>
+          </View>
+          {displayLocation ? (
+            <View style={D.locationChip}>
+              <FontAwesome5 name="map-marker-alt" size={9} color="rgba(255,255,255,0.75)" />
+              <Text style={D.locationText} numberOfLines={1}>{displayLocation}</Text>
             </View>
           ) : null}
         </View>
       </View>
 
+      {/* ══ FLOATING METRICS CARD ═══════════════════════════════════ */}
+      <View style={D.metricsCard}>
+        {/* Contract Amount */}
+        <View style={D.metricCol}>
+          <View style={[D.metricIconBox, { backgroundColor: COLORS.primarySoft }]}>
+            <FontAwesome5 name="file-invoice-dollar" size={13} color={COLORS.primary} />
+          </View>
+          <Text style={D.metricValue}>{displayBudget}</Text>
+          <Text style={D.metricLabel}>Contract</Text>
+        </View>
+
+        <View style={D.metricDivider} />
+
+        {/* Milestones */}
+        <View style={D.metricCol}>
+          <View style={[D.metricIconBox, { backgroundColor: COLORS.successSoft }]}>
+            <FontAwesome5 name="layer-group" size={13} color={COLORS.success} />
+          </View>
+          <Text style={D.metricValue}>{completedMs}/{totalMs}</Text>
+          <Text style={D.metricLabel}>Milestones</Text>
+        </View>
+
+        <View style={D.metricDivider} />
+
+        {/* Progress */}
+        <View style={D.metricCol}>
+          <View style={[D.metricIconBox, { backgroundColor: sc.bg }]}>
+            <FontAwesome5 name="chart-line" size={13} color={sc.accent} />
+          </View>
+          <Text style={[D.metricValue, { color: sc.accent }]}>{progress}%</Text>
+          <Text style={D.metricLabel}>Progress</Text>
+        </View>
+      </View>
+
+      {/* ══ SCROLLABLE CONTENT ══════════════════════════════════════ */}
       <ScrollView
         contentContainerStyle={[D.scroll, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ══ PROGRESS ═══════════════════════════════════════════════ */}
+        {/* ── PROGRESS BAR ── */}
         <View style={D.card}>
-          <View style={D.progressTopRow}>
-            <View>
-              <SLabel title="OVERALL PROGRESS" />
-              <Text style={D.msCaption}>{completedMs} of {totalMs} milestones done</Text>
-            </View>
-            <Text style={[D.pctBig, { color: sc.accent }]}>{progress}%</Text>
+          <View style={D.progressHeader}>
+            <Text style={D.cardSectionLabel}>OVERALL PROGRESS</Text>
+            <Text style={[D.progressPct, { color: sc.accent }]}>{progress}%</Text>
           </View>
-          <View style={D.track}>
-            <View style={[D.fill, { width: `${progress}%` as any, backgroundColor: sc.accent }]} />
+          <View style={D.progressTrack}>
+            <View style={[D.progressFill, { width: `${progress}%` as any, backgroundColor: sc.accent }]} />
           </View>
+          {/* Milestone step dots */}
           {totalMs > 0 && (
-            <View style={D.msPills}>
-              {project.milestones!.map((m, i) => (
-                <View
-                  key={m.id || i}
-                  style={[D.msPill, {
-                    backgroundColor: m.status?.toString().toLowerCase() === "completed"
-                      ? COLORS.success : COLORS.track,
-                  }]}
-                />
-              ))}
+            <View style={D.stepDots}>
+              {project.milestones!.map((m, i) => {
+                const done = m.status?.toString().toLowerCase() === "completed";
+                return (
+                  <View
+                    key={m.id || i}
+                    style={[D.stepDot, { backgroundColor: done ? sc.accent : COLORS.track }]}
+                  />
+                );
+              })}
             </View>
           )}
+          <Text style={D.progressCaption}>
+            {completedMs} of {totalMs} milestone{totalMs !== 1 ? "s" : ""} completed
+          </Text>
         </View>
 
-        {/* ══ FINANCIALS ══════════════════════════════════════════════ */}
-        {(project.contractAmount || project.budget) ? (
+        {/* ── DATE TIMELINE ── */}
+        {(displayStart || displayCompletion || project.ntpReceivedDate) ? (
           <View style={D.card}>
-            <SLabel title="FINANCIALS" />
-            <View style={D.financialGrid}>
-              <View style={[D.finItem, { backgroundColor: COLORS.primarySoft, borderColor: COLORS.primary + "30" }]}>
-                <View style={[D.finIconBox, { backgroundColor: COLORS.primary + "20" }]}>
-                  <FontAwesome5 name="file-invoice-dollar" size={14} color={COLORS.primary} />
-                </View>
-                <Text style={D.finLabel}>Contract Amount</Text>
-                <Text style={[D.finValue, { color: COLORS.primary }]}>
-                  {formatBudget(project.contractAmount ?? project.budget)}
-                </Text>
-              </View>
-              {project.fundingSource ? (
-                <View style={[D.finItem, { backgroundColor: COLORS.warningSoft, borderColor: COLORS.warning + "40" }]}>
-                  <View style={[D.finIconBox, { backgroundColor: COLORS.warning + "20" }]}>
-                    <FontAwesome5 name="hand-holding-usd" size={13} color={COLORS.warning} />
+            <Text style={D.cardSectionLabel}>PROJECT TIMELINE</Text>
+            <View style={D.timeline}>
+              {project.ntpReceivedDate ? (
+                <View style={D.timelineItem}>
+                  <View style={[D.tlIconBox, { backgroundColor: "#EDE9FE" }]}>
+                    <FontAwesome5 name="calendar-day" size={11} color="#7C3AED" />
                   </View>
-                  <Text style={D.finLabel}>Funding Source</Text>
-                  <Text style={[D.finValue, { color: COLORS.warning, fontSize: 12 }]}>
-                    {project.fundingSource}
-                  </Text>
+                  <Text style={D.tlLabel}>NTP Received</Text>
+                  <Text style={D.tlValue}>{project.ntpReceivedDate}</Text>
+                </View>
+              ) : null}
+              {displayStart ? (
+                <View style={D.timelineItem}>
+                  <View style={[D.tlIconBox, { backgroundColor: COLORS.primarySoft }]}>
+                    <FontAwesome5 name="play-circle" size={11} color={COLORS.primary} />
+                  </View>
+                  <Text style={D.tlLabel}>Official Start</Text>
+                  <Text style={D.tlValue}>{displayStart}</Text>
+                </View>
+              ) : null}
+              {displayCompletion ? (
+                <View style={D.timelineItem}>
+                  <View style={[D.tlIconBox, { backgroundColor: COLORS.warningSoft }]}>
+                    <FontAwesome5 name="flag-checkered" size={11} color={COLORS.warning} />
+                  </View>
+                  <Text style={D.tlLabel}>Completion</Text>
+                  <Text style={D.tlValue}>{displayCompletion}</Text>
+                </View>
+              ) : null}
+              {project.revisedDate1 ? (
+                <View style={D.timelineItem}>
+                  <View style={[D.tlIconBox, { backgroundColor: COLORS.errorSoft }]}>
+                    <FontAwesome5 name="redo" size={11} color={COLORS.error} />
+                  </View>
+                  <Text style={D.tlLabel}>Revised Date 1</Text>
+                  <Text style={D.tlValue}>{project.revisedDate1}</Text>
+                </View>
+              ) : null}
+              {project.revisedDate2 ? (
+                <View style={D.timelineItem}>
+                  <View style={[D.tlIconBox, { backgroundColor: COLORS.errorSoft }]}>
+                    <FontAwesome5 name="redo-alt" size={11} color={COLORS.error} />
+                  </View>
+                  <Text style={D.tlLabel}>Revised Date 2</Text>
+                  <Text style={D.tlValue}>{project.revisedDate2}</Text>
+                </View>
+              ) : null}
+              {project.actualDateCompleted ? (
+                <View style={D.timelineItem}>
+                  <View style={[D.tlIconBox, { backgroundColor: COLORS.successSoft }]}>
+                    <FontAwesome5 name="check-double" size={11} color={COLORS.success} />
+                  </View>
+                  <Text style={D.tlLabel}>Actual Completed</Text>
+                  <Text style={[D.tlValue, { color: COLORS.success }]}>{project.actualDateCompleted}</Text>
                 </View>
               ) : null}
             </View>
+          </View>
+        ) : null}
+
+        {/* ── PROJECT DETAILS ── */}
+        <View style={D.card}>
+          <Text style={D.cardSectionLabel}>PROJECT DETAILS</Text>
+
+          {/* Two-column grid for key details */}
+          <View style={D.detailGrid}>
+            {project.fundingSource ? (
+              <View style={D.detailCell}>
+                <View style={[D.detailIcon, { backgroundColor: COLORS.warningSoft }]}>
+                  <FontAwesome5 name="hand-holding-usd" size={12} color={COLORS.warning} />
+                </View>
+                <Text style={D.detailCellLabel}>Funding Source</Text>
+                <Text style={D.detailCellValue} numberOfLines={2}>{project.fundingSource}</Text>
+              </View>
+            ) : null}
             {project.contractor ? (
-              <View style={D.contractorRow}>
-                <FontAwesome5 name="building" size={11} color={COLORS.textTertiary} />
-                <Text style={D.contractorText}>
-                  Contractor:{" "}
-                  <Text style={{ color: COLORS.textPrimary, fontWeight: "700" }}>
-                    {project.contractor}
-                  </Text>
+              <View style={D.detailCell}>
+                <View style={[D.detailIcon, { backgroundColor: "#EDE9FE" }]}>
+                  <FontAwesome5 name="building" size={12} color="#7C3AED" />
+                </View>
+                <Text style={D.detailCellLabel}>Contractor</Text>
+                <Text style={D.detailCellValue} numberOfLines={2}>{project.contractor}</Text>
+              </View>
+            ) : null}
+            {project.accountCode ? (
+              <View style={D.detailCell}>
+                <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
+                  <FontAwesome5 name="barcode" size={12} color={COLORS.primary} />
+                </View>
+                <Text style={D.detailCellLabel}>Account Code</Text>
+                <Text style={D.detailCellValue}>{project.accountCode}</Text>
+              </View>
+            ) : null}
+            {(project.actualPercent !== undefined && project.actualPercent !== null) ? (
+              <View style={D.detailCell}>
+                <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
+                  <FontAwesome5 name="percentage" size={12} color={COLORS.primary} />
+                </View>
+                <Text style={D.detailCellLabel}>Actual %</Text>
+                <Text style={[D.detailCellValue, { color: COLORS.primary, fontWeight: "900" }]}>
+                  {project.actualPercent}%
                 </Text>
               </View>
             ) : null}
           </View>
-        ) : null}
 
-        {/* ══ PROJECT INFORMATION ══════════════════════════════════════ */}
-        <View style={D.card}>
-          <SLabel title="PROJECT INFORMATION" />
-          <HDivider />
-          <FieldRow icon="user-hard-hat"   label="Assigned Engineer"     value={displayEngineer}           iconColor={COLORS.primary} />
-          <RowDiv />
-          <FieldRow icon="map-marker-alt"  label="Location / Barangay"   value={displayLocation}           iconColor={COLORS.error} />
-          {project.sitioStreet && project.barangay ? (<><RowDiv /><FieldRow icon="road" label="Sitio / Street" value={project.sitioStreet} iconColor={COLORS.textTertiary} /></>) : null}
-          <RowDiv />
-          <FieldRow icon="calendar-day"    label="NTP Received"           value={project.ntpReceivedDate}   iconColor="#8B5CF6" />
-          <RowDiv />
-          <FieldRow icon="play-circle"     label="Official Start Date"    value={displayStart}              iconColor={COLORS.success} />
-          <RowDiv />
-          <FieldRow icon="flag-checkered"  label="Original Completion"    value={displayCompletion}         iconColor={COLORS.warning} />
-          {project.revisedDate1   ? (<><RowDiv /><FieldRow icon="redo"         label="Revised Date 1"           value={project.revisedDate1}       iconColor={COLORS.error} /></>) : null}
-          {project.revisedDate2   ? (<><RowDiv /><FieldRow icon="redo-alt"     label="Revised Date 2"           value={project.revisedDate2}       iconColor={COLORS.error} /></>) : null}
-          {project.actualDateCompleted ? (<><RowDiv /><FieldRow icon="check-double"  label="Actual Date Completed"    value={project.actualDateCompleted} iconColor={COLORS.success} valueStyle={{ color: COLORS.success }} /></>) : null}
-          {(project.actualPercent !== undefined && project.actualPercent !== null) ? (
-            <><RowDiv /><FieldRow icon="percentage" label="Actual Completion %" value={`${project.actualPercent}%`} iconColor={COLORS.primary} valueStyle={{ color: COLORS.primary, fontWeight: "800" }} /></>
+          {/* Description */}
+          {project.description ? (
+            <View style={D.descBox}>
+              <View style={D.descLabelRow}>
+                <FontAwesome5 name="align-left" size={10} color={COLORS.textTertiary} />
+                <Text style={D.descLabel}>DESCRIPTION</Text>
+              </View>
+              <Text style={D.descText}>{project.description}</Text>
+            </View>
           ) : null}
         </View>
 
-        {/* ══ DESCRIPTION ════════════════════════════════════════════ */}
-        {project.description ? (
-          <View style={D.card}>
-            <SLabel title="DESCRIPTION" />
-            <HDivider />
-            <Text style={D.descText}>{project.description}</Text>
-          </View>
-        ) : null}
-
-        {/* ══ MILESTONES ═════════════════════════════════════════════ */}
+        {/* ── MILESTONES ── */}
         <View>
           {/* Section header */}
           <View style={D.msHeader}>
             <View>
-              <SLabel title="MILESTONES" />
-              {totalMs > 0 && (
-                <Text style={D.msSubCaption}>{completedMs}/{totalMs} completed</Text>
-              )}
+              <Text style={D.msSectionLabel}>CONSTRUCTION PHASES</Text>
+              <Text style={D.msSub}>
+                {totalMs > 0
+                  ? `${completedMs} of ${totalMs} completed`
+                  : "No milestones yet"}
+              </Text>
             </View>
-            {/* Generate button — always visible, disabled if milestones exist */}
+
             <TouchableOpacity
-              style={[D.generateBtn, totalMs > 0 && D.generateBtnDisabled]}
+              style={[D.generateBtn, totalMs > 0 && D.generateBtnDone]}
               onPress={totalMs === 0 ? handleGenerate : () =>
                 Alert.alert("Already Generated", "Milestones have already been created for this project.")
               }
               activeOpacity={0.8}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={totalMs > 0 ? COLORS.textTertiary : "#fff"} />
               ) : (
                 <>
-                  <FontAwesome5 name="magic" size={11} color={totalMs > 0 ? COLORS.textTertiary : "#fff"} />
-                  <Text style={[D.generateBtnText, totalMs > 0 && { color: COLORS.textTertiary }]}>
+                  <FontAwesome5
+                    name={totalMs > 0 ? "check" : "magic"}
+                    size={11}
+                    color={totalMs > 0 ? COLORS.success : "#fff"}
+                  />
+                  <Text style={[D.generateBtnText, totalMs > 0 && D.generateBtnTextDone]}>
                     {totalMs > 0 ? "Generated" : "Generate"}
                   </Text>
                 </>
@@ -407,20 +474,20 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             </TouchableOpacity>
           </View>
 
-          {/* No milestones empty state */}
+          {/* Empty state */}
           {totalMs === 0 ? (
             <View style={D.emptyMsCard}>
               <View style={D.emptyMsIconBox}>
-                <FontAwesome5 name="layer-group" size={26} color={COLORS.primary} />
+                <FontAwesome5 name="layer-group" size={28} color={COLORS.primary} />
               </View>
-              <Text style={D.emptyMsTitle}>No Milestones Yet</Text>
+              <Text style={D.emptyMsTitle}>No Phases Yet</Text>
               <Text style={D.emptyMsBody}>
-                Tap <Text style={{ fontWeight: "800", color: COLORS.primary }}>"Generate"</Text> above to auto-create 8 standard construction-phase milestones for this project.
+                Generate the 8 standard construction-phase milestones to start tracking field progress for this project.
               </Text>
               <TouchableOpacity style={D.emptyMsBtn} onPress={handleGenerate} activeOpacity={0.85}>
                 {isLoading
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <><FontAwesome5 name="magic" size={13} color="#fff" /><Text style={D.emptyMsBtnText}>Generate Milestones</Text></>
+                  : <><FontAwesome5 name="magic" size={13} color="#fff" /><Text style={D.emptyMsBtnText}>Generate Phases</Text></>
                 }
               </TouchableOpacity>
             </View>
@@ -433,7 +500,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 isFirst={index === 0}
                 prevDone={project.milestones![index - 1]?.status?.toString().toLowerCase() === "completed"}
                 isLast={index === totalMs - 1}
-                sc={sc}
                 onSelect={() => actions.onSelectMilestone(m)}
                 onProof={() => actions.onAddProof(m)}
               />
@@ -450,124 +516,181 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 const D = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
 
-  // Hero
+  // ── Hero ──────────────────────────────────────────────────────
   hero: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 22, paddingBottom: 26, overflow: "hidden",
+    paddingHorizontal: 22, paddingBottom: 28, overflow: "hidden",
   },
-  orb1: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.06)", top: -60, right: -50 },
-  orb2: { position: "absolute", width: 130, height: 130, borderRadius: 65,  backgroundColor: "rgba(255,255,255,0.04)", bottom: -40, left: 10  },
-  orb3: { position: "absolute", width: 70,  height: 70,  borderRadius: 35,  backgroundColor: "rgba(255,255,255,0.05)", top: 30,    left: -15  },
+  orb1: { position: "absolute", width: 220, height: 220, borderRadius: 110, backgroundColor: "rgba(255,255,255,0.06)", top: -70, right: -60 },
+  orb2: { position: "absolute", width: 140, height: 140, borderRadius: 70,  backgroundColor: "rgba(255,255,255,0.04)", bottom: -50, left: 10  },
+  orb3: { position: "absolute", width: 80,  height: 80,  borderRadius: 40,  backgroundColor: "rgba(255,255,255,0.05)", top: 40,    left: -20  },
+
+  heroTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   backBtn: {
-    width: 36, height: 36, borderRadius: 11,
+    width: 38, height: 38, borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center", justifyContent: "center", marginBottom: 14,
+    alignItems: "center", justifyContent: "center",
   },
-  heroIconBox: {
-    width: 54, height: 54, borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center", justifyContent: "center", marginBottom: 10,
-  },
-  heroTitle: { fontSize: 21, fontWeight: "900", color: "#fff", lineHeight: 27, marginBottom: 10 },
-  heroBadgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  heroBadge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
-  },
-  heroBadgeDot: { width: 6, height: 6, borderRadius: 3 },
-  heroBadgeText: { fontSize: 12, fontWeight: "800" },
   codeChip: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: "rgba(255,255,255,0.15)",
-    paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
   },
   codeText: { fontSize: 11, fontWeight: "700", color: "rgba(255,255,255,0.85)" },
 
-  // Scroll
-  scroll: { paddingHorizontal: 18, paddingTop: 18, gap: 12 },
+  heroLabel: {
+    fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.6)",
+    letterSpacing: 1, marginBottom: 6,
+  },
+  heroTitle: {
+    fontSize: 22, fontWeight: "900", color: "#fff", lineHeight: 28, marginBottom: 14,
+  },
 
-  // Cards
+  engineerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
+  engineerAvatar: {
+    width: 36, height: 36, borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)",
+  },
+  engineerInitials: { fontSize: 12, fontWeight: "900", color: "#fff" },
+  engineerName:     { fontSize: 13, fontWeight: "700", color: "#fff" },
+  engineerRole:     { fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: "600", marginTop: 1 },
+
+  heroBadgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  statusBadge: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 11,
+  },
+  statusBadgeText: { fontSize: 12, fontWeight: "800" },
+  locationChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 11,
+    flex: 1,
+  },
+  locationText: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.9)", flex: 1 },
+
+  // ── Floating metrics card ─────────────────────────────────────
+  metricsCard: {
+    flexDirection: "row",
+    marginHorizontal: 18,
+    marginTop: -18,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20, padding: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+    elevation: 6, shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 12,
+    marginBottom: 14,
+  },
+  metricCol:     { flex: 1, alignItems: "center", gap: 5 },
+  metricDivider: { width: 1, backgroundColor: COLORS.border, marginVertical: 4 },
+  metricIconBox: {
+    width: 36, height: 36, borderRadius: 11,
+    alignItems: "center", justifyContent: "center",
+  },
+  metricValue: { fontSize: 16, fontWeight: "900", color: COLORS.textPrimary },
+  metricLabel: { fontSize: 10, fontWeight: "700", color: COLORS.textTertiary },
+
+  // ── Scroll ───────────────────────────────────────────────────
+  scroll: { paddingHorizontal: 18, gap: 14 },
+
+  // ── Generic card ─────────────────────────────────────────────
   card: {
-    backgroundColor: COLORS.surface, borderRadius: 20, padding: 17,
+    backgroundColor: COLORS.surface, borderRadius: 20, padding: 18,
     borderWidth: 1, borderColor: COLORS.border,
     elevation: 1, shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4,
   },
-  sectionLabel: {
-    fontSize: 10, fontWeight: "900", color: COLORS.textTertiary, letterSpacing: 1, marginBottom: 10,
+  cardSectionLabel: {
+    fontSize: 10, fontWeight: "900", color: COLORS.textTertiary,
+    letterSpacing: 1, marginBottom: 14,
   },
-  divider:    { height: 1, backgroundColor: COLORS.border, marginBottom: 2 },
-  rowDivider: { height: 1, backgroundColor: COLORS.border, marginLeft: 44 },
 
-  // Progress
-  progressTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
-  msCaption: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  pctBig:    { fontSize: 32, fontWeight: "900" },
-  track:     { height: 8, backgroundColor: COLORS.track, borderRadius: 4, overflow: "hidden", marginBottom: 10 },
-  fill:      { height: "100%", borderRadius: 4 },
-  msPills:   { flexDirection: "row", gap: 4, flexWrap: "wrap" },
-  msPill:    { height: 4, flex: 1, minWidth: 8, borderRadius: 2 },
-
-  // Financials
-  financialGrid: { flexDirection: "row", gap: 10, marginBottom: 4 },
-  finItem: { flex: 1, borderRadius: 14, padding: 13, alignItems: "center", gap: 6, borderWidth: 1 },
-  finIconBox: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  finLabel:   { fontSize: 10, fontWeight: "700", color: COLORS.textTertiary, textTransform: "uppercase", letterSpacing: 0.3 },
-  finValue:   { fontSize: 18, fontWeight: "900", textAlign: "center" },
-  contractorRow: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: COLORS.border,
+  // ── Progress ─────────────────────────────────────────────────
+  progressHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  progressPct:    { fontSize: 28, fontWeight: "900" },
+  progressTrack:  {
+    height: 10, backgroundColor: COLORS.track, borderRadius: 5,
+    overflow: "hidden", marginBottom: 10,
   },
-  contractorText: { fontSize: 13, color: COLORS.textSecondary },
+  progressFill:   { height: "100%", borderRadius: 5 },
+  stepDots:       { flexDirection: "row", gap: 5, marginBottom: 8, flexWrap: "wrap" },
+  stepDot:        { height: 5, flex: 1, minWidth: 10, borderRadius: 3 },
+  progressCaption:{ fontSize: 12, color: COLORS.textSecondary, fontWeight: "600" },
 
-  // Field rows
-  fieldRow:  { flexDirection: "row", alignItems: "flex-start", gap: 11, paddingVertical: 9 },
-  fieldIcon: {
-    width: 30, height: 30, borderRadius: 8,
-    borderWidth: 1, alignItems: "center", justifyContent: "center",
-    marginTop: 1, flexShrink: 0,
+  // ── Timeline ─────────────────────────────────────────────────
+  timeline: { gap: 0 },
+  timelineItem: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  fieldLabel: {
-    fontSize: 10, fontWeight: "700", color: COLORS.textTertiary,
-    textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2,
+  tlIconBox: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  fieldValue: { fontSize: 13, fontWeight: "600", color: COLORS.textPrimary, lineHeight: 18 },
+  tlLabel: { fontSize: 11, fontWeight: "700", color: COLORS.textSecondary, flex: 1 },
+  tlValue: { fontSize: 13, fontWeight: "700", color: COLORS.textPrimary },
 
-  // Description
-  descText: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 21 },
+  // ── Details grid ─────────────────────────────────────────────
+  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 0 },
+  detailCell: {
+    flex: 1, minWidth: "45%",
+    backgroundColor: COLORS.background, borderRadius: 14,
+    padding: 12, gap: 4,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  detailIcon: {
+    width: 30, height: 30, borderRadius: 9,
+    alignItems: "center", justifyContent: "center", marginBottom: 2,
+  },
+  detailCellLabel: {
+    fontSize: 9, fontWeight: "800", color: COLORS.textTertiary,
+    textTransform: "uppercase", letterSpacing: 0.5,
+  },
+  detailCellValue: { fontSize: 13, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 17 },
 
-  // Milestones section header
+  descBox: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: COLORS.border },
+  descLabelRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  descLabel: { fontSize: 10, fontWeight: "800", color: COLORS.textTertiary, letterSpacing: 0.6 },
+  descText:  { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
+
+  // ── Milestones header ─────────────────────────────────────────
   msHeader: {
     flexDirection: "row", justifyContent: "space-between",
-    alignItems: "flex-start", marginBottom: 12,
+    alignItems: "flex-start", marginBottom: 14,
   },
-  msSubCaption: { fontSize: 11, color: COLORS.textSecondary, marginTop: 1 },
+  msSectionLabel: { fontSize: 10, fontWeight: "900", color: COLORS.textTertiary, letterSpacing: 1 },
+  msSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 3, fontWeight: "600" },
 
   // Generate button
   generateBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: COLORS.primary, paddingHorizontal: 14,
-    paddingVertical: 8, borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 13,
   },
-  generateBtnDisabled: {
-    backgroundColor: COLORS.track, borderWidth: 1, borderColor: COLORS.border,
+  generateBtnDone: {
+    backgroundColor: COLORS.successSoft,
+    borderWidth: 1, borderColor: "#A7F3D0",
   },
-  generateBtnText: { fontSize: 12, fontWeight: "800", color: "#fff" },
+  generateBtnText:     { fontSize: 12, fontWeight: "800", color: "#fff" },
+  generateBtnTextDone: { color: COLORS.success },
 
-  // Empty milestones state
+  // Empty milestones
   emptyMsCard: {
     backgroundColor: COLORS.surface, borderRadius: 20,
-    padding: 28, alignItems: "center", gap: 10,
+    padding: 32, alignItems: "center", gap: 10,
     borderWidth: 1.5, borderColor: COLORS.accentBorder,
     borderStyle: "dashed",
   },
   emptyMsIconBox: {
-    width: 64, height: 64, borderRadius: 20,
+    width: 68, height: 68, borderRadius: 20,
     backgroundColor: COLORS.primarySoft,
     alignItems: "center", justifyContent: "center", marginBottom: 4,
   },
-  emptyMsTitle: { fontSize: 17, fontWeight: "800", color: COLORS.textPrimary },
-  emptyMsBody:  { fontSize: 13, color: COLORS.textSecondary, textAlign: "center", lineHeight: 19, paddingHorizontal: 8 },
+  emptyMsTitle:   { fontSize: 17, fontWeight: "800", color: COLORS.textPrimary },
+  emptyMsBody:    { fontSize: 13, color: COLORS.textSecondary, textAlign: "center", lineHeight: 19, paddingHorizontal: 8 },
   emptyMsBtn: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: COLORS.primary, paddingHorizontal: 22,
@@ -575,56 +698,53 @@ const D = StyleSheet.create({
   },
   emptyMsBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
 
-  // Milestone cards
+  // ── Milestone card ────────────────────────────────────────────
   msWrapper:  { position: "relative" },
   connector: {
-    position: "absolute", left: 18, top: 52, width: 2, height: 18, zIndex: 1,
+    position: "absolute", left: 19, top: 54, width: 2,
+    bottom: 0, zIndex: 0,
   },
   msCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: COLORS.surface, borderRadius: 16,
-    paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10,
-    borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14,
+    marginBottom: 10, borderWidth: 1.5,
     elevation: 1, shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4,
   },
-  msCardLocked: { opacity: 0.45, backgroundColor: COLORS.background, elevation: 0 },
-
   stepCircle: {
-    width: 38, height: 38, borderRadius: 19,
-    alignItems: "center", justifyContent: "center", flexShrink: 0,
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: "center", justifyContent: "center", flexShrink: 0, zIndex: 1,
   },
-  msTitleRow:  { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 6 },
-  seqPill: {
-    minWidth: 22, height: 20, borderRadius: 6,
-    alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 5, flexShrink: 0,
+  msContent:  { flex: 1 },
+  msTitleRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 3 },
+  msPhase:    { fontSize: 10, fontWeight: "800", color: COLORS.textTertiary, letterSpacing: 0.4 },
+  proofBadge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: COLORS.primarySoft,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
-  seqText:  { fontSize: 10, fontWeight: "900" },
-  msTitle:  { fontSize: 13, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 17, flex: 1 },
-  msMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  msStatusChip: {
+  proofBadgeText: { fontSize: 9, fontWeight: "800", color: COLORS.primary },
+  msTitle: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 18, marginBottom: 6 },
+  msStatusRow: { flexDirection: "row" },
+  msStatusPill: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
   },
   msStatusDot:  { width: 5, height: 5, borderRadius: 3 },
-  msStatusText: { fontSize: 10, fontWeight: "700", textTransform: "capitalize" },
-  proofCountChip: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: COLORS.primarySoft, paddingHorizontal: 7,
-    paddingVertical: 3, borderRadius: 7,
-  },
-  proofCountText: { fontSize: 10, fontWeight: "700", color: COLORS.primary },
+  msStatusText: { fontSize: 10, fontWeight: "700" },
 
-  // Milestone right actions
-  msActions: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
+  // Right actions
+  msActions: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
   cameraBtn: {
-    width: 34, height: 34, borderRadius: 10,
+    width: 38, height: 38, borderRadius: 12,
     backgroundColor: COLORS.primary,
     alignItems: "center", justifyContent: "center",
   },
-  chevronBtn: {
-    width: 28, height: 34,
+  chevronWrap: {
+    width: 24, height: 38,
     alignItems: "center", justifyContent: "center",
+  },
+  lockWrap: {
+    width: 32, alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
 });
