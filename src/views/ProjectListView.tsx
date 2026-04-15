@@ -74,16 +74,18 @@ const StatsBar = ({ projects }: { projects: Project[] }) => {
 };
 
 const statsStyles = StyleSheet.create({
-  row: { flexDirection: "row", marginHorizontal: 24, marginBottom: 14, gap: 8 },
+  row: { flexDirection: "row", marginHorizontal: 18, marginTop: 24, marginBottom: 14, gap: 8 },
   cell: {
     flex: 1,
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     borderTopWidth: 3,
-    paddingVertical: 10,
+    paddingVertical: 12,
     alignItems: "center",
     borderWidth: 1,
     borderColor: COLORS.border,
+    elevation: 2, shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6,
   },
   num:   { fontSize: 20, fontWeight: "900", color: COLORS.textPrimary },
   label: { fontSize: 10, fontWeight: "700", color: COLORS.textTertiary, marginTop: 2 },
@@ -198,46 +200,46 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   }, [data.projects, data.activeFilter, search]);
 
   return (
-    <View style={[S.root, { backgroundColor: COLORS.background }]}>
+    <View style={S.root}>
 
-      {/* ── Header ── */}
-      <View style={[S.header, { paddingTop: insets.top + 18 }]}>
-        <View style={S.headerRow}>
-          <View>
-            <Text style={S.headerTitle}>Projects</Text>
-            <Text style={S.headerSub}>{data.projects.length} total · real-time sync</Text>
+      {/* ══ TEAL HERO HEADER ══════════════════════════════════════ */}
+      <View style={[S.hero, { paddingTop: insets.top + 16 }]}>
+        <View style={S.heroOrb1} /><View style={S.heroOrb2} />
+        <View style={S.heroContent}>
+          <View style={S.heroRow}>
+            <View>
+              <Text style={S.heroLabel}>HCSD · CONSTRUCTION SERVICES</Text>
+              <Text style={S.heroTitle}>Projects</Text>
+            </View>
+            <View style={S.liveChip}>
+              <View style={S.liveDot} />
+              <Text style={S.liveText}>LIVE</Text>
+            </View>
           </View>
-          <View style={S.liveChip}>
-            <View style={S.liveDot} />
-            <Text style={S.liveText}>LIVE</Text>
+          {/* Inline search inside hero */}
+          <View style={S.searchBar}>
+            <FontAwesome5 name="search" size={13} color={COLORS.textTertiary} />
+            <TextInput
+              style={S.searchInput}
+              placeholder="Search projects, engineer, location…"
+              placeholderTextColor={COLORS.textTertiary}
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <FontAwesome5 name="times-circle" size={14} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
 
-      {/* ── Stats bar ── */}
+      {/* ══ STATS BAR ═══════════════════════════════════════════ */}
       <StatsBar projects={data.projects} />
 
-      {/* ── Search ── */}
-      <View style={S.searchWrap}>
-        <View style={S.searchBar}>
-          <FontAwesome5 name="search" size={13} color={COLORS.textTertiary} />
-          <TextInput
-            style={S.searchInput}
-            placeholder="Search title, engineer, location, fund…"
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-            autoCorrect={false}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <FontAwesome5 name="times-circle" size={14} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* ── Filter tabs ── */}
+      {/* ══ FILTER TABS ═════════════════════════════════════════ */}
       <View style={S.filterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterScroll}>
           {FILTERS.map((f) => {
@@ -260,7 +262,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
         </ScrollView>
       </View>
 
-      {/* ── List ── */}
+      {/* ══ LIST ════════════════════════════════════════════════ */}
       {data.isLoading && data.projects.length === 0 ? (
         <View style={S.loadingBox}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -273,7 +275,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
           renderItem={({ item }) => (
             <ProjectCard item={item} onPress={() => actions.onSelectProject(item.id)} />
           )}
-          contentContainerStyle={S.listContent}
+          contentContainerStyle={[S.listContent, { paddingBottom: insets.bottom + 110 }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={S.emptyBox}>
@@ -294,29 +296,36 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: COLORS.background },
 
-  // Header
-  header:    { paddingHorizontal: 24, marginBottom: 14 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  headerTitle: { fontSize: 28, fontWeight: "900", color: COLORS.textPrimary },
-  headerSub:   { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  // Hero header
+  hero: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 22, paddingBottom: 22, overflow: "hidden",
+    marginBottom: -12,
+  },
+  heroOrb1: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.06)", top: -50, right: -40 },
+  heroOrb2: { position: "absolute", width: 100, height: 100, borderRadius: 50, backgroundColor: "rgba(255,255,255,0.04)", bottom: -30, left: -10 },
+  heroContent: { zIndex: 1 },
+  heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
+  heroLabel: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.65)", letterSpacing: 0.8, marginBottom: 2 },
+  heroTitle: { fontSize: 28, fontWeight: "900", color: "#fff" },
   liveChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: COLORS.successSoft, borderRadius: 20,
-    paddingHorizontal: 9, paddingVertical: 5,
-    borderWidth: 1, borderColor: "#6EE7B7", marginTop: 4,
+    backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 5, marginTop: 4,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
   },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.success },
-  liveText: { fontSize: 10, fontWeight: "900", color: COLORS.success, letterSpacing: 0.5 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#6EE7B7" },
+  liveText: { fontSize: 10, fontWeight: "900", color: "#fff", letterSpacing: 0.5 },
 
-  // Search
-  searchWrap: { paddingHorizontal: 24, marginBottom: 10 },
+  // Search (inside hero)
   searchBar: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: COLORS.surface, borderRadius: 14,
+    backgroundColor: "#fff", borderRadius: 14,
     paddingHorizontal: 14, height: 46,
-    borderWidth: 1, borderColor: COLORS.border,
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.06)",
+    elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
   },
   searchInput: { flex: 1, fontSize: 14, color: COLORS.textPrimary, paddingVertical: 0 },
 
@@ -332,7 +341,7 @@ const S = StyleSheet.create({
   tabText: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
 
   // List
-  listContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 110 },
+  listContent: { paddingHorizontal: 20, paddingTop: 16 },
 
   // Card
   card: {

@@ -91,7 +91,7 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
       </View>
 
       <ScrollView
-        contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
 

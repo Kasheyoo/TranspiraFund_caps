@@ -230,7 +230,7 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
   root:   { flex: 1, backgroundColor: COLORS.background },
-  scroll: { paddingBottom: 120 },
+  scroll: { paddingBottom: 140 },
 
   // Hero
   hero: {

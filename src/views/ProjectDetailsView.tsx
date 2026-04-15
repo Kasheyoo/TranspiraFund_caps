@@ -274,7 +274,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
       </View>
 
       <ScrollView
-        contentContainerStyle={[D.scroll, { paddingBottom: insets.bottom + 48 }]}
+        contentContainerStyle={[D.scroll, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
 
