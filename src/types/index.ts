@@ -15,7 +15,7 @@ export interface Proof {
 
 export interface Milestone {
   id: string;
-  projectId: string;
+  projectId?: string;   // kept for backward compat; subcollection path is canonical
   title: string;
   status?: string;
   sequence?: number;
@@ -24,20 +24,38 @@ export interface Milestone {
 
 export interface Project {
   id: string;
-  projectTitle?: string;
-  title?: string;
-  engineer?: string;
-  location?: string;
-  startDate?: string;
-  completionDate?: string;
-  status?: string;
-  progress?: number;
-  budget?: number;
+  // ── Canonical field names written by web app HCSD ──────────────
+  projectName?: string;
+  projectEngineer?: string;
+  projectEngineerUid?: string;
+  barangay?: string;
+  sitioStreet?: string;
+  fundingSource?: string;
+  accountCode?: string;
   contractAmount?: number;
+  ntpReceivedDate?: string;
+  officialDateStarted?: string;
+  originalDateCompletion?: string;
+  revisedDate1?: string;
+  revisedDate2?: string;
+  actualDateCompleted?: string;
+  actualPercent?: number;
+  // ── Display-friendly aliases (resolved in ProjectModel.normalize) ─
+  title?: string;         // = projectName
+  engineer?: string;      // = projectEngineer
+  location?: string;      // = barangay [+ sitioStreet]
+  startDate?: string;     // = officialDateStarted
+  completionDate?: string;// = originalDateCompletion
+  // ── Shared fields ──────────────────────────────────────────────
   contractor?: string;
   description?: string;
   projectCode?: string;
+  status?: string;
+  progress?: number;
+  budget?: number;        // legacy alias for contractAmount display
   milestones?: Milestone[];
+  createdBy?: string;
+  createdAt?: FirestoreTimestamp;
 }
 
 export interface UserProfile {
@@ -48,7 +66,7 @@ export interface UserProfile {
   department?: string;
   role?: string;
   status?: string;
-  firstTimeAccess?: boolean;   // legacy field (unused by web app)
+  firstTimeAccess?: boolean;    // legacy field (unused by web app)
   mustChangePassword?: boolean; // set by web app on account creation
   name?: string;
   photoURL?: string;
@@ -70,7 +88,14 @@ export interface AuditTrail {
 }
 
 export interface DashboardStats {
-  progress: number;
-  done: number;
-  delay: number;
+  // Project status counts — written by web app's onProjectWritten trigger
+  progress: number;  // in-progress / ongoing projects
+  done: number;      // completed projects
+  delay: number;     // delayed projects
+  // Additional web stats (available but not required by mobile dashboard)
+  engineerCount?: number;
+  departmentCount?: number;
+  projectCount?: number;
+  totalBudget?: number;
+  lastUpdated?: string;
 }

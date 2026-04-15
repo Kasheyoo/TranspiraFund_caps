@@ -6,8 +6,6 @@ service cloud.firestore {
     //  HELPER FUNCTIONS
     // ════════════════════════════════════════════════════════════════
 
-    // Returns the calling user's role from the users collection.
-    // Returns '' if the user document does not exist.
     function getUserRole() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
@@ -18,7 +16,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Returns true if the caller has one of the specified roles.
     function hasRole(roles) {
       return isAuthenticated() && getUserRole() in roles;
     }
@@ -28,14 +25,10 @@ service cloud.firestore {
     //  CATEGORY 1 — USER MANAGEMENT
     // ════════════════════════════════════════════════════════════════
 
-    // users/{uid}
-    //   Read:  Own document (any authenticated user) or MIS/DEPW (all docs)
-    //   Write: BLOCKED — Cloud Functions (Admin SDK) only
-
     match /users/{userId} {
       allow read: if isAuthenticated() &&
                      (request.auth.uid == userId ||
-                      hasRole(['MIS', 'DEPW']));
+                      hasRole(['MIS', 'HCSD']));
       allow write: if false;
     }
 
@@ -44,68 +37,53 @@ service cloud.firestore {
     //  CATEGORY 2 — PROJECT DATA
     // ════════════════════════════════════════════════════════════════
 
-    // projects/{projectId}
-    //   Read:  All authenticated roles (dashboards, registries, approvals)
-    //   Write: BLOCKED — createProject Cloud Function via Admin SDK
-
     match /projects/{projectId} {
-      allow read: if hasRole(['MIS', 'MAYOR', 'DEPW', 'CPDO', 'PROJ_ENG']);
+      allow read: if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
       allow create, update, delete: if false;
-    }
 
-    // milestones/{milestoneId}
-    //   Read:   All authenticated roles
-    //   Update: PROJ_ENG only — for submitting proof images and progress updates
-    //           (create/delete still handled by Cloud Functions / Admin SDK)
-
-    match /milestones/{milestoneId} {
-      allow read:   if hasRole(['MIS', 'MAYOR', 'DEPW', 'CPDO', 'PROJ_ENG']);
-      allow update: if hasRole(['PROJ_ENG']);
-      allow create, delete: if false;
+      // Milestones live as a subcollection under each project
+      // PROJ_ENG can update (add geotagged proofs) — no create/delete from client
+      match /milestones/{milestoneId} {
+        allow read:   if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
+        allow update: if hasRole(['PROJ_ENG']);
+        allow create, delete: if false;
+      }
     }
 
 
     // ════════════════════════════════════════════════════════════════
     //  CATEGORY 3 — AUDIT TRAILS
+    //  Hierarchical: auditTrails/{scope}/entries/{logId}
     // ════════════════════════════════════════════════════════════════
 
-    // systemAuditTrails/{logId}  →  MIS SCOPE ONLY
-    match /systemAuditTrails/{logId} {
+    // MIS-scope: account provisioning, OTP, password changes
+    match /auditTrails/mis/entries/{logId} {
       allow read:  if hasRole(['MIS']);
       allow write: if false;
     }
 
-    // depwAuditTrails/{logId}  →  DEPW SCOPE ONLY
-    match /depwAuditTrails/{logId} {
-      allow read:  if hasRole(['DEPW']);
+    // HCSD-scope: project created, PROJ_ENG accounts, profile updates
+    match /auditTrails/hcsd/entries/{logId} {
+      allow read:  if hasRole(['HCSD']);
       allow write: if false;
     }
 
-    // projEngAuditTrails/{logId}  →  PROJECT ENGINEER AUDIT TRAILS
-    //   PROJ_ENG actions from the mobile app
-    //   (e.g., logins, proof uploads, progress updates)
-    //   DEPW and MIS can read to monitor PROJ_ENG field activity
-    //   Append-only: no updates or deletes allowed
-
-    match /projEngAuditTrails/{logId} {
-      allow read:   if hasRole(['MIS', 'DEPW', 'PROJ_ENG']);
+    // Mobile-scope: PROJ_ENG field activity (logins, proof uploads)
+    // MIS + HCSD can read for monitoring; PROJ_ENG appends their own logs
+    match /auditTrails/mobile/entries/{logId} {
+      allow read:   if hasRole(['MIS', 'HCSD', 'PROJ_ENG']);
       allow create: if hasRole(['PROJ_ENG']);
       allow update, delete: if false;
     }
 
 
     // ════════════════════════════════════════════════════════════════
-    //  CATEGORY 4 — NOTIFICATIONS (MOBILE APP)
+    //  CATEGORY 4 — NOTIFICATIONS
     // ════════════════════════════════════════════════════════════════
 
-    // notification/{notifId}
-    //   All authenticated roles can read their notifications
-    //   PROJ_ENG can update (mark as read) — no create/delete from client
-    //   Creating notifications is done server-side (Cloud Functions / Admin SDK)
-
-    match /notification/{notifId} {
-      allow read:   if hasRole(['MIS', 'MAYOR', 'DEPW', 'CPDO', 'PROJ_ENG']);
-      allow update: if hasRole(['MIS', 'MAYOR', 'DEPW', 'CPDO', 'PROJ_ENG']);
+    match /notifications/{notifId} {
+      allow read:   if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
+      allow update: if hasRole(['MIS', 'MAYOR', 'HCSD', 'CPDO', 'PROJ_ENG']);
       allow create, delete: if false;
     }
 
@@ -118,12 +96,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /passwordResetCooldowns/{docId} {
+    // Web app password reset (Firebase Auth link flow)
+    match /passwordResets/{docId} {
       allow read, write: if false;
     }
 
+    // Mobile app password reset (custom OTP flow)
     match /passwordResetOtps/{docId} {
-      allow read, write: if false;  // Admin SDK only
+      allow read, write: if false;
+    }
+
+    match /passwordResetCooldowns/{docId} {
+      allow read, write: if false;
     }
 
 

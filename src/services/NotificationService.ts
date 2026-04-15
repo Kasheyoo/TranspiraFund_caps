@@ -20,7 +20,7 @@ export const NotificationService = {
 
     try {
       const q = query(
-        collection(db, "notification"),
+        collection(db, "notifications"),
         orderBy("timestamp", "desc"),
       );
       const querySnapshot = await getDocs(q);
@@ -43,7 +43,7 @@ export const NotificationService = {
   markAsRead: async (notificationId: string): Promise<boolean> => {
     requireAuth();
     try {
-      const docRef = doc(db, "notification", notificationId);
+      const docRef = doc(db, "notifications", notificationId);
       await updateDoc(docRef, { status: "Read" });
       invalidateCache("notifications_all");
       return true;

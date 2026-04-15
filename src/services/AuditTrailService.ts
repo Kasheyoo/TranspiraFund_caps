@@ -9,22 +9,23 @@ export class AuditTrailService {
   static async getAll(): Promise<AuditTrail[]> {
     requireAuth();
 
-    // const cached = getCached<AuditTrail[]>("projEngAuditTrails");
-    // if (cached) return cached;
+    const cached = getCached<AuditTrail[]>("auditTrails_mobile");
+    if (cached) return cached;
 
     try {
-      const logsRef = collection(db, "projEngAuditTrails");
+      // Reads from the shared hierarchical audit trail — mobile scope
+      const logsRef = collection(db, "auditTrails", "mobile", "entries");
       const q = query(logsRef, orderBy("timestamp", "desc"), limit(10));
       const querySnapshot = await getDocs(q);
       const results: AuditTrail[] = querySnapshot.docs.map((d) => ({
         id: d.id,
         ...d.data(),
       })) as AuditTrail[];
-      setCached("projEngAuditTrails", results);
+      setCached("auditTrails_mobile", results);
       return results;
     } catch (error: any) {
       if (error?.code === "permission-denied") {
-        logger.warn("Audit Trails: insufficient Firestore permissions. Update security rules.");
+        logger.warn("Audit Trails: insufficient Firestore permissions. Check security rules.");
       } else {
         logger.error("Audit Trails Fetch Error:", error);
       }

@@ -1,10 +1,10 @@
-import { arrayUnion, doc, updateDoc } from "firebase/firestore";
+import { arrayUnion, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useRef, useState } from "react";
 import { Alert, PermissionsAndroid } from "react-native";
 import { launchCamera } from "react-native-image-picker";
 import Geolocation from "react-native-geolocation-service";
-import { db, storage } from "../firebaseConfig";
+import { storage } from "../firebaseConfig";
 import { callFn } from "../services/CloudFunctionService";
 import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
@@ -94,7 +94,7 @@ export const useProjectDetailsPresenter = (
         }
 
         // Validate file size
-        const fileSize = asset.fileSize || 0;
+        const fileSize = (asset as any).fileSize || 0;
         if (fileSize > MAX_IMAGE_SIZE_BYTES) {
           Alert.alert("File Too Large", "Image must be under 10MB.");
           return;
@@ -126,7 +126,7 @@ export const useProjectDetailsPresenter = (
         await uploadBytes(storageRef, blob);
         const downloadURL = await getDownloadURL(storageRef);
 
-        const milestoneRef = doc(db, "milestones", m.id);
+        const milestoneRef = ProjectModel.milestoneRef(project!.id, m.id);
         const newProof = {
           url: downloadURL,
           location: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
@@ -143,8 +143,8 @@ export const useProjectDetailsPresenter = (
         // Audit: PROOF_UPLOAD syncs to DEPW HEAD (core field activity)
         callFn("logMobileAuditTrail", {
           action: "Proof Uploaded",
-          details: project?.projectTitle ?? "Project",
-          syncToDEPW: true,
+          details: project?.projectName ?? project?.title ?? "Project",
+          syncToHCSD: true,
         }).catch(() => {}); // Non-blocking
 
         // Real-time listener auto-refreshes — no manual reload needed

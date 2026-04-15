@@ -4,8 +4,6 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
-  query,
-  where,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { requireAuth } from "../utils/authGuard";
@@ -14,29 +12,49 @@ import { logger } from "../utils/logger";
 import type { Milestone, Project } from "../types";
 
 export class ProjectModel {
-  // ── Shared helpers ───────────────────────────────────────────────────────────
+  // ── Field normalizer ─────────────────────────────────────────────
+  // Maps canonical web-app field names to the display aliases the
+  // mobile views use.  Both sets of fields end up on the Project object
+  // so views that reference either name continue to work.
+  private static normalize(raw: Record<string, unknown>, id: string): Project {
+    const r = raw as Project;
+    return {
+      id,
+      ...r,
+      // Display aliases derived from canonical names (fall back to old names)
+      title:          r.projectName      ?? r.title,
+      engineer:       r.projectEngineer  ?? r.engineer,
+      startDate:      r.officialDateStarted  ?? r.startDate,
+      completionDate: r.originalDateCompletion ?? r.completionDate,
+      location: r.barangay
+        ? r.sitioStreet
+          ? `${r.sitioStreet}, ${r.barangay}`
+          : r.barangay
+        : r.location,
+      // budget alias for displays that show currency
+      budget: r.contractAmount ?? r.budget,
+    };
+  }
 
+  // ── Milestone subcollection helper ───────────────────────────────
   private static async fetchMilestonesForProjects(
     projectIds: string[],
   ): Promise<Record<string, Milestone[]>> {
-    const allMilestones: Milestone[] = [];
-    const BATCH_SIZE = 30;
-    for (let i = 0; i < projectIds.length; i += BATCH_SIZE) {
-      const batch = projectIds.slice(i, i + BATCH_SIZE);
-      const q = query(
-        collection(db, "milestones"),
-        where("projectId", "in", batch),
-      );
-      const snaps = await getDocs(q);
-      snaps.docs.forEach((d) =>
-        allMilestones.push({ id: d.id, ...d.data() } as Milestone),
-      );
-    }
     const byProject: Record<string, Milestone[]> = {};
-    allMilestones.forEach((m) => {
-      if (!byProject[m.projectId]) byProject[m.projectId] = [];
-      byProject[m.projectId].push(m);
-    });
+    await Promise.all(
+      projectIds.map(async (projectId) => {
+        try {
+          const snaps = await getDocs(
+            collection(db, "projects", projectId, "milestones"),
+          );
+          byProject[projectId] = snaps.docs.map(
+            (d) => ({ id: d.id, projectId, ...d.data() } as Milestone),
+          );
+        } catch {
+          byProject[projectId] = [];
+        }
+      }),
+    );
     return byProject;
   }
 
@@ -62,7 +80,7 @@ export class ProjectModel {
     });
   }
 
-  // ── One-time fetches (used by dashboard + legacy callers) ────────────────────
+  // ── One-time fetches ─────────────────────────────────────────────
 
   static async getAll(): Promise<Project[]> {
     requireAuth();
@@ -71,10 +89,9 @@ export class ProjectModel {
       if (cached) return cached;
 
       const querySnapshot = await getDocs(collection(db, "projects"));
-      const projects: Project[] = querySnapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as Project[];
+      const projects: Project[] = querySnapshot.docs.map((d) =>
+        this.normalize(d.data(), d.id),
+      );
 
       if (projects.length === 0) return [];
 
@@ -98,18 +115,13 @@ export class ProjectModel {
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return null;
 
-      const projectData: Project = {
-        id: docSnap.id,
-        ...docSnap.data(),
-      } as Project;
+      const projectData = this.normalize(docSnap.data(), docSnap.id);
 
-      const mq = query(
-        collection(db, "milestones"),
-        where("projectId", "==", projectId),
+      const milestoneSnaps = await getDocs(
+        collection(db, "projects", projectId, "milestones"),
       );
-      const milestoneSnaps = await getDocs(mq);
       projectData.milestones = milestoneSnaps.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Milestone))
+        .map((d) => ({ id: d.id, projectId, ...d.data() } as Milestone))
         .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
 
       const completed = projectData.milestones.filter(
@@ -127,13 +139,8 @@ export class ProjectModel {
     }
   }
 
-  // ── Real-time subscriptions ──────────────────────────────────────────────────
+  // ── Real-time subscriptions ──────────────────────────────────────
 
-  /**
-   * Real-time listener on ALL projects.
-   * Any change made from the web app (assign, update status, etc.) pushes instantly.
-   * Returns an unsubscribe function — call on component unmount.
-   */
   static subscribeToAll(
     onUpdate: (projects: Project[]) => void,
     onError?: (error: Error) => void,
@@ -144,10 +151,9 @@ export class ProjectModel {
       collection(db, "projects"),
       async (snapshot) => {
         try {
-          const projects: Project[] = snapshot.docs.map((d) => ({
-            id: d.id,
-            ...d.data(),
-          })) as Project[];
+          const projects: Project[] = snapshot.docs.map((d) =>
+            this.normalize(d.data(), d.id),
+          );
 
           if (projects.length === 0) {
             onUpdate([]);
@@ -170,10 +176,6 @@ export class ProjectModel {
     );
   }
 
-  /**
-   * Real-time listener on a single project + its milestones.
-   * Returns an unsubscribe function — call on component unmount.
-   */
   static subscribeToProject(
     projectId: string,
     onUpdate: (project: Project | null) => void,
@@ -189,18 +191,13 @@ export class ProjectModel {
           return;
         }
         try {
-          const projectData: Project = {
-            id: snap.id,
-            ...snap.data(),
-          } as Project;
+          const projectData = this.normalize(snap.data(), snap.id);
 
-          const mq = query(
-            collection(db, "milestones"),
-            where("projectId", "==", projectId),
+          const milestoneSnaps = await getDocs(
+            collection(db, "projects", projectId, "milestones"),
           );
-          const milestoneSnaps = await getDocs(mq);
           projectData.milestones = milestoneSnaps.docs
-            .map((d) => ({ id: d.id, ...d.data() } as Milestone))
+            .map((d) => ({ id: d.id, projectId, ...d.data() } as Milestone))
             .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
 
           const completed = projectData.milestones.filter(
@@ -222,5 +219,10 @@ export class ProjectModel {
         onError?.(err);
       },
     );
+  }
+
+  // ── Milestone ref helper (use this when writing proofs) ──────────
+  static milestoneRef(projectId: string, milestoneId: string) {
+    return doc(db, "projects", projectId, "milestones", milestoneId);
   }
 }

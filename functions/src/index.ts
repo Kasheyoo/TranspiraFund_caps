@@ -31,16 +31,16 @@ function createTransporter(user: string, pass: string) {
 
 /**
  * Logs an audit event.
- * Always writes to `projEngAuditTrails` (PROJ_ENG's own trail).
- * Only writes to `depwAuditTrails` when syncToDEPW is true
- * (security events + field activity that DEPW HEAD needs to see).
+ * Always writes to `auditTrails/mobile/entries` (PROJ_ENG scope).
+ * Only writes to `auditTrails/hcsd/entries` when syncToHCSD is true
+ * (security events + field activity that HCSD needs to see).
  */
 async function logAuditTrail(
   uid: string,
   email: string,
   action: string,
   details: string,
-  syncToDEPW = false,
+  syncToHCSD = false,
 ) {
   const entry = {
     uid,
@@ -51,12 +51,20 @@ async function logAuditTrail(
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
   };
 
+  // Always write to mobile audit trail (PROJ_ENG scope)
   const writes: Promise<unknown>[] = [
-    admin.firestore().collection("projEngAuditTrails").add(entry),
+    admin.firestore()
+      .collection("auditTrails").doc("mobile").collection("entries")
+      .add(entry),
   ];
 
-  if (syncToDEPW) {
-    writes.push(admin.firestore().collection("depwAuditTrails").add(entry));
+  // Sync to HCSD audit trail for security-relevant events (password change, proof uploads)
+  if (syncToHCSD) {
+    writes.push(
+      admin.firestore()
+        .collection("auditTrails").doc("hcsd").collection("entries")
+        .add(entry),
+    );
   }
 
   await Promise.all(writes);
@@ -101,10 +109,11 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
 
-  const { action, details, syncToDEPW } = request.data as {
+  const { action, details, syncToDEPW, syncToHCSD } = request.data as {
     action?: string;
     details?: string;
-    syncToDEPW?: boolean;
+    syncToDEPW?: boolean;  // accepted for backward compat from older app versions
+    syncToHCSD?: boolean;
   };
 
   if (!action || !details) {
@@ -114,7 +123,7 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   const uid = request.auth.uid;
   const email = request.auth.token.email || "";
 
-  await logAuditTrail(uid, email, action, details, syncToDEPW === true);
+  await logAuditTrail(uid, email, action, details, syncToHCSD === true || syncToDEPW === true);
 
   return { success: true };
 });
@@ -195,7 +204,7 @@ export const sendPasswordResetOtp = onCall(
               <p style="color:#718096;font-size:13px;margin:0;">If you did not request this, you can safely ignore this email.</p>
             </div>
             <p style="text-align:center;color:#A0AEC0;font-size:12px;margin-top:16px;">
-              Construction Services Division, DEPW
+              Construction Services Division, HCSD
             </p>
           </div>
         `,
