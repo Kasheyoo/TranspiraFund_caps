@@ -1,4 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -10,24 +11,38 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
+import { ToastMessage } from "../components/ToastMessage";
+import { ConfirmModal } from "../components/ConfirmModal";
 import type { Milestone, Project } from "../types";
+
+type ToastType = "success" | "error" | "info";
 
 interface MilestoneDetailsData {
   selectedMilestone: Milestone | null;
   project: Project | null;
   isLoading: boolean;
+  toast?: { visible: boolean; type: ToastType; message: string };
 }
 
 interface MilestoneDetailsActions {
   onRefresh: () => void;
   onSelectMilestone: (m: Milestone | null) => void;
   onAddProof: (m: Milestone) => void;
+  onConfirmMilestone?: (m: Milestone) => Promise<boolean>;
+  onMarkCompleted?: (m: Milestone) => Promise<boolean>;
+  onDismissToast?: () => void;
 }
 
 interface MilestoneDetailsViewProps {
   data: MilestoneDetailsData;
   actions: MilestoneDetailsActions;
 }
+
+// Detects the legacy "lat, lng" string stored in older proofs (before
+// server-side reverse geocoding shipped). When `location` is just numbers,
+// the COORDINATES row already covers it — don't render it twice as a place.
+const COORD_STRING_RE = /^\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+\s*$/;
+const isCoordString = (s?: string) => !!s && COORD_STRING_RE.test(s);
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { accent: string; bg: string; text: string }> = {
@@ -38,7 +53,7 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string }> =
 
 export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProps) => {
   const insets = useSafeAreaInsets();
-  const { selectedMilestone: m, project, isLoading } = data;
+  const { selectedMilestone: m, project, isLoading, toast } = data;
 
   if (!m) return null;
 
@@ -47,9 +62,63 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
   const isCompleted = statusKey === "completed";
   const proofs     = Array.isArray(m.proofs) ? [...m.proofs].reverse() : [];
   const proofCount = proofs.length;
+  const PROOF_LIMIT = 5;
+  const atProofLimit = proofCount >= PROOF_LIMIT;
+  const needsReview = m.confirmed === false;
+  const isAiGenerated = !!m.generatedBy;
+
+  const handleConfirm = async () => {
+    if (!actions.onConfirmMilestone) return;
+    await actions.onConfirmMilestone(m);
+  };
+
+  // In-app confirm for Mark Completed — replaces the native Alert so the
+  // dialog matches the rest of the app's design system instead of the OS.
+  const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
+  const [confirmingComplete, setConfirmingComplete] = useState(false);
+
+  const canMarkCompleted = !isCompleted && !needsReview && proofCount > 0;
+  const openMarkCompleted = () => {
+    if (!actions.onMarkCompleted) return;
+    setConfirmCompleteOpen(true);
+  };
+  const submitMarkCompleted = async () => {
+    if (!actions.onMarkCompleted) return;
+    try {
+      setConfirmingComplete(true);
+      await actions.onMarkCompleted(m);
+    } finally {
+      setConfirmingComplete(false);
+      setConfirmCompleteOpen(false);
+    }
+  };
 
   return (
     <View style={S.root}>
+
+      {/* ══ TOAST OVERLAY ════════════════════════════════════════ */}
+      {toast ? (
+        <ToastMessage
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          onHide={() => actions.onDismissToast?.()}
+        />
+      ) : null}
+
+      {/* ══ MARK-COMPLETED CONFIRM (in-app, not OS Alert) ═══════ */}
+      <ConfirmModal
+        visible={confirmCompleteOpen}
+        tone="success"
+        icon="flag-checkered"
+        title="Mark as Completed?"
+        message={`Confirm that "${m.title}" is finished. This updates the project progress and notifies HCSD. You can still view the proofs after.`}
+        confirmLabel="Mark Completed"
+        cancelLabel="Cancel"
+        isBusy={confirmingComplete}
+        onConfirm={submitMarkCompleted}
+        onCancel={() => setConfirmCompleteOpen(false)}
+      />
 
       {/* ══ HERO ══════════════════════════════════════════════════ */}
       <View style={[S.hero, { paddingTop: insets.top + 10 }]}>
@@ -95,32 +164,107 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ══ PROOF OF WORK HEADER ═══════════════════════════════ */}
-        <View style={S.proofHeader}>
-          <View>
-            <Text style={S.proofHeaderTitle}>Proof of Work</Text>
-            <Text style={S.proofHeaderSub}>
-              {proofCount > 0
-                ? `${proofCount} photo${proofCount !== 1 ? "s" : ""} submitted`
-                : "No evidence submitted yet"}
-            </Text>
-          </View>
+        {/* ══ SPEC CARD (AI metadata) ════════════════════════════ */}
+        {(m.description || m.weightPercentage || m.suggestedDurationDays || isAiGenerated) ? (
+          <View style={S.specCard}>
+            {isAiGenerated ? (
+              <View style={S.aiTag}>
+                <FontAwesome5 name="robot" size={10} color={COLORS.primary} />
+                <Text style={S.aiTagText}>AI-DRAFTED · {m.generatedBy?.toUpperCase()}</Text>
+              </View>
+            ) : null}
 
-          {!isCompleted && (
+            {m.description ? (
+              <View style={S.specBlock}>
+                <Text style={S.specLabel}>WHAT TO VERIFY ON-SITE</Text>
+                <Text style={S.specBody}>{m.description}</Text>
+              </View>
+            ) : null}
+
+            {(m.weightPercentage !== undefined || m.suggestedDurationDays !== undefined) ? (
+              <View style={S.specMetrics}>
+                {m.weightPercentage !== undefined ? (
+                  <View style={S.specMetric}>
+                    <FontAwesome5 name="balance-scale" size={11} color={COLORS.primary} />
+                    <Text style={S.specMetricLabel}>WEIGHT</Text>
+                    <Text style={S.specMetricValue}>{m.weightPercentage}%</Text>
+                  </View>
+                ) : null}
+                {m.suggestedDurationDays !== undefined ? (
+                  <View style={S.specMetric}>
+                    <FontAwesome5 name="calendar-alt" size={11} color={COLORS.primary} />
+                    <Text style={S.specMetricLabel}>SUGGESTED</Text>
+                    <Text style={S.specMetricValue}>
+                      {m.suggestedDurationDays} day{m.suggestedDurationDays !== 1 ? "s" : ""}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* ══ REVIEW & CONFIRM (blocks proofs until confirmed) ═══ */}
+        {needsReview ? (
+          <View style={S.confirmCard}>
+            <View style={S.confirmIconRing}>
+              <FontAwesome5 name="search" size={18} color={COLORS.warning} />
+            </View>
+            <Text style={S.confirmTitle}>Review & Confirm</Text>
+            <Text style={S.confirmBody}>
+              Read the phase description above. If it matches the work you'll perform, confirm to unlock proof uploads. Otherwise contact HCSD to revise it.
+            </Text>
             <TouchableOpacity
-              style={S.addProofBtn}
-              onPress={() => actions.onAddProof(m)}
+              style={S.confirmBtn}
+              onPress={handleConfirm}
               activeOpacity={0.85}
+              disabled={isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <FontAwesome5 name="camera" size={13} color="#fff" />
-                  <Text style={S.addProofBtnText}>Add Proof</Text>
+                  <FontAwesome5 name="check" size={13} color="#fff" />
+                  <Text style={S.confirmBtnText}>Confirm Milestone</Text>
                 </>
               )}
             </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* ══ PROOF OF WORK HEADER ═══════════════════════════════ */}
+        <View style={S.proofHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={S.proofHeaderTitle}>Proof of Work</Text>
+            <Text style={S.proofHeaderSub}>
+              {proofCount > 0
+                ? `${proofCount} of ${PROOF_LIMIT} photo${proofCount !== 1 ? "s" : ""} submitted`
+                : `No evidence yet · up to ${PROOF_LIMIT}`}
+            </Text>
+          </View>
+
+          {!isCompleted && !needsReview && (
+            atProofLimit ? (
+              <View style={S.proofLimitChip}>
+                <FontAwesome5 name="check-double" size={11} color={COLORS.success} />
+                <Text style={S.proofLimitChipText}>Limit reached</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={S.addProofBtn}
+                onPress={() => actions.onAddProof(m)}
+                activeOpacity={0.85}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <FontAwesome5 name="camera" size={13} color="#fff" />
+                    <Text style={S.addProofBtnText}>Add Proof</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )
           )}
         </View>
 
@@ -146,33 +290,40 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
 
                 {/* Info row */}
                 <View style={S.proofInfo}>
-                  <View style={S.proofInfoRow}>
-                    <View style={[S.proofInfoIcon, { backgroundColor: COLORS.errorSoft }]}>
-                      <FontAwesome5 name="map-marker-alt" size={10} color={COLORS.error} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={S.proofInfoLabel}>GPS LOCATION</Text>
-                      <Text style={S.proofInfoValue} numberOfLines={1}>
-                        {p.location || "No GPS data"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={S.proofInfoDivider} />
+                  {/* LOCATION — human-readable place from server reverse-geocode.
+                      Hidden when the value is just a coord string (legacy proof
+                      pre-geocoding) since the COORDINATES row already covers it. */}
+                  {p.location && !isCoordString(p.location) ? (
+                    <>
+                      <View style={S.proofInfoRow}>
+                        <View style={[S.proofInfoIcon, { backgroundColor: COLORS.errorSoft }]}>
+                          <FontAwesome5 name="map-marker-alt" size={10} color={COLORS.error} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={S.proofInfoLabel}>LOCATION</Text>
+                          <Text style={S.proofInfoValue} numberOfLines={2}>
+                            {p.location}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={S.proofInfoDivider} />
+                    </>
+                  ) : null}
 
                   <View style={S.proofInfoRow}>
                     <View style={[S.proofInfoIcon, { backgroundColor: COLORS.primarySoft }]}>
                       <FontAwesome5 name="clock" size={10} color={COLORS.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={S.proofInfoLabel}>SUBMITTED</Text>
+                      <Text style={S.proofInfoLabel}>CAPTURED</Text>
                       <Text style={S.proofInfoValue}>
-                        {p.timestamp
-                          ? new Date(p.timestamp).toLocaleString("en-PH", {
-                              month: "short", day: "numeric", year: "numeric",
-                              hour: "2-digit", minute: "2-digit",
-                            })
-                          : "Date unavailable"}
+                        {(() => {
+                          const t = p.capturedAt ?? p.timestamp;
+                          return t ? new Date(t).toLocaleString("en-PH", {
+                            month: "short", day: "numeric", year: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                          }) : "Date unavailable";
+                        })()}
                       </Text>
                     </View>
                   </View>
@@ -186,7 +337,12 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
                           <FontAwesome5 name="crosshairs" size={10} color={COLORS.warning} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={S.proofInfoLabel}>COORDINATES</Text>
+                          <Text style={S.proofInfoLabel}>
+                            COORDINATES
+                            {typeof p.accuracy === "number" && p.accuracy > 0
+                              ? ` · ±${p.accuracy}m`
+                              : ""}
+                          </Text>
                           <Text style={S.proofInfoValue}>
                             {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
                           </Text>
@@ -208,7 +364,7 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
             <Text style={S.emptyBody}>
               Take a photo at the project site to submit your first proof of work. GPS coordinates will be recorded automatically.
             </Text>
-            {!isCompleted && (
+            {!isCompleted && !needsReview && (
               <TouchableOpacity style={S.emptyBtn} onPress={() => actions.onAddProof(m)} activeOpacity={0.85}>
                 {isLoading
                   ? <ActivityIndicator size="small" color="#fff" />
@@ -218,6 +374,58 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
             )}
           </View>
         )}
+
+        {/* ══ MARK AS COMPLETED (gated on proof) ════════════════ */}
+        {!isCompleted && !needsReview && actions.onMarkCompleted ? (
+          <View style={S.markDoneCard}>
+            <View style={S.markDoneHeader}>
+              <View style={S.markDoneIconRing}>
+                <FontAwesome5
+                  name={canMarkCompleted ? "flag-checkered" : "lock"}
+                  size={16}
+                  color={canMarkCompleted ? COLORS.success : COLORS.textTertiary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={S.markDoneTitle}>
+                  {canMarkCompleted ? "Ready to Close This Phase?" : "Attach Proof First"}
+                </Text>
+                <Text style={S.markDoneBody}>
+                  {canMarkCompleted
+                    ? "Marking this phase completed locks new proofs and updates project progress for HCSD."
+                    : "Take at least one geotagged photo above. The Mark Completed button will unlock once HCSD has evidence on file."}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[S.markDoneBtn, !canMarkCompleted && S.markDoneBtnDisabled]}
+              onPress={openMarkCompleted}
+              activeOpacity={0.85}
+              disabled={!canMarkCompleted || isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <FontAwesome5
+                    name="check-double"
+                    size={13}
+                    color={canMarkCompleted ? "#fff" : COLORS.textTertiary}
+                  />
+                  <Text
+                    style={[
+                      S.markDoneBtnText,
+                      !canMarkCompleted && { color: COLORS.textTertiary },
+                    ]}
+                  >
+                    Mark as Completed
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Completed notice */}
         {isCompleted && (
@@ -286,6 +494,13 @@ const S = StyleSheet.create({
     borderRadius: 13,
   },
   addProofBtnText: { fontSize: 13, fontWeight: "800", color: "#fff" },
+  proofLimitChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: COLORS.successSoft,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
+    borderWidth: 1, borderColor: "#A7F3D0",
+  },
+  proofLimitChipText: { fontSize: 11, fontWeight: "800", color: COLORS.success },
 
   // Proof list
   proofList: { gap: 14 },
@@ -351,4 +566,90 @@ const S = StyleSheet.create({
     borderWidth: 1, borderColor: "#A7F3D0",
   },
   completedText: { flex: 1, fontSize: 13, color: COLORS.success, lineHeight: 18 },
+
+  // ── Spec card (AI-generated description / weight / duration) ─
+  specCard: {
+    backgroundColor: COLORS.surface, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+    elevation: 1, shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4,
+  },
+  aiTag: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1, borderColor: COLORS.accentBorder,
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8,
+    alignSelf: "flex-start", marginBottom: 12,
+  },
+  aiTagText: { fontSize: 9, fontWeight: "900", color: COLORS.primary, letterSpacing: 0.6 },
+  specBlock: { marginBottom: 12 },
+  specLabel: {
+    fontSize: 9, fontWeight: "900", color: COLORS.textTertiary,
+    letterSpacing: 0.7, marginBottom: 6,
+  },
+  specBody: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
+  specMetrics: {
+    flexDirection: "row", gap: 10,
+    paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border,
+  },
+  specMetric: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: COLORS.background, borderRadius: 10,
+    padding: 10, borderWidth: 1, borderColor: COLORS.border,
+  },
+  specMetricLabel: { fontSize: 9, fontWeight: "800", color: COLORS.textTertiary, letterSpacing: 0.5 },
+  specMetricValue: { fontSize: 12, fontWeight: "800", color: COLORS.textPrimary, marginLeft: "auto" },
+
+  // ── Confirm card ─────────────────────────────────────────────
+  confirmCard: {
+    backgroundColor: COLORS.warningSoft,
+    borderRadius: 18, padding: 18, alignItems: "center",
+    borderWidth: 1, borderColor: "#FDE68A",
+  },
+  confirmIconRing: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 10,
+    borderWidth: 1, borderColor: "#FDE68A",
+  },
+  confirmTitle: { fontSize: 15, fontWeight: "900", color: COLORS.warning, marginBottom: 6 },
+  confirmBody: {
+    fontSize: 12, color: COLORS.warning, textAlign: "center",
+    lineHeight: 17, fontWeight: "600", marginBottom: 14,
+    paddingHorizontal: 6,
+  },
+  confirmBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: COLORS.warning,
+    paddingHorizontal: 22, paddingVertical: 12, borderRadius: 14,
+  },
+  confirmBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+
+  // ── Mark as Completed card ───────────────────────────────────
+  markDoneCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 18, padding: 16, gap: 14,
+    borderWidth: 1, borderColor: COLORS.border,
+    elevation: 1, shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4,
+  },
+  markDoneHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  markDoneIconRing: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: COLORS.successSoft,
+    alignItems: "center", justifyContent: "center",
+  },
+  markDoneTitle: { fontSize: 14, fontWeight: "800", color: COLORS.textPrimary, marginBottom: 3 },
+  markDoneBody: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 17 },
+  markDoneBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: COLORS.success,
+    paddingVertical: 13, borderRadius: 14,
+  },
+  markDoneBtnDisabled: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  markDoneBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });

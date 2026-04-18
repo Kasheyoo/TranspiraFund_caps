@@ -68,18 +68,32 @@ export class ProjectModel {
       const milestones = (byProject[project.id] || []).sort(
         (a, b) => (a.sequence || 0) - (b.sequence || 0),
       );
-      const completed = milestones.filter(
-        (m) => m.status?.toString().toLowerCase() === "completed",
-      ).length;
       return {
         ...project,
         milestones,
-        progress:
-          milestones.length > 0
-            ? Math.round((completed / milestones.length) * 100)
-            : 0,
+        progress: ProjectModel.computeProgress(milestones),
       };
     });
+  }
+
+  // AI-generated milestones carry a weightPercentage; sum the completed
+  // weights for true work-effort progress. Legacy milestones (no weights)
+  // fall back to count-based progress so old data still renders sensibly.
+  private static computeProgress(milestones: Milestone[]): number {
+    if (milestones.length === 0) return 0;
+    const hasWeights = milestones.some(
+      (m) => typeof m.weightPercentage === "number" && m.weightPercentage > 0,
+    );
+    if (hasWeights) {
+      const completedWeight = milestones
+        .filter((m) => m.status?.toString().toLowerCase() === "completed")
+        .reduce((sum, m) => sum + (m.weightPercentage || 0), 0);
+      return Math.min(100, Math.round(completedWeight));
+    }
+    const completed = milestones.filter(
+      (m) => m.status?.toString().toLowerCase() === "completed",
+    ).length;
+    return Math.round((completed / milestones.length) * 100);
   }
 
   // ── One-time fetches ─────────────────────────────────────────────
@@ -127,13 +141,7 @@ export class ProjectModel {
         .map((d) => ({ id: d.id, projectId, ...d.data() } as Milestone))
         .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
 
-      const completed = projectData.milestones.filter(
-        (m) => m.status?.toString().toLowerCase() === "completed",
-      ).length;
-      projectData.progress =
-        projectData.milestones.length > 0
-          ? Math.round((completed / projectData.milestones.length) * 100)
-          : 0;
+      projectData.progress = ProjectModel.computeProgress(projectData.milestones);
 
       return projectData;
     } catch (error) {
@@ -179,6 +187,10 @@ export class ProjectModel {
     );
   }
 
+  // Two parallel listeners — project doc + milestone subcollection — combined
+  // into a single onUpdate stream. Subcollection writes (e.g. generateMilestones
+  // batch-writing milestone docs) don't touch the parent doc, so a project-doc-
+  // only listener silently misses them and the UI stays stale.
   static subscribeToProject(
     projectId: string,
     onUpdate: (project: Project | null) => void,
@@ -186,42 +198,65 @@ export class ProjectModel {
   ): () => void {
     requireAuth();
 
-    return onSnapshot(
+    let latestProject: Project | null = null;
+    let latestMilestones: Milestone[] = [];
+    let projectLoaded = false;
+    let milestonesLoaded = false;
+
+    const emit = () => {
+      if (!projectLoaded) return;
+      if (!latestProject) {
+        onUpdate(null);
+        return;
+      }
+      const sorted = [...latestMilestones].sort(
+        (a, b) => (a.sequence || 0) - (b.sequence || 0),
+      );
+      onUpdate({
+        ...latestProject,
+        milestones: sorted,
+        progress: ProjectModel.computeProgress(sorted),
+      });
+    };
+
+    const unsubProject = onSnapshot(
       doc(db, "projects", projectId),
-      async (snap) => {
+      (snap) => {
         if (!snap.exists()) {
+          latestProject = null;
+          projectLoaded = true;
           onUpdate(null);
           return;
         }
-        try {
-          const projectData = this.normalize(snap.data(), snap.id);
-
-          const milestoneSnaps = await getDocs(
-            collection(db, "projects", projectId, "milestones"),
-          );
-          projectData.milestones = milestoneSnaps.docs
-            .map((d) => ({ id: d.id, projectId, ...d.data() } as Milestone))
-            .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
-
-          const completed = projectData.milestones.filter(
-            (m) => m.status?.toString().toLowerCase() === "completed",
-          ).length;
-          projectData.progress =
-            projectData.milestones.length > 0
-              ? Math.round((completed / projectData.milestones.length) * 100)
-              : 0;
-
-          onUpdate(projectData);
-        } catch (err) {
-          logger.error("subscribeToProject processing error:", err);
-          onError?.(err as Error);
-        }
+        latestProject = this.normalize(snap.data(), snap.id);
+        projectLoaded = true;
+        if (milestonesLoaded) emit();
       },
       (err) => {
-        logger.error("subscribeToProject error:", err);
+        logger.error("subscribeToProject (project doc) error:", err);
         onError?.(err);
       },
     );
+
+    const unsubMilestones = onSnapshot(
+      collection(db, "projects", projectId, "milestones"),
+      (snap) => {
+        latestMilestones = snap.docs.map(
+          (d) => ({ id: d.id, projectId, ...d.data() } as Milestone),
+        );
+        milestonesLoaded = true;
+        emit();
+      },
+      (err) => {
+        logger.error("subscribeToProject (milestones) error:", err);
+        onError?.(err);
+      },
+    );
+
+    return () => {
+      unsubProject();
+      unsubMilestones();
+    };
   }
 
   // ── Milestone ref helper (use this when writing proofs) ──────────

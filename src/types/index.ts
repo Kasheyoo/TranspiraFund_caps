@@ -6,11 +6,32 @@ export interface FirestoreTimestamp {
 }
 
 export interface Proof {
-  url: string;
-  location: string;
-  timestamp: number;
+  // Stable id — `${capturedAt}_${uid}` so duplicate uploads dedupe and
+  // HCSD can reference a single submission unambiguously.
+  id: string;
+
+  // ── Storage layer ──────────────────────────────────────────────
+  url: string;            // Public download URL (Firebase Storage signed)
+  storagePath: string;    // Full bucket path — needed for cleanup / re-issue
+
+  // ── Geo (camera-time, not upload-time) ─────────────────────────
   latitude: number;
   longitude: number;
+  accuracy: number;       // GPS accuracy in meters at capture
+  // Human-readable place name from server-side reverse geocode
+  // (e.g. "Brgy. San Roque, Mati City, Davao Oriental"). Falls back to a
+  // "lat, lng" string when geocoding fails. Older proofs only ever stored
+  // the coord string — read sites should treat this as a freeform label.
+  location: string;
+
+  // ── Provenance ─────────────────────────────────────────────────
+  capturedAt: number;     // ms epoch — moment the photo was taken
+  uploadedAt: number;     // ms epoch — moment the upload completed
+  uploadedBy: string;     // PROJ_ENG uid
+
+  // Backwards-compat — older proofs only had `timestamp`. Read paths
+  // should prefer `capturedAt` and fall back to `timestamp`.
+  timestamp?: number;
 }
 
 export interface Milestone {
@@ -20,14 +41,20 @@ export interface Milestone {
   status?: string;
   sequence?: number;
   proofs?: Proof[];
+  // ── AI-generated milestone fields (from generateMilestones Cloud Function) ──
+  description?: string;
+  weightPercentage?: number;     // contribution to overall progress; sums to 100 across milestones
+  suggestedDurationDays?: number; // calendar days estimate
+  generatedBy?: string;           // e.g. "claude-haiku-4-5" — distinguishes AI from manual
+  confirmed?: boolean;            // engineer must review + confirm before tracking proofs
+  createdAt?: FirestoreTimestamp;
 }
 
 export interface Project {
   id: string;
   // ── Canonical field names written by web app HCSD ──────────────
   projectName?: string;
-  projectEngineer?: string;
-  projectEngineerUid?: string;
+  projectEngineer?: string;  // holds the engineer's auth UID (yes, despite the name)
   barangay?: string;
   sitioStreet?: string;
   fundingSource?: string;

@@ -23,11 +23,26 @@ interface ProjectDetailsData {
   isLoading: boolean;
 }
 
+interface GenerateMilestonesResult {
+  ok: boolean;
+  count?: number;
+  projectType?: string;
+  errorCode?:
+    | "unauthenticated" | "invalid-argument" | "not-found"
+    | "permission-denied" | "already-exists" | "internal" | "unknown";
+  errorMessage?: string;
+}
+
 interface ProjectDetailsActions {
   onRefresh: () => void;
   onSelectMilestone: (m: Milestone | null) => void;
   onAddProof: (m: Milestone) => void;
-  onGenerateMilestones: () => void;
+  onGenerateMilestones: () => Promise<GenerateMilestonesResult>;
+  onConfirmMilestone: (m: Milestone) => Promise<boolean>;
+  onSaveAndConfirmAll: (
+    edits: Record<string, Partial<Milestone>>,
+  ) => Promise<boolean>;
+  onDeleteMilestone: (m: Milestone) => Promise<boolean>;
 }
 
 interface ProjectDetailsViewProps {
@@ -114,6 +129,9 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
   const isActive   = isUnlocked && !isDone;
   const isLocked   = !isUnlocked;
   const proofCount = m.proofs?.length ?? 0;
+  // AI-generated milestones must be confirmed by the engineer before
+  // they can accept proofs / advance status (per the AI generation spec).
+  const needsReview = m.confirmed === false;
 
   // State colors
   const circleColor = isDone ? COLORS.success : isDelayed ? COLORS.error : isActive ? COLORS.primary : "#CBD5E1";
@@ -148,6 +166,17 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
         <View style={D.msContent}>
           <View style={D.msTitleRow}>
             <Text style={D.msPhase}>Phase {m.sequence ?? index + 1}</Text>
+            {typeof m.weightPercentage === "number" && m.weightPercentage > 0 ? (
+              <View style={D.weightBadge}>
+                <Text style={D.weightBadgeText}>{m.weightPercentage}%</Text>
+              </View>
+            ) : null}
+            {needsReview && (
+              <View style={D.reviewBadge}>
+                <FontAwesome5 name="exclamation" size={8} color={COLORS.warning} />
+                <Text style={D.reviewBadgeText}>PENDING REVIEW</Text>
+              </View>
+            )}
             {proofCount > 0 && (
               <View style={D.proofBadge}>
                 <FontAwesome5 name="camera" size={8} color={COLORS.primary} />
@@ -174,7 +203,7 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
         {/* Right: action buttons */}
         {!isLocked ? (
           <View style={D.msActions}>
-            {!isDone && (
+            {!isDone && !needsReview && (
               <TouchableOpacity
                 style={D.cameraBtn}
                 onPress={(e) => { e.stopPropagation?.(); onProof(); }}
@@ -183,6 +212,11 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
               >
                 <FontAwesome5 name="camera" size={13} color="#fff" />
               </TouchableOpacity>
+            )}
+            {needsReview && (
+              <View style={D.reviewIconBtn}>
+                <FontAwesome5 name="search" size={12} color={COLORS.warning} />
+              </View>
             )}
             <View style={D.chevronWrap}>
               <FontAwesome5
@@ -214,10 +248,18 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const sc       = STATUS_MAP[status] || DEFAULT_SC;
   const progress = Math.min(100, Math.max(0, project.progress || 0));
 
-  const completedMs = project.milestones?.filter(
+  // Drafts (confirmed === false) live in the review modal — they do NOT
+  // appear in the project details until the engineer confirms them. Anything
+  // confirmed: true OR confirmed === undefined (legacy data) is shown.
+  const allMilestones      = project.milestones ?? [];
+  const draftMilestones    = allMilestones.filter((m) => m.confirmed === false);
+  const visibleMilestones  = allMilestones.filter((m) => m.confirmed !== false);
+  const completedMs        = visibleMilestones.filter(
     (m) => m.status?.toString().toLowerCase() === "completed",
-  ).length ?? 0;
-  const totalMs = project.milestones?.length ?? 0;
+  ).length;
+  const totalMs            = visibleMilestones.length;     // confirmed-only count
+  const draftCount         = draftMilestones.length;
+  const hasDraftsOnly      = totalMs === 0 && draftCount > 0;
 
   const displayTitle    = project.projectName    ?? project.title    ?? "Untitled Project";
   // project.projectEngineer is the engineer's UID (per firestore rules). The
@@ -752,48 +794,29 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
         {/* ── MILESTONES ── */}
         <View>
-          {/* Section header */}
-          <View style={D.msHeader}>
-            <View>
-              <Text style={D.msSectionLabel}>CONSTRUCTION PHASES</Text>
-              <Text style={D.msSub}>
-                {totalMs > 0
-                  ? `${completedMs} of ${totalMs} completed`
-                  : "No milestones yet"}
-              </Text>
+          {/* Section header — only shown once confirmed phases exist */}
+          {totalMs > 0 ? (
+            <View style={D.msHeader}>
+              <View>
+                <Text style={D.msSectionLabel}>CONSTRUCTION PHASES</Text>
+                <Text style={D.msSub}>{completedMs} of {totalMs} completed</Text>
+              </View>
+              <View style={[D.generateBtn, D.generateBtnDone]}>
+                <FontAwesome5 name="check" size={11} color={COLORS.success} />
+                <Text style={[D.generateBtnText, D.generateBtnTextDone]}>Generated</Text>
+              </View>
             </View>
+          ) : null}
 
-            <TouchableOpacity
-              style={[D.generateBtn, totalMs > 0 && D.generateBtnDone]}
-              onPress={handleGenerate}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color={totalMs > 0 ? COLORS.textTertiary : "#fff"} />
-              ) : (
-                <>
-                  <FontAwesome5
-                    name={totalMs > 0 ? "check" : "magic"}
-                    size={11}
-                    color={totalMs > 0 ? COLORS.success : "#fff"}
-                  />
-                  <Text style={[D.generateBtnText, totalMs > 0 && D.generateBtnTextDone]}>
-                    {totalMs > 0 ? "Generated" : "Generate"}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Empty state */}
-          {totalMs === 0 ? (
+          {totalMs === 0 && draftCount === 0 ? (
+            // ── State A: nothing exists yet → CTA to generate
             <View style={D.emptyMsCard}>
               <View style={D.emptyMsIconBox}>
                 <FontAwesome5 name="layer-group" size={28} color={COLORS.primary} />
               </View>
               <Text style={D.emptyMsTitle}>No Phases Yet</Text>
               <Text style={D.emptyMsBody}>
-                Generate the 8 standard construction-phase milestones to start tracking field progress for this project.
+                Let AI draft the construction-phase milestones for this project. You'll review and confirm every phase before they're locked in.
               </Text>
               <TouchableOpacity style={D.emptyMsBtn} onPress={handleGenerate} activeOpacity={0.85}>
                 {isLoading
@@ -802,14 +825,32 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 }
               </TouchableOpacity>
             </View>
+          ) : hasDraftsOnly ? (
+            // ── State B: AI drafted, awaiting engineer review/confirm
+            <View style={D.resumeCard}>
+              <View style={D.resumeIconBox}>
+                <FontAwesome5 name="search" size={26} color={COLORS.warning} />
+              </View>
+              <Text style={D.resumeTitle}>
+                {draftCount} Draft Phase{draftCount !== 1 ? "s" : ""} Awaiting Review
+              </Text>
+              <Text style={D.resumeBody}>
+                AI has drafted {draftCount} milestone{draftCount !== 1 ? "s" : ""} for this project. Review, edit, or remove anything that doesn't apply — then confirm to lock them in.
+              </Text>
+              <TouchableOpacity style={D.resumeBtn} onPress={handleGenerate} activeOpacity={0.85}>
+                <FontAwesome5 name="clipboard-check" size={13} color="#fff" />
+                <Text style={D.resumeBtnText}>Resume Review</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
-            project.milestones!.map((m, index) => (
+            // ── State C: confirmed phases — render the timeline
+            visibleMilestones.map((m, index) => (
               <MilestoneCard
                 key={m.id || index}
                 m={m}
                 index={index}
                 isFirst={index === 0}
-                prevDone={project.milestones![index - 1]?.status?.toString().toLowerCase() === "completed"}
+                prevDone={visibleMilestones[index - 1]?.status?.toString().toLowerCase() === "completed"}
                 isLast={index === totalMs - 1}
                 onSelect={() => actions.onSelectMilestone(m)}
                 onProof={() => actions.onAddProof(m)}
@@ -823,6 +864,10 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
       <MilestoneGenerationModal
         visible={milestoneModalVisible}
         onClose={() => setMilestoneModalVisible(false)}
+        onGenerate={actions.onGenerateMilestones}
+        draftMilestones={draftMilestones}
+        onSaveAndConfirmAll={actions.onSaveAndConfirmAll}
+        onDeleteMilestone={actions.onDeleteMilestone}
       />
     </View>
   );
@@ -1084,6 +1129,31 @@ const D = StyleSheet.create({
   },
   emptyMsBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
 
+  // Resume Review card — drafts exist, waiting on engineer
+  resumeCard: {
+    backgroundColor: COLORS.warningSoft,
+    borderRadius: 20, padding: 26, alignItems: "center", gap: 8,
+    borderWidth: 1.5, borderColor: "#FDE68A",
+  },
+  resumeIconBox: {
+    width: 64, height: 64, borderRadius: 20,
+    backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center", marginBottom: 4,
+    borderWidth: 1, borderColor: "#FDE68A",
+  },
+  resumeTitle: { fontSize: 16, fontWeight: "900", color: COLORS.warning, textAlign: "center" },
+  resumeBody:  {
+    fontSize: 12.5, color: COLORS.warning, textAlign: "center",
+    lineHeight: 18, fontWeight: "600", paddingHorizontal: 4,
+  },
+  resumeBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: COLORS.warning,
+    paddingHorizontal: 22, paddingVertical: 12, borderRadius: 14,
+    marginTop: 6,
+  },
+  resumeBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+
   // ── Milestone card ────────────────────────────────────────────
   msWrapper:  { position: "relative" },
   connector: {
@@ -1110,6 +1180,32 @@ const D = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
   proofBadgeText: { fontSize: 9, fontWeight: "800", color: COLORS.primary },
+  weightBadge: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1, borderColor: COLORS.border,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  weightBadgeText: { fontSize: 9, fontWeight: "800", color: COLORS.textSecondary },
+  reviewBadge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1, borderColor: "#FDE68A",
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  reviewBadgeText: { fontSize: 8, fontWeight: "900", color: COLORS.warning, letterSpacing: 0.4 },
+  reviewIconBtn: {
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1, borderColor: "#FDE68A",
+    alignItems: "center", justifyContent: "center",
+  },
+  reviewBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1, borderColor: "#FDE68A",
+    borderRadius: 14, padding: 12, marginBottom: 12,
+  },
+  reviewBannerText: { flex: 1, fontSize: 12, color: COLORS.warning, lineHeight: 17, fontWeight: "600" },
   msTitle: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 18, marginBottom: 6 },
   msStatusRow: { flexDirection: "row" },
   msStatusPill: {

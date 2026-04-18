@@ -30,6 +30,67 @@ function createTransporter(user: string, pass: string) {
 }
 
 /**
+ * Reverse-geocode lat/lng → human-readable Philippine address via OpenStreetMap
+ * Nominatim. Free, no API key, but their usage policy requires a real
+ * User-Agent identifying the app. Returns null on any failure (timeout, rate
+ * limit, no result) so callers can fall back to coordinates string.
+ *
+ * Builds a barangay-first label since that's what HCSD uses internally:
+ *   "Brgy. San Roque, Mati City, Davao Oriental"
+ *
+ * Hard 3s timeout — geocoding is best-effort metadata, not allowed to block
+ * a proof upload.
+ */
+async function reverseGeocode(
+  latitude: number,
+  longitude: number,
+): Promise<string | null> {
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
+      `&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "TranspiraFund-Mobile/1.0 (LGU project monitoring)",
+        "Accept-Language": "en",
+      },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      address?: Record<string, string>;
+      display_name?: string;
+    };
+    const a = data.address ?? {};
+
+    // Nominatim's PH responses typically populate: village/suburb/neighbourhood
+    // (≈ barangay), city/town/municipality, state (province). Pick the most
+    // specific available, prefix barangays with "Brgy." for HCSD readability.
+    const barangay =
+      a.village || a.suburb || a.neighbourhood || a.hamlet || a.quarter;
+    const city = a.city || a.town || a.municipality || a.county;
+    const province = a.state || a.region;
+
+    const parts: string[] = [];
+    if (barangay) parts.push(`Brgy. ${barangay}`);
+    if (city)     parts.push(city);
+    if (province) parts.push(province);
+
+    if (parts.length > 0) return parts.join(", ");
+    // Last-ditch fallback to whatever Nominatim summarized.
+    return data.display_name?.split(",").slice(0, 3).join(",").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Logs an audit event.
  * Always writes to `auditTrails/mobile/entries` (PROJ_ENG scope).
  * Only writes to `auditTrails/hcsd/entries` when syncToHCSD is true
@@ -73,18 +134,72 @@ async function logAuditTrail(
 // ─── generateMilestones ───────────────────────────────────────────────────────
 //
 //  Called by PROJ_ENG from the mobile app when a project has no milestones.
-//  Creates standard construction-phase milestones as a subcollection under
-//  projects/{projectId}/milestones — uses Admin SDK to bypass client rules.
+//  Creates draft milestones as a subcollection under projects/{projectId}/milestones
+//  — uses Admin SDK to bypass client rules. Drafts are written with
+//  `confirmed: false` so the mobile review flow gates them: the engineer must
+//  review, optionally edit/delete each one, then batch-confirm before they
+//  appear in the project details proper.
+//
+//  Weights sum to 100 so the weighted-progress calculation in the mobile
+//  ProjectModel.computeProgress() returns clean percentages.
 //
 const STANDARD_MILESTONES = [
-  { title: "Site Clearing & Preparation",     sequence: 1 },
-  { title: "Foundation Works",                sequence: 2 },
-  { title: "Structural / Framing Works",      sequence: 3 },
-  { title: "Masonry & Concrete Works",        sequence: 4 },
-  { title: "Roofing Works",                   sequence: 5 },
-  { title: "Plumbing & Electrical Rough-In",  sequence: 6 },
-  { title: "Finishing Works",                 sequence: 7 },
-  { title: "Final Inspection & Turnover",     sequence: 8 },
+  {
+    title: "Site Clearing & Preparation",
+    sequence: 1,
+    description: "Clear vegetation, remove debris, mark site boundaries, and prepare ground for excavation. Verify access roads and staging areas.",
+    weightPercentage: 5,
+    suggestedDurationDays: 5,
+  },
+  {
+    title: "Foundation Works",
+    sequence: 2,
+    description: "Excavate footings, install rebar, pour concrete foundation, and cure. Verify alignment with project plan and check soil bearing capacity.",
+    weightPercentage: 15,
+    suggestedDurationDays: 14,
+  },
+  {
+    title: "Structural / Framing Works",
+    sequence: 3,
+    description: "Erect columns, beams, and load-bearing structures. Verify all structural members against plans for dimensions and reinforcement spec.",
+    weightPercentage: 20,
+    suggestedDurationDays: 21,
+  },
+  {
+    title: "Masonry & Concrete Works",
+    sequence: 4,
+    description: "Construct exterior and interior walls, slabs, and concrete features. Verify wall thickness, plumbness, and proper curing time.",
+    weightPercentage: 15,
+    suggestedDurationDays: 14,
+  },
+  {
+    title: "Roofing Works",
+    sequence: 5,
+    description: "Install roof trusses, sheeting, gutters, and waterproofing. Verify watertight integrity and proper drainage slope.",
+    weightPercentage: 10,
+    suggestedDurationDays: 10,
+  },
+  {
+    title: "Plumbing & Electrical Rough-In",
+    sequence: 6,
+    description: "Run water supply lines, drainage, conduits, and electrical wiring before walls are sealed. Verify against plans and code.",
+    weightPercentage: 12,
+    suggestedDurationDays: 12,
+  },
+  {
+    title: "Finishing Works",
+    sequence: 7,
+    description: "Install fixtures, doors, windows, paint, tiling, and final electrical/plumbing fittings. Verify quality of finishes against contract spec.",
+    weightPercentage: 18,
+    suggestedDurationDays: 18,
+  },
+  {
+    title: "Final Inspection & Turnover",
+    sequence: 8,
+    description: "Conduct punch-list walkthrough, address deficiencies, complete final cleanup, and prepare turnover documents for handover.",
+    weightPercentage: 5,
+    suggestedDurationDays: 3,
+  },
 ];
 
 export const generateMilestones = onCall({ region: "asia-southeast1" }, async (request) => {
@@ -97,14 +212,19 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("invalid-argument", "projectId is required.");
   }
 
-  // Verify project exists
+  // Verify project exists + caller is the assigned engineer
   const projectRef = admin.firestore().doc(`projects/${projectId}`);
   const projectSnap = await projectRef.get();
   if (!projectSnap.exists) {
     throw new HttpsError("not-found", "Project not found.");
   }
+  const projectData = projectSnap.data() ?? {};
+  if (projectData.projectEngineer && projectData.projectEngineer !== request.auth.uid) {
+    throw new HttpsError("permission-denied", "Only the assigned engineer can generate milestones.");
+  }
 
-  // Check if milestones already exist — prevent duplicates
+  // Idempotency — prevent duplicates. Includes drafts (confirmed: false)
+  // so the engineer can't accidentally re-generate over an in-progress review.
   const existingSnap = await admin.firestore()
     .collection(`projects/${projectId}/milestones`)
     .limit(1)
@@ -114,7 +234,6 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("already-exists", "Milestones already exist for this project.");
   }
 
-  // Batch-create all standard milestones
   const batch = admin.firestore().batch();
   const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
 
@@ -124,18 +243,84 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
       ...m,
       status: "Pending",
       proofs: [],
+      confirmed: false,        // drafts — engineer must review to commit
+      generatedBy: "ai",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
 
   await batch.commit();
 
-  // Audit trail
   const uid   = request.auth.uid;
   const email = request.auth.token.email || "";
-  await logAuditTrail(uid, email, "Milestones Generated", `Project: ${projectId}`, true);
+  await logAuditTrail(uid, email, "Milestones Drafted", `Project: ${projectId}`, true);
 
-  return { success: true, count: STANDARD_MILESTONES.length };
+  return {
+    success: true,
+    count: STANDARD_MILESTONES.length,
+    projectType: "construction",
+  };
+});
+
+// ─── deleteMilestone ──────────────────────────────────────────────────────────
+//
+//  Called by PROJ_ENG during the milestone review flow to discard a draft
+//  that doesn't apply to this project. Firestore rules block client-side
+//  delete on milestones, so this function performs the delete via Admin SDK.
+//
+//  Safety: only DRAFT milestones (confirmed === false) may be deleted —
+//  once the engineer has confirmed the milestone set, the workflow is
+//  immutable from the mobile side.
+//
+export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const { projectId, milestoneId } = (request.data ?? {}) as {
+    projectId?: string;
+    milestoneId?: string;
+  };
+  if (!projectId || !milestoneId) {
+    throw new HttpsError("invalid-argument", "projectId and milestoneId are required.");
+  }
+
+  const projectRef = admin.firestore().doc(`projects/${projectId}`);
+  const projectSnap = await projectRef.get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found.");
+  }
+  const projectData = projectSnap.data() ?? {};
+  if (projectData.projectEngineer && projectData.projectEngineer !== request.auth.uid) {
+    throw new HttpsError("permission-denied", "Only the assigned engineer can edit milestones.");
+  }
+
+  const milestoneRef = admin.firestore()
+    .doc(`projects/${projectId}/milestones/${milestoneId}`);
+  const milestoneSnap = await milestoneRef.get();
+  if (!milestoneSnap.exists) {
+    throw new HttpsError("not-found", "Milestone not found.");
+  }
+  const m = milestoneSnap.data() ?? {};
+  if (m.confirmed === true) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Confirmed milestones cannot be deleted from the mobile app.",
+    );
+  }
+
+  await milestoneRef.delete();
+
+  const uid   = request.auth.uid;
+  const email = request.auth.token.email || "";
+  await logAuditTrail(
+    uid, email,
+    "Milestone Draft Removed",
+    `Project ${projectId} · phase: ${m.title ?? milestoneId}`,
+    true,
+  );
+
+  return { success: true };
 });
 
 // ─── markProjectOngoing ──────────────────────────────────────────────────────
@@ -323,6 +508,159 @@ export const uploadProfilePhoto = onCall(
     await logAuditTrail(uid, email, "Profile Photo Updated", "Profile photo updated", false);
 
     return { success: true, photoURL };
+  },
+);
+
+// ─── uploadProofPhoto ────────────────────────────────────────────────────────
+//
+//  Mobile-only. Same constraint as uploadProfilePhoto — the Firebase JS SDK's
+//  Storage uploadBytes / uploadString both end up trying to construct a Blob
+//  from a Uint8Array, which RN's Blob polyfill rejects:
+//    "Creating blobs from 'ArrayBuilder' and 'ArrayBufferView' are not supported"
+//  So the client posts base64 here, we upload via Admin SDK, and we
+//  atomically append the proof object to the milestone subcollection doc.
+//
+//  Atomicity matters: doing storage-then-firestore on the client risks
+//  orphaned uploads if the client crashes between calls. Server-side, an
+//  exception in the firestore step still leaves a stranded file in Storage,
+//  but that's recoverable by the storagePath we save and is far less common
+//  than a client-side network drop mid-flow.
+//
+//  Authorization mirrors the Storage rule deployed by the web team:
+//  `request.auth.uid == projects/{projectId}.projectEngineer`.
+//
+export const uploadProofPhoto = onCall(
+  // invoker:"public" forces Firebase to (re-)attach the allUsers→roles/run.invoker
+  // IAM binding on deploy. The first deploy of this function landed without it
+  // (intermittent Firebase/Cloud Run quirk for new 2nd-gen functions), which
+  // surfaced as 401 "request was not authorized to invoke this service."
+  { region: "asia-southeast1", memory: "512MiB", invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const {
+      projectId, milestoneId, base64,
+      capturedAt, latitude, longitude, accuracy,
+    } = (request.data ?? {}) as {
+      projectId?: string;
+      milestoneId?: string;
+      base64?: string;
+      capturedAt?: number;
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
+    };
+
+    if (!projectId || !milestoneId || !base64) {
+      throw new HttpsError("invalid-argument", "projectId, milestoneId and base64 are required.");
+    }
+    if (typeof latitude !== "number" || typeof longitude !== "number") {
+      throw new HttpsError("invalid-argument", "Geotag coordinates are required.");
+    }
+
+    const uid   = request.auth.uid;
+    const email = request.auth.token.email || "";
+
+    // Engineer authorization — same field everyone else checks.
+    const projectRef  = admin.firestore().doc(`projects/${projectId}`);
+    const projectSnap = await projectRef.get();
+    if (!projectSnap.exists) {
+      throw new HttpsError("not-found", "Project not found.");
+    }
+    const projectData = projectSnap.data() ?? {};
+    if (projectData.projectEngineer && projectData.projectEngineer !== uid) {
+      throw new HttpsError("permission-denied", "Only the assigned engineer can upload proofs for this project.");
+    }
+
+    // Milestone must exist and be confirmed (drafts can't accept proofs).
+    const milestoneRef  = admin.firestore().doc(`projects/${projectId}/milestones/${milestoneId}`);
+    const milestoneSnap = await milestoneRef.get();
+    if (!milestoneSnap.exists) {
+      throw new HttpsError("not-found", "Milestone not found.");
+    }
+    const m = milestoneSnap.data() ?? {};
+    if (m.confirmed === false) {
+      throw new HttpsError("failed-precondition", "This phase is still a draft. Confirm it before uploading proof.");
+    }
+
+    // Hard cap: max 5 proofs per milestone. Marking the phase Completed is
+    // allowed at any count >= 1 — the cap only blocks the 6th upload to keep
+    // Storage bounded and HCSD review tractable.
+    const existingProofs = Array.isArray(m.proofs) ? m.proofs : [];
+    if (existingProofs.length >= 5) {
+      throw new HttpsError("failed-precondition", "This phase already has the maximum of 5 proofs.");
+    }
+
+    // Decode + size cap (matches the deployed Storage rule and client copy).
+    const buffer = Buffer.from(base64, "base64");
+    if (buffer.length === 0) {
+      throw new HttpsError("invalid-argument", "Empty image data.");
+    }
+    if (buffer.length > 10 * 1024 * 1024) {
+      throw new HttpsError("invalid-argument", "Photo exceeds 10MB limit.");
+    }
+
+    // Sanitize path segments — paranoia, projectIds are auto-generated but
+    // milestoneIds in older docs sometimes carry user-typed values.
+    const safeProjectId   = projectId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+    const safeMilestoneId = milestoneId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+    const ts = typeof capturedAt === "number" ? capturedAt : Date.now();
+
+    const storagePath = `projects/${safeProjectId}/milestones/${safeMilestoneId}/proofs/${ts}.jpg`;
+    const bucket = admin.storage().bucket();
+    const file   = bucket.file(storagePath);
+    const token  = crypto.randomUUID();
+
+    await file.save(buffer, {
+      metadata: {
+        contentType: "image/jpeg",
+        metadata: { firebaseStorageDownloadTokens: token },
+      },
+    });
+
+    const encodedPath = encodeURIComponent(storagePath);
+    const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+
+    // Best-effort reverse geocode for HCSD oversight. If Nominatim is slow
+    // or down we still ship the proof — `location` just falls back to a coord
+    // string, which is what older proofs already store anyway.
+    const placeName = await reverseGeocode(latitude, longitude);
+
+    const uploadedAt = Date.now();
+    const proofId   = `${ts}_${uid}`;
+    const proof = {
+      id: proofId,
+      url: downloadURL,
+      storagePath,
+      latitude,
+      longitude,
+      accuracy: Math.round(accuracy ?? 0),
+      // Human-readable address when available — coord string fallback so the
+      // field is never empty (web app reads this directly for the proof list).
+      location: placeName || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+      capturedAt: ts,
+      uploadedAt,
+      uploadedBy: uid,
+      timestamp: ts, // legacy alias — keep for older read sites + web app
+    };
+
+    await milestoneRef.update({
+      proofs: admin.firestore.FieldValue.arrayUnion(proof),
+      // Don't downgrade Completed back to Pending if the engineer somehow
+      // added more proof after closing the phase.
+      status: m.status === "Completed" ? "Completed" : "Pending",
+    });
+
+    await logAuditTrail(
+      uid, email,
+      "Proof Uploaded",
+      `${projectData.projectName ?? projectData.title ?? "Project"} · ${m.title ?? milestoneId}`,
+      true,
+    );
+
+    return { success: true, proof };
   },
 );
 
