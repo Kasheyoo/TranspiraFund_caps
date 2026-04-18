@@ -5,20 +5,25 @@ import type { AuditTrail, DashboardStats } from "../types";
 import { logger } from "../utils/logger";
 import { useNavigation } from "@react-navigation/native";
 import { ROUTES } from "../navigation/routes";
+import { useAuth } from "../context/AuthContext";
 
 export const useDashboardPresenter = (_navigationCallback?: () => void) => {
+  const { userProfile } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({ progress: 0, done: 0, delay: 0, draft: 0, forMayor: 0 });
   const [recentLogs, setRecentLogs] = useState<AuditTrail[]>([]);
-  const [engineerName, setEngineerName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const navigation = useNavigation<any>();
+
+  const engineerName = userProfile?.firstName
+    ? `${userProfile.firstName} ${userProfile.lastName || ""}`.trim()
+    : userProfile?.name || "Project Engineer";
+  const engineerPhotoURL = userProfile?.photoURL;
 
   const loadDashboard = useCallback(async () => {
     setIsLoading(true);
     try {
       const projects = await ProjectModel.getAll();
       if (projects.length > 0) {
-        setEngineerName(projects[0].engineer || "Project Engineer");
 
         let inProgress = 0;
         let completed = 0;
@@ -28,11 +33,11 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
 
         projects.forEach((proj) => {
           const s = proj.status?.toLowerCase();
-          if (s === "completed")        completed++;
-          else if (s === "delayed")     delayed++;
-          else if (s === "in progress") inProgress++;
-          else if (s === "draft")       draft++;
-          else if (s === "for mayor")   forMayor++;
+          if (s === "completed")                              completed++;
+          else if (s === "delayed")                          delayed++;
+          else if (s === "in progress" || s === "ongoing")   inProgress++;
+          else if (s === "draft")                            draft++;
+          else if (s === "for mayor")                        forMayor++;
         });
 
         setStats({ progress: inProgress, done: completed, delay: delayed, draft, forMayor });
@@ -52,7 +57,7 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
   }, [loadDashboard]);
 
   return {
-    data: { stats, recentLogs, engineerName, isLoading },
+    data: { stats, recentLogs, engineerName, engineerPhotoURL, isLoading },
     actions: { 
       onRefresh: loadDashboard,
       onViewAllActivity: () => navigation.navigate(ROUTES.AUDIT_TRAIL),

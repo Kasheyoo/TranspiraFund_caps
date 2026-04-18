@@ -246,6 +246,86 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   return { success: true };
 });
 
+// ─── uploadProfilePhoto ──────────────────────────────────────────────────────
+//
+//  Mobile-only. React Native's `fetch(file://...)` fails on Android so the
+//  client cannot produce a Blob to hand to Firebase Storage's JS SDK. This
+//  function accepts base64, uploads to Storage via Admin SDK, and writes the
+//  same users/{uid}.photoURL field the web's updateProfilePhoto callable writes
+//  — so the web's realtime UI picks up the change identically to a web upload.
+//
+//  Payload:
+//    { base64: string, contentType?: string } — uploads a new photo
+//    { base64: "" }                           — removes the existing photo
+//
+//  Storage path matches the web contract: profile-photos/{uid} exactly. The
+//  download URL uses the same ?alt=media&token=... format getDownloadURL()
+//  produces, so <Image source={{ uri: photoURL }}> works identically.
+//
+export const uploadProfilePhoto = onCall(
+  { region: "asia-southeast1", memory: "512MiB" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const { base64, contentType } = (request.data ?? {}) as {
+      base64?: string;
+      contentType?: string;
+    };
+
+    const uid = request.auth.uid;
+    const email = request.auth.token.email || "";
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(`profile-photos/${uid}`);
+
+    // Removal path
+    if (!base64) {
+      try { await file.delete(); } catch { /* may not exist */ }
+
+      await admin.firestore().doc(`users/${uid}`).update({
+        photoURL: admin.firestore.FieldValue.delete(),
+        photoChangedAt: Date.now(),
+      });
+      try { await admin.auth().updateUser(uid, { photoURL: null as never }); } catch { /* ok */ }
+      await logAuditTrail(uid, email, "Profile Photo Removed", "Profile photo removed", false);
+
+      return { success: true, photoURL: "" };
+    }
+
+    // Upload path
+    const mime = contentType || "image/jpeg";
+    const buffer = Buffer.from(base64, "base64");
+
+    if (buffer.length === 0) {
+      throw new HttpsError("invalid-argument", "Empty image data.");
+    }
+    if (buffer.length > 5 * 1024 * 1024) {
+      throw new HttpsError("invalid-argument", "Photo exceeds 5MB limit.");
+    }
+
+    const token = crypto.randomUUID();
+    await file.save(buffer, {
+      metadata: {
+        contentType: mime,
+        metadata: { firebaseStorageDownloadTokens: token },
+      },
+    });
+
+    const encodedPath = encodeURIComponent(`profile-photos/${uid}`);
+    const photoURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+
+    await admin.firestore().doc(`users/${uid}`).update({
+      photoURL,
+      photoChangedAt: Date.now(),
+    });
+    try { await admin.auth().updateUser(uid, { photoURL }); } catch { /* ok */ }
+    await logAuditTrail(uid, email, "Profile Photo Updated", "Profile photo updated", false);
+
+    return { success: true, photoURL };
+  },
+);
+
 // ─── sendPasswordResetOtp ────────────────────────────────────────────────────
 //
 //  Unauthenticated. Generates a 6-digit OTP for password reset and emails it.

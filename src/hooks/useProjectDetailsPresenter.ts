@@ -10,6 +10,7 @@ import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
 import { sanitizeInput } from "../utils/security";
 import { logger } from "../utils/logger";
+import { useAuth } from "../context/AuthContext";
 import type { Milestone, Project } from "../types";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -31,11 +32,21 @@ export const useProjectDetailsPresenter = (
   projectId: string,
   onBackCallback: () => void,
 ) => {
+  const { userProfile } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const selectedMilestoneRef = useRef(selectedMilestone);
   selectedMilestoneRef.current = selectedMilestone;
+
+  // The signed-in PROJ_ENG is always the engineer assigned to this project
+  // (firestore rules enforce projectEngineer == request.auth.uid). So pull
+  // the display name and photo straight from AuthContext — same source the
+  // Dashboard and Settings use, so updates sync everywhere.
+  const engineerName = userProfile?.firstName
+    ? `Engr. ${userProfile.firstName} ${userProfile.lastName || ""}`.trim()
+    : userProfile?.name || null;
+  const engineerPhotoURL = userProfile?.photoURL;
 
   // Real-time subscription to this project + its milestones
   useEffect(() => {
@@ -177,7 +188,7 @@ export const useProjectDetailsPresenter = (
   };
 
   return {
-    data: { project, selectedMilestone, isLoading },
+    data: { project, engineerName, engineerPhotoURL, selectedMilestone, isLoading },
     actions: {
       onRefresh: () => {}, // No-op — real-time listener handles updates automatically
       goBack: onBackCallback,

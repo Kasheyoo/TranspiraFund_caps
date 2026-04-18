@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,7 +17,9 @@ import type { Project } from "../types";
 
 interface ProjectListData {
   projects: Project[];
+  allProjects: Project[];
   isLoading: boolean;
+  isRefreshing: boolean;
   activeFilter: string;
 }
 
@@ -24,6 +27,7 @@ interface ProjectListActions {
   onSelectProject: (id: string) => void;
   loadProjects: () => void;
   setFilter: (filter: string) => void;
+  onRefresh: () => void;
 }
 
 interface ProjectListViewProps {
@@ -42,9 +46,9 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-// Pre-active statuses (web app workflow) — display as In Progress on mobile
-const PRE_ACTIVE: Record<string, true> = { "Draft": true, "For Mayor": true };
-const displayStatus = (raw: string) => PRE_ACTIVE[raw] ? "In Progress" : raw;
+// Statuses that all map to "In Progress" on mobile
+const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
+const displayStatus = (raw: string) => ACTIVE_ALIASES[raw] ? "In Progress" : raw;
 
 const FILTERS = ["All", "In Progress", "Completed", "Delayed"];
 
@@ -61,13 +65,8 @@ const StatsBar = ({ projects }: { projects: Project[] }) => {
   const counts = useMemo(() => {
     const c: Record<string, number> = { "In Progress": 0, "Completed": 0, "Delayed": 0 };
     projects.forEach((p) => {
-      const s = p.status ?? "";
-      // Draft / For Mayor are pre-active — count as In Progress while sync is pending
-      if (s === "Draft" || s === "For Mayor" || s === "Pending") {
-        c["In Progress"]++;
-      } else if (c[s] !== undefined) {
-        c[s]++;
-      }
+      const display = displayStatus(p.status ?? "");
+      if (c[display] !== undefined) c[display]++;
     });
     return c;
   }, [projects]);
@@ -79,7 +78,7 @@ const StatsBar = ({ projects }: { projects: Project[] }) => {
         return (
           <View key={s} style={[statsStyles.cell, { borderTopColor: sc.accent }]}>
             <Text style={[statsStyles.num, { color: sc.accent }]}>{counts[s]}</Text>
-            <Text style={statsStyles.label}>{s === "In Progress" ? "Active" : s}</Text>
+            <Text style={statsStyles.label}>{s}</Text>
           </View>
         );
       })}
@@ -133,12 +132,6 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
             <Text style={S.cardTitle} numberOfLines={2}>
               {item.title || item.projectName || "Untitled Project"}
             </Text>
-            {item.engineer ? (
-              <View style={S.engineerRow}>
-                <FontAwesome5 name="user-hard-hat" size={10} color={COLORS.textTertiary} />
-                <Text style={S.engineerText} numberOfLines={1}>{item.engineer}</Text>
-              </View>
-            ) : null}
           </View>
 
           <View style={[S.badge, { backgroundColor: sc.bg }]}>
@@ -202,7 +195,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   const filtered = useMemo(() => {
     const base = data.activeFilter === "All"
       ? data.projects
-      : data.projects.filter((p) => p.status === data.activeFilter);
+      : data.projects.filter((p) => displayStatus(p.status ?? "") === data.activeFilter);
     if (!search.trim()) return base;
     const q = search.toLowerCase();
     return base.filter((p) =>
@@ -251,7 +244,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
       </View>
 
       {/* ══ STATS BAR ═══════════════════════════════════════════ */}
-      <StatsBar projects={data.projects} />
+      <StatsBar projects={data.allProjects} />
 
       {/* ══ FILTER TABS ═════════════════════════════════════════ */}
       <View style={S.filterWrap}>
@@ -291,6 +284,14 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
           )}
           contentContainerStyle={[S.listContent, { paddingBottom: insets.bottom + 110 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={data.isRefreshing}
+              onRefresh={actions.onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
           ListEmptyComponent={
             <View style={S.emptyBox}>
               <View style={S.emptyIconBox}>

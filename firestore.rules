@@ -29,7 +29,10 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                      (request.auth.uid == userId ||
                       hasRole(['MIS', 'HCSD']));
-      allow write: if false;
+      // Users may update only their own profile photo
+      allow update: if request.auth.uid == userId &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoURL']);
+      allow create, delete: if false;
     }
 
 
@@ -38,14 +41,17 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════
 
     match /projects/{projectId} {
-      allow read: if hasRole(['MIS', 'HCSD', 'CPDO', 'PROJ_ENG']);
+      allow read: if hasRole(['MIS', 'HCSD', 'CPDO']) ||
+                     (hasRole(['PROJ_ENG']) && resource.data.projectEngineer == request.auth.uid);
       allow create, update, delete: if false;
 
       // Milestones live as a subcollection under each project
       // PROJ_ENG can update (add geotagged proofs) — no create/delete from client
       match /milestones/{milestoneId} {
-        allow read:   if hasRole(['MIS', 'HCSD', 'CPDO', 'PROJ_ENG']);
-        allow update: if hasRole(['PROJ_ENG']);
+        allow read:   if hasRole(['MIS', 'HCSD', 'CPDO']) ||
+                         (hasRole(['PROJ_ENG']) && get(/databases/$(database)/documents/projects/$(projectId)).data.projectEngineer == request.auth.uid);
+        allow update: if hasRole(['PROJ_ENG']) &&
+                         get(/databases/$(database)/documents/projects/$(projectId)).data.projectEngineer == request.auth.uid;
         allow create, delete: if false;
       }
     }

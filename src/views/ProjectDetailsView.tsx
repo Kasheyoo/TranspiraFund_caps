@@ -2,6 +2,7 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +18,8 @@ import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal
 // ── Interfaces ────────────────────────────────────────────────────────────────
 interface ProjectDetailsData {
   project: Project | null;
+  engineerName?: string | null;
+  engineerPhotoURL?: string;
   isLoading: boolean;
 }
 
@@ -45,8 +48,8 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
 // Pre-active statuses set by the web app workflow — always display as In Progress on mobile
-const PRE_ACTIVE: Record<string, true> = { "Draft": true, "For Mayor": true };
-const displayStatus = (raw: string) => PRE_ACTIVE[raw] ? "In Progress" : raw;
+const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
+const displayStatus = (raw: string) => ACTIVE_ALIASES[raw] ? "In Progress" : raw;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number): string => {
@@ -54,6 +57,43 @@ const formatBudget = (v?: number): string => {
   if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(2)}M`;
   if (v >= 1_000)     return `₱${(v / 1_000).toFixed(1)}K`;
   return `₱${v.toLocaleString()}`;
+};
+
+const formatDateString = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+};
+
+// Mirrors the web Project Accomplishment calculation in
+// TranspiraFund-WebApp-LGU/client/src/pages/hcsd/ProjectDetail.jsx
+const computeAccomplishment = (
+  start?: string | null,
+  end?: string | null,
+  actualPercent?: number,
+): { durationDays: number; timeElapsed: number; slippage: number; daysDelay: number } => {
+  if (!start || !end) return { durationDays: 0, timeElapsed: 0, slippage: 0, daysDelay: 0 };
+  const s = new Date(start).getTime();
+  const e = new Date(end).getTime();
+  if (isNaN(s) || isNaN(e) || e <= s) {
+    return { durationDays: 0, timeElapsed: 0, slippage: 0, daysDelay: 0 };
+  }
+  const durationDays = Math.max(0, Math.round((e - s) / 86_400_000));
+  const now = Date.now();
+  const rawElapsed = ((now - s) / (e - s)) * 100;
+  const timeElapsed = Math.max(0, Math.min(100, rawElapsed));
+  const actual = Number.isFinite(actualPercent) ? Number(actualPercent) : 0;
+  const slippage = timeElapsed - actual;
+  const daysDelay = slippage > 0 && durationDays
+    ? Math.round((slippage / 100) * durationDays)
+    : 0;
+  return {
+    durationDays,
+    timeElapsed: Math.round(timeElapsed * 10) / 10,
+    slippage: Math.round(slippage * 10) / 10,
+    daysDelay,
+  };
 };
 
 // ── Milestone card ────────────────────────────────────────────────────────────
@@ -165,7 +205,8 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
 // ── Main view ─────────────────────────────────────────────────────────────────
 export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsViewProps) => {
   const insets = useSafeAreaInsets();
-  const { project, isLoading } = data;
+  const [milestoneModalVisible, setMilestoneModalVisible] = useState(false);
+  const { project, engineerName, engineerPhotoURL, isLoading } = data;
 
   if (!project) return null;
 
@@ -179,7 +220,10 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const totalMs = project.milestones?.length ?? 0;
 
   const displayTitle    = project.projectName    ?? project.title    ?? "Untitled Project";
-  const displayEngineer = project.projectEngineer ?? project.engineer ?? null;
+  // project.projectEngineer is the engineer's UID (per firestore rules). The
+  // resolved display name comes from AuthContext via the presenter — the
+  // signed-in PROJ_ENG is always the assigned engineer on their own projects.
+  const displayEngineer = engineerName ?? null;
   const displayLocation = project.barangay
     ? project.sitioStreet ? `${project.sitioStreet}, ${project.barangay}` : project.barangay
     : project.location ?? null;
@@ -191,7 +235,15 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const initials = displayEngineer
     ?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() ?? "PE";
 
-  const [milestoneModalVisible, setMilestoneModalVisible] = useState(false);
+  // Project Accomplishment (mirrors web calculation)
+  const accomplishment = computeAccomplishment(
+    displayStart,
+    displayCompletion,
+    project.actualPercent,
+  );
+  const hasTimeline = !!(displayStart && displayCompletion);
+  const slippageIsBehind = accomplishment.slippage > 0;
+
   const handleGenerate = () => setMilestoneModalVisible(true);
 
   return (
@@ -224,7 +276,11 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         {displayEngineer ? (
           <View style={D.engineerRow}>
             <View style={D.engineerAvatar}>
-              <Text style={D.engineerInitials}>{initials}</Text>
+              {engineerPhotoURL ? (
+                <Image source={{ uri: engineerPhotoURL }} style={D.engineerAvatarImg} />
+              ) : (
+                <Text style={D.engineerInitials}>{initials}</Text>
+              )}
             </View>
             <View>
               <Text style={D.engineerName}>{displayEngineer}</Text>
@@ -233,7 +289,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </View>
         ) : null}
 
-        {/* Status + location row */}
+        {/* Status + location + duration row */}
         <View style={D.heroBadgeRow}>
           <View style={[D.statusBadge, { backgroundColor: sc.bg }]}>
             <FontAwesome5 name={sc.icon} size={10} color={sc.accent} />
@@ -243,6 +299,14 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             <View style={D.locationChip}>
               <FontAwesome5 name="map-marker-alt" size={9} color="rgba(255,255,255,0.75)" />
               <Text style={D.locationText} numberOfLines={1}>{displayLocation}</Text>
+            </View>
+          ) : null}
+          {accomplishment.durationDays > 0 ? (
+            <View style={D.durationChip}>
+              <FontAwesome5 name="clock" size={9} color="rgba(255,255,255,0.75)" />
+              <Text style={D.locationText} numberOfLines={1}>
+                {accomplishment.durationDays} calendar day{accomplishment.durationDays !== 1 ? "s" : ""}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -423,6 +487,17 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 </Text>
               </View>
             ) : null}
+            {(project.incurredAmount !== undefined && project.incurredAmount !== null) ? (
+              <View style={D.detailCell}>
+                <View style={[D.detailIcon, { backgroundColor: COLORS.successSoft }]}>
+                  <FontAwesome5 name="coins" size={12} color={COLORS.success} />
+                </View>
+                <Text style={D.detailCellLabel}>Incurred Amount</Text>
+                <Text style={[D.detailCellValue, { color: COLORS.success, fontWeight: "900" }]}>
+                  {formatBudget(project.incurredAmount)}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Description */}
@@ -436,6 +511,244 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             </View>
           ) : null}
         </View>
+
+        {/* ── ASSIGNED PERSONNEL ── */}
+        {(displayEngineer || project.projectInspector || project.materialInspector || project.electricalInspector) ? (
+          <View style={D.card}>
+            <Text style={D.cardSectionLabel}>ASSIGNED PERSONNEL</Text>
+            <View style={D.personnelGrid}>
+              {displayEngineer ? (
+                <View style={D.personnelCell}>
+                  <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
+                    <FontAwesome5 name="hard-hat" size={12} color={COLORS.primary} />
+                  </View>
+                  <Text style={D.detailCellLabel}>Project Engineer</Text>
+                  <Text style={D.detailCellValue} numberOfLines={2}>{displayEngineer}</Text>
+                </View>
+              ) : null}
+              {project.projectInspector ? (
+                <View style={D.personnelCell}>
+                  <View style={[D.detailIcon, { backgroundColor: "#EDE9FE" }]}>
+                    <FontAwesome5 name="user-check" size={12} color="#7C3AED" />
+                  </View>
+                  <Text style={D.detailCellLabel}>Project Inspector</Text>
+                  <Text style={D.detailCellValue} numberOfLines={2}>{project.projectInspector}</Text>
+                </View>
+              ) : null}
+              {project.materialInspector ? (
+                <View style={D.personnelCell}>
+                  <View style={[D.detailIcon, { backgroundColor: COLORS.warningSoft }]}>
+                    <FontAwesome5 name="boxes" size={12} color={COLORS.warning} />
+                  </View>
+                  <Text style={D.detailCellLabel}>Material Inspector</Text>
+                  <Text style={D.detailCellValue} numberOfLines={2}>{project.materialInspector}</Text>
+                </View>
+              ) : null}
+              {project.electricalInspector ? (
+                <View style={D.personnelCell}>
+                  <View style={[D.detailIcon, { backgroundColor: COLORS.successSoft }]}>
+                    <FontAwesome5 name="bolt" size={12} color={COLORS.success} />
+                  </View>
+                  <Text style={D.detailCellLabel}>Electrical Inspector</Text>
+                  <Text style={D.detailCellValue} numberOfLines={2}>{project.electricalInspector}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {/* ── PROJECT ACCOMPLISHMENT (computed) ── */}
+        {hasTimeline ? (
+          <View style={D.card}>
+            <Text style={D.cardSectionLabel}>PROJECT ACCOMPLISHMENT</Text>
+            <View style={D.accompGrid}>
+              <View style={D.accompCell}>
+                <Text style={D.detailCellLabel}>Time Elapsed</Text>
+                <Text style={D.accompValue}>
+                  {accomplishment.timeElapsed}
+                  <Text style={D.accompUnit}>%</Text>
+                </Text>
+                <Text style={D.accompSub}>% of contract period used</Text>
+              </View>
+              <View style={D.accompCell}>
+                <Text style={D.detailCellLabel}>Actual Progress</Text>
+                <Text style={D.accompValue}>
+                  {project.actualPercent ?? 0}
+                  <Text style={D.accompUnit}>%</Text>
+                </Text>
+                <Text style={D.accompSub}>% of work completed</Text>
+              </View>
+              <View style={[D.accompCell, slippageIsBehind && D.accompCellWarn]}>
+                <Text style={D.detailCellLabel}>Slippage</Text>
+                <Text style={[D.accompValue, slippageIsBehind && { color: COLORS.warning }]}>
+                  {slippageIsBehind ? "+" : ""}{accomplishment.slippage}
+                  <Text style={D.accompUnit}>%</Text>
+                </Text>
+                <Text style={[D.accompSub, slippageIsBehind && { color: COLORS.warning }]}>
+                  {slippageIsBehind ? "behind schedule" : "ahead of or on schedule"}
+                </Text>
+              </View>
+              <View style={[D.accompCell, accomplishment.daysDelay > 0 && D.accompCellWarn]}>
+                <Text style={D.detailCellLabel}>Days Delay</Text>
+                <Text style={[D.accompValue, accomplishment.daysDelay > 0 && { color: COLORS.error }]}>
+                  {accomplishment.daysDelay}
+                  <Text style={D.accompUnit}> days</Text>
+                </Text>
+                <Text style={[D.accompSub, accomplishment.daysDelay > 0 && { color: COLORS.error }]}>
+                  {accomplishment.daysDelay > 0 ? "estimated calendar days behind" : "no delay recorded"}
+                </Text>
+              </View>
+            </View>
+
+            {/* Dual progress bars */}
+            <View style={D.accompBarBlock}>
+              <View style={D.accompBarLabel}>
+                <View style={[D.accompLegendDot, { backgroundColor: "#64748B" }]} />
+                <Text style={D.accompBarLabelText}>TIME ELAPSED</Text>
+                <Text style={D.accompBarPct}>{accomplishment.timeElapsed}%</Text>
+              </View>
+              <View style={D.progressTrack}>
+                <View style={[D.progressFill, { width: `${accomplishment.timeElapsed}%` as any, backgroundColor: "#64748B" }]} />
+              </View>
+            </View>
+            <View style={D.accompBarBlock}>
+              <View style={D.accompBarLabel}>
+                <View style={[D.accompLegendDot, { backgroundColor: COLORS.warning }]} />
+                <Text style={D.accompBarLabelText}>ACTUAL PROGRESS</Text>
+                <Text style={D.accompBarPct}>{project.actualPercent ?? 0}%</Text>
+              </View>
+              <View style={D.progressTrack}>
+                <View style={[D.progressFill, { width: `${project.actualPercent ?? 0}%` as any, backgroundColor: COLORS.warning }]} />
+              </View>
+            </View>
+
+            {slippageIsBehind ? (
+              <View style={D.slippageAlert}>
+                <FontAwesome5 name="exclamation-triangle" size={12} color={COLORS.warning} />
+                <Text style={D.slippageAlertText}>
+                  Work is{" "}
+                  <Text style={{ fontWeight: "900" }}>{accomplishment.slippage}%</Text>
+                  {" "}behind the elapsed time — approximately{" "}
+                  <Text style={{ fontWeight: "900" }}>{accomplishment.daysDelay} day{accomplishment.daysDelay !== 1 ? "s" : ""}</Text>
+                  {" "}behind schedule.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* ── PROJECT ORDERS ── */}
+        {(project.resumeOrderNumber || project.validationOrderNumber || project.suspensionOrderNumber) ? (
+          <View style={D.card}>
+            <Text style={D.cardSectionLabel}>PROJECT ORDERS</Text>
+
+            {project.resumeOrderNumber || project.resumeOrderDate || project.timeExtensionOnOrder ? (
+              <View style={D.orderBlock}>
+                <View style={D.orderHeaderRow}>
+                  <View style={[D.detailIcon, { backgroundColor: COLORS.successSoft }]}>
+                    <FontAwesome5 name="play" size={10} color={COLORS.success} />
+                  </View>
+                  <Text style={D.orderHeaderText}>RESUME ORDER</Text>
+                </View>
+                <View style={D.orderGrid}>
+                  {project.resumeOrderNumber ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Order Number</Text>
+                      <Text style={D.detailCellValue}>{project.resumeOrderNumber}</Text>
+                    </View>
+                  ) : null}
+                  {project.resumeOrderDate ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Order Date</Text>
+                      <Text style={D.detailCellValue}>{formatDateString(project.resumeOrderDate)}</Text>
+                    </View>
+                  ) : null}
+                  {project.timeExtensionOnOrder ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Time Extension</Text>
+                      <Text style={D.detailCellValue}>{project.timeExtensionOnOrder}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {project.validationOrderNumber || project.validationOrderDate ? (
+              <View style={D.orderBlock}>
+                <View style={D.orderHeaderRow}>
+                  <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
+                    <FontAwesome5 name="clipboard-check" size={10} color={COLORS.primary} />
+                  </View>
+                  <Text style={D.orderHeaderText}>VALIDATION ORDER</Text>
+                </View>
+                <View style={D.orderGrid}>
+                  {project.validationOrderNumber ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Order Number</Text>
+                      <Text style={D.detailCellValue}>{project.validationOrderNumber}</Text>
+                    </View>
+                  ) : null}
+                  {project.validationOrderDate ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Order Date</Text>
+                      <Text style={D.detailCellValue}>{formatDateString(project.validationOrderDate)}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {project.suspensionOrderNumber || project.suspensionOrderDate ? (
+              <View style={[D.orderBlock, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 0 }]}>
+                <View style={D.orderHeaderRow}>
+                  <View style={[D.detailIcon, { backgroundColor: COLORS.errorSoft }]}>
+                    <FontAwesome5 name="pause" size={10} color={COLORS.error} />
+                  </View>
+                  <Text style={D.orderHeaderText}>SUSPENSION ORDER</Text>
+                </View>
+                <View style={D.orderGrid}>
+                  {project.suspensionOrderNumber ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Order Number</Text>
+                      <Text style={D.detailCellValue}>{project.suspensionOrderNumber}</Text>
+                    </View>
+                  ) : null}
+                  {project.suspensionOrderDate ? (
+                    <View style={D.orderCell}>
+                      <Text style={D.detailCellLabel}>Order Date</Text>
+                      <Text style={D.detailCellValue}>{formatDateString(project.suspensionOrderDate)}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* ── REMARKS & ACTION TAKEN ── */}
+        {(project.remarks || project.actionTaken) ? (
+          <View style={D.card}>
+            <Text style={D.cardSectionLabel}>REMARKS & ACTION TAKEN</Text>
+            {project.remarks ? (
+              <View style={D.remarkBlock}>
+                <View style={D.descLabelRow}>
+                  <FontAwesome5 name="comment-alt" size={10} color={COLORS.textTertiary} />
+                  <Text style={D.descLabel}>REMARKS</Text>
+                </View>
+                <Text style={D.descText}>{project.remarks}</Text>
+              </View>
+            ) : null}
+            {project.actionTaken ? (
+              <View style={D.remarkBlock}>
+                <View style={D.descLabelRow}>
+                  <FontAwesome5 name="tasks" size={10} color={COLORS.textTertiary} />
+                  <Text style={D.descLabel}>ACTION TAKEN</Text>
+                </View>
+                <Text style={D.descText}>{project.actionTaken}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* ── MILESTONES ── */}
         <View>
@@ -551,11 +864,13 @@ const D = StyleSheet.create({
 
   engineerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   engineerAvatar: {
-    width: 36, height: 36, borderRadius: 11,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.22)",
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)",
+    overflow: "hidden",
   },
+  engineerAvatarImg: { width: 36, height: 36, borderRadius: 18 },
   engineerInitials: { fontSize: 12, fontWeight: "900", color: "#fff" },
   engineerName:     { fontSize: 13, fontWeight: "700", color: "#fff" },
   engineerRole:     { fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: "600", marginTop: 1 },
@@ -571,6 +886,11 @@ const D = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 11,
     flex: 1,
+  },
+  durationChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 11,
   },
   locationText: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.9)", flex: 1 },
 
@@ -658,6 +978,69 @@ const D = StyleSheet.create({
   descLabelRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
   descLabel: { fontSize: 10, fontWeight: "800", color: COLORS.textTertiary, letterSpacing: 0.6 },
   descText:  { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
+
+  // ── Personnel grid (Assigned Personnel) ───────────────────────
+  personnelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  personnelCell: {
+    flex: 1, minWidth: "45%",
+    backgroundColor: COLORS.background, borderRadius: 14,
+    padding: 12, gap: 4,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+
+  // ── Project Accomplishment ────────────────────────────────────
+  accompGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 6 },
+  accompCell: {
+    flex: 1, minWidth: "45%",
+    backgroundColor: COLORS.background, borderRadius: 14,
+    padding: 12, gap: 4,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  accompCellWarn: {
+    backgroundColor: COLORS.warningSoft,
+    borderColor: "#FDE68A",
+  },
+  accompValue: {
+    fontSize: 26, fontWeight: "900", color: COLORS.textPrimary, lineHeight: 30,
+  },
+  accompUnit: { fontSize: 13, fontWeight: "700", color: COLORS.textTertiary },
+  accompSub:  { fontSize: 10, color: COLORS.textTertiary, fontWeight: "600" },
+  accompBarBlock: { marginTop: 12 },
+  accompBarLabel: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  accompLegendDot: { width: 10, height: 10, borderRadius: 3 },
+  accompBarLabelText: {
+    fontSize: 10, fontWeight: "800", color: COLORS.textSecondary,
+    letterSpacing: 0.8, flex: 1,
+  },
+  accompBarPct: { fontSize: 11, fontWeight: "800", color: COLORS.textPrimary },
+  slippageAlert: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1, borderColor: "#FDE68A",
+    borderRadius: 12, padding: 12, marginTop: 12,
+  },
+  slippageAlertText: {
+    fontSize: 12, color: COLORS.warning, flex: 1, lineHeight: 17, fontWeight: "600",
+  },
+
+  // ── Project Orders ────────────────────────────────────────────
+  orderBlock: {
+    paddingBottom: 12, marginBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  orderHeaderRow: {
+    flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10,
+  },
+  orderHeaderText: {
+    fontSize: 10, fontWeight: "900", color: COLORS.textSecondary, letterSpacing: 0.8,
+  },
+  orderGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  orderCell: {
+    flex: 1, minWidth: "45%", gap: 4,
+  },
+
+  // ── Remarks ───────────────────────────────────────────────────
+  remarkBlock: { marginBottom: 12 },
 
   // ── Milestones header ─────────────────────────────────────────
   msHeader: {

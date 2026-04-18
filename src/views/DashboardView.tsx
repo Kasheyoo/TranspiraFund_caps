@@ -1,5 +1,6 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import {
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ interface DashboardData {
   stats: DashboardStats;
   recentLogs: AuditTrail[];
   engineerName: string;
+  engineerPhotoURL?: string;
   isLoading: boolean;
 }
 
@@ -62,7 +64,7 @@ const getActivityIcon = (action = ""): { name: string; color: string; bg: string
 // ── Main view ─────────────────────────────────────────────────────────────────
 export const DashboardView = ({ data, actions }: DashboardViewProps) => {
   const insets = useSafeAreaInsets();
-  const { stats, recentLogs, engineerName, isLoading } = data;
+  const { stats, recentLogs, engineerName, engineerPhotoURL, isLoading } = data;
 
   const total     = (stats.progress || 0) + (stats.done || 0) + (stats.delay || 0);
   const firstName = engineerName?.split(" ")[0] || "Engineer";
@@ -100,7 +102,11 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
 
             {/* Right: circular avatar */}
             <View style={S.avatar}>
-              <Text style={S.avatarText}>{initials}</Text>
+              {engineerPhotoURL ? (
+                <Image source={{ uri: engineerPhotoURL }} style={S.avatarImg} />
+              ) : (
+                <Text style={S.avatarText}>{initials}</Text>
+              )}
             </View>
           </View>
         </View>
@@ -247,7 +253,9 @@ const S = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     borderWidth: 2.5, borderColor: "rgba(255,255,255,0.4)",
     flexShrink: 0,
+    overflow: "hidden",
   },
+  avatarImg:  { width: 56, height: 56, borderRadius: 28 },
   avatarText: { fontSize: 18, fontWeight: "900", color: "#fff" },
 
   // ── Floating stats card ────────────────────────────────────────

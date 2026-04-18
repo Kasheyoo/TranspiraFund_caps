@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProjectModel } from "../models/ProjectModel";
 import { callFn } from "../services/CloudFunctionService";
 import type { Project } from "../types";
@@ -14,6 +14,7 @@ export const useProjectListPresenter = (
 ) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
 
   // Track which projects have already been synced this session — avoids duplicate calls
@@ -52,19 +53,33 @@ export const useProjectListPresenter = (
 
   const filteredProjects = useMemo(() => {
     if (activeFilter === "All") return projects;
-    return projects.filter((p) => p.status === activeFilter);
+    return projects.filter((p) => {
+      const s = p.status ?? "";
+      const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
+      const display = ACTIVE_ALIASES[s] ? "In Progress" : s;
+      return display === activeFilter;
+    });
   }, [projects, activeFilter]);
+
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // Real-time listener handles data — just give user visual feedback
+    setTimeout(() => setIsRefreshing(false), 1200);
+  }, []);
 
   return {
     data: {
       projects: filteredProjects,
+      allProjects: projects,
       isLoading,
+      isRefreshing,
       activeFilter,
     },
     actions: {
       onSelectProject,
-      loadProjects: () => {}, // No-op — real-time listener handles updates
+      loadProjects: () => {},
       setFilter: setActiveFilter,
+      onRefresh,
       goBack: onBack,
     },
   };

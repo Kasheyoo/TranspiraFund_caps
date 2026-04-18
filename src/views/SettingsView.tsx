@@ -1,6 +1,7 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useState } from "react";
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -103,7 +104,11 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
 
           <View style={S.avatarRing}>
             <View style={S.avatarCircle}>
-              <Text style={S.avatarText}>{initials}</Text>
+              {userProfile?.photoURL ? (
+                <Image source={{ uri: userProfile.photoURL }} style={S.avatarImg} />
+              ) : (
+                <Text style={S.avatarText}>{initials}</Text>
+              )}
             </View>
           </View>
 
@@ -202,7 +207,9 @@ const S = StyleSheet.create({
     width: 76, height: 76, borderRadius: 38,
     backgroundColor: "#fff",
     alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
   },
+  avatarImg:    { width: 76, height: 76, borderRadius: 38 },
   avatarText:   { fontSize: 26, fontWeight: "900", color: COLORS.primary },
   heroName:     { fontSize: 20, fontWeight: "900", color: "#fff", marginBottom: 12 },
   roleChip: {

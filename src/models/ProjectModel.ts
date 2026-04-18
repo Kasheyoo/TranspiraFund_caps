@@ -4,6 +4,8 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
+  query,
+  where,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { requireAuth } from "../utils/authGuard";
@@ -83,12 +85,13 @@ export class ProjectModel {
   // ── One-time fetches ─────────────────────────────────────────────
 
   static async getAll(): Promise<Project[]> {
-    requireAuth();
+    const uid = requireAuth();
     try {
       const cached = getCached<Project[]>("projects_all");
       if (cached) return cached;
 
-      const querySnapshot = await getDocs(collection(db, "projects"));
+      const q = query(collection(db, "projects"), where("projectEngineer", "==", uid));
+      const querySnapshot = await getDocs(q);
       const projects: Project[] = querySnapshot.docs.map((d) =>
         this.normalize(d.data(), d.id),
       );
@@ -145,10 +148,10 @@ export class ProjectModel {
     onUpdate: (projects: Project[]) => void,
     onError?: (error: Error) => void,
   ): () => void {
-    requireAuth();
+    const uid = requireAuth();
 
     return onSnapshot(
-      collection(db, "projects"),
+      query(collection(db, "projects"), where("projectEngineer", "==", uid)),
       async (snapshot) => {
         try {
           const projects: Project[] = snapshot.docs.map((d) =>

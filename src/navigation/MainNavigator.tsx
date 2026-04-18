@@ -77,11 +77,13 @@ export function MainNavigator() {
         <BottomNavBar
           currentScreen={props.state.routes[props.state.index].name}
           onNavigate={(screen) => {
-            // Projects and Settings always reset to their root screen
+            // Every tab always resets to its root screen
             if (screen === ROUTES.PROJECTS) {
               props.navigation.navigate(ROUTES.PROJECTS, { screen: ROUTES.PROJECT_LIST });
             } else if (screen === ROUTES.SETTINGS) {
               props.navigation.navigate(ROUTES.SETTINGS, { screen: "SettingsHome" });
+            } else if (screen === ROUTES.DASHBOARD) {
+              props.navigation.navigate(ROUTES.DASHBOARD, { screen: "DashboardHome" });
             } else {
               props.navigation.navigate(screen);
             }

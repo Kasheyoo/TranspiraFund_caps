@@ -56,6 +56,23 @@ export interface Project {
   milestones?: Milestone[];
   createdBy?: string;
   createdAt?: FirestoreTimestamp;
+  // ── Assigned Personnel (web-canonical, flat) ────────────────────
+  projectInspector?: string;
+  materialInspector?: string;
+  electricalInspector?: string;
+  // ── Project Orders (flat fields written by web) ─────────────────
+  resumeOrderNumber?: string;
+  resumeOrderDate?: string;
+  timeExtensionOnOrder?: string;
+  validationOrderNumber?: string;
+  validationOrderDate?: string;
+  suspensionOrderNumber?: string;
+  suspensionOrderDate?: string;
+  // ── Fund Utilization ────────────────────────────────────────────
+  incurredAmount?: number;
+  // ── Remarks & Action ────────────────────────────────────────────
+  remarks?: string;
+  actionTaken?: string;
 }
 
 export interface UserProfile {
@@ -82,8 +99,11 @@ export interface AppNotification {
 
 export interface AuditTrail {
   id: string;
+  uid?: string;      // actor's Firebase UID — key into users/{uid}
+  email?: string;    // actor's email — fallback if user doc is missing
   action?: string;
   details?: string;
+  platform?: string;
   timestamp?: FirestoreTimestamp;
 }
 

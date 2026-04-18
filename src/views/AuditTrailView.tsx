@@ -1,6 +1,7 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import {
   ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,11 +11,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
-import type { AuditTrail } from "../types";
+import type { AuditTrail, UserProfile } from "../types";
 
 interface AuditTrailViewProps {
   logs: AuditTrail[];
   isLoading: boolean;
+  actorCache: Record<string, UserProfile>;
   onRefresh: () => void;
   onBack: () => void;
 }
@@ -29,6 +31,8 @@ const getActionIcon = (action = ""): { name: string; color: string; bg: string }
     return { name: "key",                 color: "#7C3AED",       bg: "#EDE9FE" };
   if (a.includes("proof") || a.includes("upload"))
     return { name: "cloud-upload-alt",    color: "#0891B2",       bg: "#E0F2FE" };
+  if (a.includes("photo"))
+    return { name: "camera",              color: "#DB2777",       bg: "#FCE7F3" };
   if (a.includes("milestone"))
     return { name: "layer-group",         color: COLORS.warning,  bg: COLORS.warningSoft };
   if (a.includes("delay"))
@@ -49,7 +53,26 @@ const formatTimestamp = (seconds: number): string => {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ` · ${timeStr}`;
 };
 
-export const AuditTrailView = ({ logs, isLoading, onRefresh, onBack }: AuditTrailViewProps) => {
+// ── Actor avatar (photo or initials) ─────────────────────────
+const ActorAvatar = ({ profile, email }: { profile?: UserProfile; email?: string }) => {
+  const photoURL = profile?.photoURL;
+  const name = profile?.firstName
+    ? `${profile.firstName} ${profile.lastName || ""}`.trim()
+    : profile?.name || email || "?";
+  const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
+  return (
+    <View style={S.actorAvatar}>
+      {photoURL ? (
+        <Image source={{ uri: photoURL }} style={S.actorAvatarImg} />
+      ) : (
+        <Text style={S.actorAvatarText}>{initials}</Text>
+      )}
+    </View>
+  );
+};
+
+export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack }: AuditTrailViewProps) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -60,24 +83,22 @@ export const AuditTrailView = ({ logs, isLoading, onRefresh, onBack }: AuditTrai
         <View style={S.orb1} /><View style={S.orb2} />
 
         <View style={S.heroRow}>
-          {/* Back button */}
           <TouchableOpacity style={S.backBtn} onPress={onBack} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <FontAwesome5 name="arrow-left" size={15} color="#fff" />
           </TouchableOpacity>
 
-          {/* Title block */}
           <View style={S.heroCenter}>
             <Text style={S.heroTitle}>Audit Trail</Text>
             <Text style={S.heroSub}>Your field activity log</Text>
           </View>
 
-          {/* Count chip */}
-          {logs.length > 0 && (
+          {logs.length > 0 ? (
             <View style={S.countChip}>
               <Text style={S.countText}>{logs.length}</Text>
             </View>
+          ) : (
+            <View style={{ width: 44 }} />
           )}
-          {logs.length === 0 && <View style={{ width: 44 }} />}
         </View>
       </View>
 
@@ -94,7 +115,6 @@ export const AuditTrailView = ({ logs, isLoading, onRefresh, onBack }: AuditTrai
           />
         }
       >
-        {/* Loading initial state */}
         {isLoading && logs.length === 0 ? (
           <View style={S.loadingBox}>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -104,25 +124,39 @@ export const AuditTrailView = ({ logs, isLoading, onRefresh, onBack }: AuditTrai
             <Text style={S.sectionLabel}>ALL ACTIVITY</Text>
             <View style={S.logCard}>
               {logs.map((log, i) => {
-                const icon   = getActionIcon(log.action);
-                const isLast = i === logs.length - 1;
+                const icon    = getActionIcon(log.action);
+                const isLast  = i === logs.length - 1;
+                const actor   = log.uid ? actorCache[log.uid] : undefined;
+                const actorName = actor?.firstName
+                  ? `${actor.firstName} ${actor.lastName || ""}`.trim()
+                  : actor?.name || log.email || "Unknown";
+
                 return (
                   <View key={log.id || i.toString()}>
                     <View style={[S.logRow, isLast && S.logRowLast]}>
-                      {/* Icon */}
+                      {/* Action icon */}
                       <View style={[S.logIcon, { backgroundColor: icon.bg }]}>
                         <FontAwesome5 name={icon.name} size={13} color={icon.color} />
                       </View>
 
-                      {/* Text */}
+                      {/* Text block */}
                       <View style={S.logBody}>
                         <Text style={S.logAction}>{log.action}</Text>
                         {log.details ? (
                           <Text style={S.logDetail} numberOfLines={2}>{log.details}</Text>
                         ) : null}
-                        <Text style={S.logTime}>
-                          {log.timestamp?.seconds ? formatTimestamp(log.timestamp.seconds) : "Recently"}
-                        </Text>
+
+                        {/* Actor + timestamp row — hydrated from users/{uid} */}
+                        <View style={S.logMeta}>
+                          <ActorAvatar profile={actor} email={log.email} />
+                          <Text style={S.logMetaText} numberOfLines={1}>
+                            {actorName}
+                          </Text>
+                          <View style={S.logMetaDot} />
+                          <Text style={S.logTime}>
+                            {log.timestamp?.seconds ? formatTimestamp(log.timestamp.seconds) : "Recently"}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                     {!isLast && <View style={S.rowDivider} />}
@@ -185,8 +219,8 @@ const S = StyleSheet.create({
   countText: { fontSize: 13, fontWeight: "900", color: "#fff" },
 
   // ── Content ───────────────────────────────────────────────────
-  scroll:      { paddingHorizontal: 18, paddingTop: 20 },
-  sectionLabel:{
+  scroll:       { paddingHorizontal: 18, paddingTop: 20 },
+  sectionLabel: {
     fontSize: 10, fontWeight: "900", color: COLORS.textTertiary,
     letterSpacing: 1, marginBottom: 10, paddingHorizontal: 2,
   },
@@ -213,7 +247,29 @@ const S = StyleSheet.create({
   logBody:   { flex: 1 },
   logAction: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 19 },
   logDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2, fontWeight: "500", lineHeight: 16 },
-  logTime:   { fontSize: 11, color: COLORS.textTertiary, marginTop: 5, fontWeight: "600" },
+
+  // Actor + timestamp row
+  logMeta: {
+    flexDirection: "row", alignItems: "center", marginTop: 7, gap: 5, flexWrap: "wrap",
+  },
+  actorAvatar: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: COLORS.primary,
+    alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  actorAvatarImg: { width: 18, height: 18, borderRadius: 9 },
+  actorAvatarText: { fontSize: 8, fontWeight: "900", color: "#fff" },
+  logMetaText: {
+    fontSize: 11, fontWeight: "700", color: COLORS.textSecondary,
+    flexShrink: 1, maxWidth: 120,
+  },
+  logMetaDot: {
+    width: 3, height: 3, borderRadius: 2,
+    backgroundColor: COLORS.textTertiary, flexShrink: 0,
+  },
+  logTime: { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600" },
 
   // ── Loading ───────────────────────────────────────────────────
   loadingBox: { paddingTop: 60, alignItems: "center" },
