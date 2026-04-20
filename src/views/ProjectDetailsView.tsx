@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -61,6 +62,18 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
   "For Mayor":   { accent: "#7C3AED",      bg: "#EDE9FE",           text: "#7C3AED",      icon: "user-tie"           },
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
+
+// ── Project Type config ──────────────────────────────────────────────────────
+// Seven LGU project categories sourced from the web app HCSD dropdown.
+const PROJECT_TYPE_MAP: Record<string, { accent: string; bg: string; icon: string }> = {
+  "Building Construction":          { accent: COLORS.primary, bg: COLORS.primarySoft, icon: "building"  },
+  "Roads & Pavement":                { accent: "#7C3AED",      bg: "#EDE9FE",           icon: "road"      },
+  "Drainage & Flood Control":        { accent: "#06B6D4",      bg: "#ECFEFF",           icon: "water"     },
+  "Water Supply":                    { accent: "#3B82F6",      bg: "#EFF6FF",           icon: "tint"      },
+  "Electrical & Lighting":           { accent: COLORS.warning, bg: COLORS.warningSoft,  icon: "bolt"      },
+  "Public Facility Rehabilitation":  { accent: COLORS.success, bg: COLORS.successSoft,  icon: "hammer"    },
+  "Other":                           { accent: "#64748B",      bg: "#F1F5F9",           icon: "briefcase" },
+};
 
 // Pre-active statuses set by the web app workflow — always display as In Progress on mobile
 const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
@@ -337,6 +350,18 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             <FontAwesome5 name={sc.icon} size={10} color={sc.accent} />
             <Text style={[D.statusBadgeText, { color: sc.text }]}>{status}</Text>
           </View>
+          {project.projectType && PROJECT_TYPE_MAP[project.projectType] ? (
+            <View style={[D.statusBadge, { backgroundColor: PROJECT_TYPE_MAP[project.projectType].bg }]}>
+              <FontAwesome5
+                name={PROJECT_TYPE_MAP[project.projectType].icon}
+                size={10}
+                color={PROJECT_TYPE_MAP[project.projectType].accent}
+              />
+              <Text style={[D.statusBadgeText, { color: PROJECT_TYPE_MAP[project.projectType].accent }]}>
+                {project.projectType}
+              </Text>
+            </View>
+          ) : null}
           {displayLocation ? (
             <View style={D.locationChip}>
               <FontAwesome5 name="map-marker-alt" size={9} color="rgba(255,255,255,0.75)" />
@@ -552,6 +577,31 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               <Text style={D.descText}>{project.description}</Text>
             </View>
           ) : null}
+        </View>
+
+        {/* ── NOTICE TO PROCEED ── */}
+        <View style={D.card}>
+          <Text style={D.cardSectionLabel}>NOTICE TO PROCEED</Text>
+          {project.ntpFileUrl ? (
+            <TouchableOpacity
+              style={D.ntpRow}
+              onPress={() => Linking.openURL(project.ntpFileUrl!)}
+              activeOpacity={0.85}
+            >
+              <View style={D.ntpIconBox}>
+                <FontAwesome5 name="file-pdf" size={16} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={D.ntpTitle}>View NTP</Text>
+                <Text style={D.ntpSubtitle} numberOfLines={1}>
+                  {project.ntpFileName ?? "Notice to Proceed document"}
+                </Text>
+              </View>
+              <FontAwesome5 name="external-link-alt" size={12} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <Text style={D.ntpEmpty}>No NTP on file</Text>
+          )}
         </View>
 
         {/* ── ASSIGNED PERSONNEL ── */}
@@ -1023,6 +1073,25 @@ const D = StyleSheet.create({
   descLabelRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
   descLabel: { fontSize: 10, fontWeight: "800", color: COLORS.textTertiary, letterSpacing: 0.6 },
   descText:  { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
+
+  // ── NTP viewer ────────────────────────────────────────────────
+  ntpRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: COLORS.background, borderRadius: 14,
+    padding: 12,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  ntpIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: COLORS.primarySoft,
+  },
+  ntpTitle: { fontSize: 13, fontWeight: "800", color: COLORS.textPrimary },
+  ntpSubtitle: { fontSize: 11, fontWeight: "600", color: COLORS.textSecondary, marginTop: 2 },
+  ntpEmpty: {
+    fontSize: 12, fontWeight: "600", color: COLORS.textTertiary,
+    fontStyle: "italic",
+  },
 
   // ── Personnel grid (Assigned Personnel) ───────────────────────
   personnelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },

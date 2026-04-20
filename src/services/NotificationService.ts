@@ -1,57 +1,54 @@
 import {
   collection,
   doc,
-  getDocs,
+  limit,
+  onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
-import { db } from "../firebaseConfig";
-import { requireAuth } from "../utils/authGuard";
-import { getCached, invalidateCache, setCached } from "../utils/cache";
+import { auth, db } from "../firebaseConfig";
 import { logger } from "../utils/logger";
 import type { AppNotification } from "../types";
 
 export const NotificationService = {
-  getAll: async (): Promise<AppNotification[]> => {
-    requireAuth();
-    const cached = getCached<AppNotification[]>("notifications_all", 2 * 60 * 1000);
-    if (cached) return cached;
-
-    try {
-      const q = query(
-        collection(db, "notifications"),
-        orderBy("timestamp", "desc"),
-      );
-      const querySnapshot = await getDocs(q);
-      const results: AppNotification[] = querySnapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as AppNotification[];
-      setCached("notifications_all", results);
-      return results;
-    } catch (error: any) {
-      if (error?.code === "permission-denied") {
-        // Expected during auth flow — user may not have completed login yet
-      } else {
-        logger.error("Error fetching notifications:", error);
-      }
-      return [];
+  subscribe(
+    onUpdate: (notifs: AppNotification[]) => void,
+    onError?: (err: Error) => void,
+  ): () => void {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      onError?.(new Error("Not signed in"));
+      return () => {};
     }
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientUid", "==", uid),
+      orderBy("createdAt", "desc"),
+      limit(50),
+    );
+    return onSnapshot(
+      q,
+      (snap) =>
+        onUpdate(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AppNotification),
+        ),
+      (err) => {
+        logger.error("[Notifications] subscribe error:", err);
+        onError?.(err);
+      },
+    );
   },
 
-  markAsRead: async (notificationId: string): Promise<boolean> => {
-    requireAuth();
-    try {
-      const docRef = doc(db, "notifications", notificationId);
-      await updateDoc(docRef, { status: "Read" });
-      invalidateCache("notifications_all");
-      return true;
-    } catch (error: any) {
-      if (error?.code !== "permission-denied") {
-        logger.error("Error updating notification status:", error);
-      }
-      return false;
-    }
+  async markAsRead(notificationId: string): Promise<void> {
+    await updateDoc(doc(db, "notifications", notificationId), { isRead: true });
+  },
+
+  async dismiss(notificationId: string): Promise<void> {
+    await updateDoc(doc(db, "notifications", notificationId), {
+      dismissedAt: serverTimestamp(),
+    });
   },
 };

@@ -1,66 +1,81 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NotificationService } from "../services/NotificationService";
 import type { AppNotification } from "../types";
 import { logger } from "../utils/logger";
 
-export const useNotificationPresenter = () => {
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+interface UseNotificationPresenterArgs {
+  onNavigateToProject?: (projectId: string) => void;
+}
 
-  const loadNotifications = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await NotificationService.getAll();
-      setNotifications(data);
-    } catch (error) {
-      logger.error("Load Notifications Error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+export const useNotificationPresenter = (
+  { onNavigateToProject }: UseNotificationPresenterArgs = {},
+) => {
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    setIsLoading(true);
+    const unsubscribe = NotificationService.subscribe(
+      (items) => {
+        setNotifications(items);
+        setIsLoading(false);
+      },
+      (err) => {
+        logger.error("[Notifications] subscribe failed:", err);
+        setIsLoading(false);
+      },
+    );
+    return unsubscribe;
+  }, []);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications],
+  );
 
   const handleItemPress = async (item: AppNotification) => {
-    if (item.status === "Unread") {
+    if (!item.isRead) {
       setNotifications((prev) =>
-        prev.map((n) => (n.id === item.id ? { ...n, status: "Read" } : n)),
+        prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
       );
-
-      try {
-        await NotificationService.markAsRead(item.id);
-      } catch (error) {
-        logger.error("Mark Read Error:", error);
-        loadNotifications();
-      }
+      NotificationService.markAsRead(item.id).catch((err) => {
+        logger.error("[Notifications] markAsRead error:", err);
+      });
+    }
+    if (item.targetType === "project" && item.targetId && onNavigateToProject) {
+      onNavigateToProject(item.targetId);
     }
   };
 
   const handleMarkAllAsRead = async () => {
-    const unread = notifications.filter((n) => n.status === "Unread");
+    const unread = notifications.filter((n) => !n.isRead);
     if (unread.length === 0) return;
 
-    // Optimistic update
     setNotifications((prev) =>
-      prev.map((n) => (n.status === "Unread" ? { ...n, status: "Read" } : n)),
+      prev.map((n) => (n.isRead ? n : { ...n, isRead: true })),
     );
 
     try {
       await Promise.all(unread.map((n) => NotificationService.markAsRead(n.id)));
     } catch (error) {
-      logger.error("Mark All Read Error:", error);
-      loadNotifications();
+      logger.error("[Notifications] markAllAsRead error:", error);
+    }
+  };
+
+  const handleDismiss = async (id: string) => {
+    try {
+      await NotificationService.dismiss(id);
+    } catch (error) {
+      logger.error("[Notifications] dismiss error:", error);
     }
   };
 
   return {
-    data: { notifications, isLoading },
+    data: { notifications, unreadCount, isLoading },
     actions: {
-      refresh: loadNotifications,
       onPressItem: handleItemPress,
       markAllAsRead: handleMarkAllAsRead,
+      onDismiss: handleDismiss,
     },
   };
 };

@@ -140,67 +140,84 @@ async function logAuditTrail(
 //  review, optionally edit/delete each one, then batch-confirm before they
 //  appear in the project details proper.
 //
-//  Weights sum to 100 so the weighted-progress calculation in the mobile
-//  ProjectModel.computeProgress() returns clean percentages.
+//  Templates are keyed by the project's `projectType` field (set by the web
+//  app on project creation). Unknown or missing types fall back to "Other"
+//  and the audit trail records the fallback for traceability.
 //
-const STANDARD_MILESTONES = [
-  {
-    title: "Site Clearing & Preparation",
-    sequence: 1,
-    description: "Clear vegetation, remove debris, mark site boundaries, and prepare ground for excavation. Verify access roads and staging areas.",
-    weightPercentage: 5,
-    suggestedDurationDays: 5,
-  },
-  {
-    title: "Foundation Works",
-    sequence: 2,
-    description: "Excavate footings, install rebar, pour concrete foundation, and cure. Verify alignment with project plan and check soil bearing capacity.",
-    weightPercentage: 15,
-    suggestedDurationDays: 14,
-  },
-  {
-    title: "Structural / Framing Works",
-    sequence: 3,
-    description: "Erect columns, beams, and load-bearing structures. Verify all structural members against plans for dimensions and reinforcement spec.",
-    weightPercentage: 20,
-    suggestedDurationDays: 21,
-  },
-  {
-    title: "Masonry & Concrete Works",
-    sequence: 4,
-    description: "Construct exterior and interior walls, slabs, and concrete features. Verify wall thickness, plumbness, and proper curing time.",
-    weightPercentage: 15,
-    suggestedDurationDays: 14,
-  },
-  {
-    title: "Roofing Works",
-    sequence: 5,
-    description: "Install roof trusses, sheeting, gutters, and waterproofing. Verify watertight integrity and proper drainage slope.",
-    weightPercentage: 10,
-    suggestedDurationDays: 10,
-  },
-  {
-    title: "Plumbing & Electrical Rough-In",
-    sequence: 6,
-    description: "Run water supply lines, drainage, conduits, and electrical wiring before walls are sealed. Verify against plans and code.",
-    weightPercentage: 12,
-    suggestedDurationDays: 12,
-  },
-  {
-    title: "Finishing Works",
-    sequence: 7,
-    description: "Install fixtures, doors, windows, paint, tiling, and final electrical/plumbing fittings. Verify quality of finishes against contract spec.",
-    weightPercentage: 18,
-    suggestedDurationDays: 18,
-  },
-  {
-    title: "Final Inspection & Turnover",
-    sequence: 8,
-    description: "Conduct punch-list walkthrough, address deficiencies, complete final cleanup, and prepare turnover documents for handover.",
-    weightPercentage: 5,
-    suggestedDurationDays: 3,
-  },
-];
+const MILESTONE_TEMPLATES: Record<string, string[]> = {
+  "Building Construction": [
+    "Site Preparation & Mobilization",
+    "Excavation & Foundation Works",
+    "Structural Framing",
+    "Masonry & Wall Works",
+    "Roofing Works",
+    "Plumbing Rough-In",
+    "Electrical Rough-In",
+    "Finishing Works",
+    "Final Inspection & Turnover",
+  ],
+  "Roads & Pavement": [
+    "Site Clearing & Survey",
+    "Subgrade Preparation",
+    "Base Course Installation",
+    "Drainage Provisions",
+    "Concreting & Paving Works",
+    "Curing Period",
+    "Line Striping & Signage",
+    "Final Inspection & Acceptance",
+  ],
+  "Drainage & Flood Control": [
+    "Site Survey & Staking",
+    "Excavation",
+    "Lean Concrete Works",
+    "Pipe & Culvert Laying",
+    "Manhole & Catch Basin Construction",
+    "Backfill & Compaction",
+    "Surface Restoration",
+    "Hydraulic Testing",
+    "Final Inspection & Acceptance",
+  ],
+  "Water Supply": [
+    "Site Survey & Staking",
+    "Trenching & Excavation",
+    "Mainline Pipe Laying",
+    "Valve & Fitting Installation",
+    "Service Connections",
+    "Pressure Testing",
+    "Disinfection & Flushing",
+    "Backfill & Surface Restoration",
+    "Final Inspection & Acceptance",
+  ],
+  "Electrical & Lighting": [
+    "Site Survey & Fixture Layout",
+    "Post & Pole Installation",
+    "Conduit & Wiring Installation",
+    "Fixture Mounting",
+    "Panel Board & Meter Installation",
+    "Grounding Works",
+    "Circuit Testing & Commissioning",
+    "Final Inspection & Energization",
+  ],
+  "Public Facility Rehabilitation": [
+    "Condition Assessment & Documentation",
+    "Demolition of Defective Elements",
+    "Structural Repairs",
+    "Plumbing & Electrical Repairs",
+    "Masonry & Finishing Repairs",
+    "Painting Works",
+    "Fixture Replacement",
+    "Final Inspection & Turnover",
+  ],
+  "Other": [
+    "Project Mobilization",
+    "Site Preparation",
+    "Implementation Phase 1",
+    "Implementation Phase 2",
+    "Implementation Phase 3",
+    "Final Inspection",
+    "Project Turnover",
+  ],
+};
 
 export const generateMilestones = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
@@ -223,6 +240,15 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("permission-denied", "Only the assigned engineer can generate milestones.");
   }
 
+  // Resolve the project type. Unknown or missing values fall back to "Other"
+  // so legacy projects still generate something usable. The audit note below
+  // records the fallback for traceability.
+  const KNOWN_TYPES = new Set(Object.keys(MILESTONE_TEMPLATES));
+  const rawType = typeof projectData.projectType === "string" ? projectData.projectType : "";
+  const resolvedType = KNOWN_TYPES.has(rawType) ? rawType : "Other";
+  const template = MILESTONE_TEMPLATES[resolvedType];
+  const fellBack = rawType !== resolvedType;
+
   // Idempotency — prevent duplicates. Includes drafts (confirmed: false)
   // so the engineer can't accidentally re-generate over an in-progress review.
   const existingSnap = await admin.firestore()
@@ -237,14 +263,15 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
   const batch = admin.firestore().batch();
   const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
 
-  STANDARD_MILESTONES.forEach((m) => {
+  template.forEach((title, i) => {
     const docRef = msCollection.doc();
     batch.set(docRef, {
-      ...m,
+      title,
+      sequence: i + 1,
       status: "Pending",
       proofs: [],
       confirmed: false,        // drafts — engineer must review to commit
-      generatedBy: "ai",
+      generatedBy: "template", // provenance marker, not an LLM author
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
@@ -253,12 +280,18 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
 
   const uid   = request.auth.uid;
   const email = request.auth.token.email || "";
-  await logAuditTrail(uid, email, "Milestones Drafted", `Project: ${projectId}`, true);
+  const suffix = fellBack ? ` (fallback: unknown type "${rawType}")` : "";
+  await logAuditTrail(
+    uid, email,
+    "Milestones Drafted",
+    `Project: ${projectId} (type: ${resolvedType})${suffix}`,
+    true,
+  );
 
   return {
     success: true,
-    count: STANDARD_MILESTONES.length,
-    projectType: "construction",
+    count: template.length,
+    projectType: resolvedType,
   };
 });
 

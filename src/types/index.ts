@@ -55,6 +55,15 @@ export interface Project {
   // ── Canonical field names written by web app HCSD ──────────────
   projectName?: string;
   projectEngineer?: string;  // holds the engineer's auth UID (yes, despite the name)
+  // Project category used by the server to pick a milestone template. One of
+  // the seven LGU categories; legacy docs may not have it, so always optional.
+  projectType?: string;
+  // Notice to Proceed metadata. Only written by HCSD via the web app's
+  // attachNtp Cloud Function. Mobile reads are permitted; writes are not.
+  ntpFileUrl?: string;
+  ntpFileName?: string;
+  ntpUploadedAt?: FirestoreTimestamp;
+  ntpUploadedBy?: string;
   barangay?: string;
   sitioStreet?: string;
   fundingSource?: string;
@@ -118,10 +127,17 @@ export interface UserProfile {
 
 export interface AppNotification {
   id: string;
-  type?: string;
-  status?: string;
-  Message?: string;
-  timestamp?: FirestoreTimestamp;
+  recipientUid: string;
+  action: string;
+  severity: "info" | "success" | "critical";
+  title: string;
+  body: string;
+  targetType: "project" | null;
+  targetId: string | null;
+  metadata?: Record<string, unknown>;
+  isRead: boolean;
+  dismissedAt?: FirestoreTimestamp | null;
+  createdAt: FirestoreTimestamp;
 }
 
 export interface AuditTrail {

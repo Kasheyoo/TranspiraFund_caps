@@ -1,8 +1,8 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,17 +11,18 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
-import type { AppNotification } from "../types";
+import type { AppNotification, FirestoreTimestamp } from "../types";
 
 interface NotificationsData {
   notifications: AppNotification[];
+  unreadCount: number;
   isLoading: boolean;
 }
 
 interface NotificationsActions {
   onPressItem: (item: AppNotification) => void;
-  refresh: () => void;
   markAllAsRead?: () => void;
+  onDismiss?: (id: string) => void;
 }
 
 interface NotificationsViewProps {
@@ -29,11 +30,26 @@ interface NotificationsViewProps {
   actions: NotificationsActions;
 }
 
-const FILTERS = ["All", "Unread", "Read", "System"];
+const FILTERS = ["All", "Unread", "Read", "Critical"] as const;
+type FilterName = (typeof FILTERS)[number];
 
-const getRelativeTime = (seconds: number): string => {
-  const now  = Date.now();
-  const diff = now - seconds * 1000;
+const SEV: Record<
+  AppNotification["severity"],
+  { icon: string; color: string; bg: string; label: string }
+> = {
+  info:     { icon: "info-circle",        color: COLORS.primary, bg: COLORS.primarySoft, label: "Info"     },
+  success:  { icon: "check-circle",       color: COLORS.success, bg: COLORS.successSoft, label: "Success"  },
+  critical: { icon: "exclamation-circle", color: COLORS.error,   bg: COLORS.errorSoft,   label: "Critical" },
+};
+
+const tsToDate = (ts?: FirestoreTimestamp | null): Date | null => {
+  if (!ts || typeof ts.seconds !== "number") return null;
+  return new Date(ts.seconds * 1000);
+};
+
+const getRelativeTime = (d: Date | null): string => {
+  if (!d) return "";
+  const diff = Date.now() - d.getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1)  return "Just now";
   if (mins < 60) return `${mins}m ago`;
@@ -41,38 +57,26 @@ const getRelativeTime = (seconds: number): string => {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7)  return `${days}d ago`;
-  return new Date(seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-};
-
-const getNotifIcon = (type = "", isUnread: boolean) => {
-  const t = type.toLowerCase();
-  if (t === "system") return { name: "cog",         color: "#7C3AED", bg: "#EDE9FE" };
-  if (t === "alert")  return { name: "exclamation-circle", color: COLORS.error, bg: COLORS.errorSoft };
-  if (t === "update") return { name: "pen",          color: "#D97706", bg: "#FEF3C7" };
-  return isUnread
-    ? { name: "bell",   color: COLORS.primary, bg: COLORS.primarySoft }
-    : { name: "bell",   color: COLORS.textTertiary, bg: COLORS.background };
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 };
 
 export const NotificationsView = ({ data, actions }: NotificationsViewProps) => {
   const insets = useSafeAreaInsets();
-  const { notifications = [], isLoading = false } = data || {};
-  const [activeFilter, setActiveFilter] = useState("All");
+  const { notifications = [], unreadCount = 0, isLoading = false } = data || {};
+  const [activeFilter, setActiveFilter] = useState<FilterName>("All");
 
   const filteredData = useMemo(() => {
-    if (activeFilter === "All")    return notifications;
-    if (activeFilter === "Unread") return notifications.filter((n) => n.status === "Unread");
-    if (activeFilter === "Read")   return notifications.filter((n) => n.status === "Read");
-    if (activeFilter === "System") return notifications.filter((n) => n.type === "System");
+    if (activeFilter === "Unread")   return notifications.filter((n) => !n.isRead);
+    if (activeFilter === "Read")     return notifications.filter((n) =>  n.isRead);
+    if (activeFilter === "Critical") return notifications.filter((n) => n.severity === "critical");
     return notifications;
   }, [notifications, activeFilter]);
 
-  const unreadCount = notifications.filter((n) => n.status === "Unread").length;
-
   const renderItem = ({ item, index }: { item: AppNotification; index: number }) => {
-    const isUnread = item.status === "Unread";
-    const icon     = getNotifIcon(item.type, isUnread);
+    const sev      = SEV[item.severity] || SEV.info;
+    const isUnread = !item.isRead;
     const isLast   = index === filteredData.length - 1;
+    const when     = getRelativeTime(tsToDate(item.createdAt));
 
     return (
       <TouchableOpacity
@@ -80,25 +84,22 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
         onPress={() => actions?.onPressItem(item)}
         activeOpacity={0.75}
       >
-        {/* Icon box */}
-        <View style={[S.notifIcon, { backgroundColor: icon.bg }]}>
-          <FontAwesome5 name={icon.name} size={14} color={icon.color} />
+        <View style={[S.notifIcon, { backgroundColor: sev.bg }]}>
+          <FontAwesome5 name={sev.icon} size={14} color={sev.color} />
         </View>
 
-        {/* Content */}
         <View style={S.notifBody}>
           <View style={S.notifMeta}>
-            <Text style={S.notifType}>{item.type || "Notification"}</Text>
-            <Text style={S.notifTime}>
-              {item.timestamp?.seconds ? getRelativeTime(item.timestamp.seconds) : "Just now"}
+            <Text style={[S.notifTitle, isUnread && S.notifTitleUnread]} numberOfLines={1}>
+              {item.title || "Notification"}
             </Text>
+            <Text style={S.notifTime}>{when}</Text>
           </View>
           <Text style={[S.notifMessage, isUnread && S.notifMessageUnread]} numberOfLines={2}>
-            {item.Message || "No message content"}
+            {item.body || ""}
           </Text>
         </View>
 
-        {/* Unread dot */}
         {isUnread && <View style={S.unreadDot} />}
       </TouchableOpacity>
     );
@@ -111,7 +112,6 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
       <View style={[S.hero, { paddingTop: insets.top + 20 }]}>
         <View style={S.orb1} /><View style={S.orb2} />
 
-        {/* Top row: title left · mark-all right */}
         <View style={S.heroTopRow}>
           <Text style={S.heroTitle}>Notifications</Text>
           {unreadCount > 0 && actions?.markAllAsRead && (
@@ -122,7 +122,6 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
           )}
         </View>
 
-        {/* Unread count — only shown when there are unread items */}
         {unreadCount > 0 && (
           <View style={S.heroStatusRow}>
             <View style={S.unreadPill}>
@@ -157,31 +156,30 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
       </View>
 
       {/* ══ LIST ══════════════════════════════════════════════════ */}
-      <FlatList
-        data={filteredData}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[S.listContent, { paddingBottom: insets.bottom + 110 }]}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={actions?.refresh}
-            tintColor={COLORS.primary}
-            colors={[COLORS.primary]}
-          />
-        }
-        ListEmptyComponent={
-          !isLoading ? (
+      {isLoading && notifications.length === 0 ? (
+        <View style={S.loadingBox}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={S.loadingText}>Loading notifications…</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredData}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[S.listContent, { paddingBottom: insets.bottom + 110 }]}
+          ListEmptyComponent={
             <View style={S.emptyBox}>
               <View style={S.emptyIconBox}>
                 <FontAwesome5 name="bell-slash" size={22} color={COLORS.textTertiary} />
               </View>
-              <Text style={S.emptyTitle}>No {activeFilter === "All" ? "" : activeFilter.toLowerCase() + " "}notifications</Text>
-              <Text style={S.emptyBody}>Pull down to refresh your alerts.</Text>
+              <Text style={S.emptyTitle}>
+                No {activeFilter === "All" ? "" : activeFilter.toLowerCase() + " "}notifications
+              </Text>
+              <Text style={S.emptyBody}>You'll see alerts here the moment they arrive.</Text>
             </View>
-          ) : null
-        }
-      />
+          }
+        />
+      )}
     </View>
   );
 };
@@ -190,7 +188,6 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
 
-  // ── Hero ──────────────────────────────────────────────────────
   hero: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -205,8 +202,6 @@ const S = StyleSheet.create({
     position: "absolute", width: 120, height: 120, borderRadius: 60,
     backgroundColor: "rgba(255,255,255,0.04)", bottom: -40, left: -20,
   },
-  heroInner:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  heroLeft:     { flex: 1, paddingRight: 16 },
   heroTopRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   heroTitle:    { fontSize: 28, fontWeight: "900", color: "#fff" },
   heroStatusRow:{ flexDirection: "row", alignItems: "center", gap: 6 },
@@ -219,30 +214,6 @@ const S = StyleSheet.create({
   },
   unreadPillText: { fontSize: 11, fontWeight: "800", color: "#fff" },
 
-  // Bell icon
-  bellRing: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: "rgba(255,255,255,0.3)",
-    flexShrink: 0,
-  },
-  bellCircle: {
-    width: 54, height: 54, borderRadius: 27,
-    backgroundColor: "#fff",
-    alignItems: "center", justifyContent: "center",
-  },
-  bellBadge: {
-    position: "absolute", top: 6, right: 6,
-    backgroundColor: COLORS.error,
-    borderRadius: 8, minWidth: 16, height: 16,
-    alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 3,
-    borderWidth: 1.5, borderColor: "#fff",
-  },
-  bellBadgeText: { fontSize: 8, fontWeight: "900", color: "#fff" },
-
-  // Mark all read — ghost button at bottom of hero
   markAllBtn: {
     flexDirection: "row", alignItems: "center", gap: 7,
     alignSelf: "flex-start",
@@ -253,7 +224,6 @@ const S = StyleSheet.create({
   },
   markAllText: { fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.9)" },
 
-  // ── Filter chips ──────────────────────────────────────────────
   filterWrap:   { backgroundColor: COLORS.primary, paddingBottom: 16 },
   filterScroll: { paddingHorizontal: 20, gap: 8, flexDirection: "row" },
   chip: {
@@ -269,7 +239,6 @@ const S = StyleSheet.create({
   chipText:       { fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.85)" },
   chipTextActive: { color: COLORS.primary },
 
-  // ── List ──────────────────────────────────────────────────────
   listContent: { paddingHorizontal: 18, paddingTop: 16 },
 
   notifRow: {
@@ -292,14 +261,16 @@ const S = StyleSheet.create({
   notifBody: { flex: 1 },
   notifMeta: {
     flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 4,
+    alignItems: "center", marginBottom: 4, gap: 8,
   },
-  notifType: {
-    fontSize: 10, fontWeight: "800", color: COLORS.textTertiary,
-    textTransform: "uppercase", letterSpacing: 0.5,
+  notifTitle: {
+    fontSize: 13, fontWeight: "700", color: COLORS.textSecondary, flex: 1,
+  },
+  notifTitleUnread: {
+    color: COLORS.textPrimary, fontWeight: "800",
   },
   notifTime:         { fontSize: 10, color: COLORS.textTertiary, fontWeight: "600" },
-  notifMessage:      { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, fontWeight: "500" },
+  notifMessage:      { fontSize: 12, color: COLORS.textSecondary, lineHeight: 17, fontWeight: "500" },
   notifMessageUnread:{ color: COLORS.textPrimary, fontWeight: "600" },
 
   unreadDot: {
@@ -308,7 +279,9 @@ const S = StyleSheet.create({
     marginTop: 6, flexShrink: 0,
   },
 
-  // ── Empty state ───────────────────────────────────────────────
+  loadingBox:  { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: "600" },
+
   emptyBox:     { alignItems: "center", paddingTop: 60, gap: 8 },
   emptyIconBox: {
     width: 60, height: 60, borderRadius: 18,
