@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
 import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal";
@@ -22,12 +22,12 @@ interface ProjectDetailsData {
   engineerName?: string | null;
   engineerPhotoURL?: string;
   isLoading: boolean;
+  lastViewedMilestoneId?: string | null;
 }
 
 interface GenerateMilestonesResult {
   ok: boolean;
   count?: number;
-  projectType?: string;
   errorCode?:
     | "unauthenticated" | "invalid-argument" | "not-found"
     | "permission-denied" | "already-exists" | "internal" | "unknown";
@@ -62,18 +62,6 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
   "For Mayor":   { accent: "#7C3AED",      bg: "#EDE9FE",           text: "#7C3AED",      icon: "user-tie"           },
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
-
-// ── Project Type config ──────────────────────────────────────────────────────
-// Seven LGU project categories sourced from the web app HCSD dropdown.
-const PROJECT_TYPE_MAP: Record<string, { accent: string; bg: string; icon: string }> = {
-  "Building Construction":          { accent: COLORS.primary, bg: COLORS.primarySoft, icon: "building"  },
-  "Roads & Pavement":                { accent: "#7C3AED",      bg: "#EDE9FE",           icon: "road"      },
-  "Drainage & Flood Control":        { accent: "#06B6D4",      bg: "#ECFEFF",           icon: "water"     },
-  "Water Supply":                    { accent: "#3B82F6",      bg: "#EFF6FF",           icon: "tint"      },
-  "Electrical & Lighting":           { accent: COLORS.warning, bg: COLORS.warningSoft,  icon: "bolt"      },
-  "Public Facility Rehabilitation":  { accent: COLORS.success, bg: COLORS.successSoft,  icon: "hammer"    },
-  "Other":                           { accent: "#64748B",      bg: "#F1F5F9",           icon: "briefcase" },
-};
 
 // Pre-active statuses set by the web app workflow — always display as In Progress on mobile
 const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
@@ -253,7 +241,16 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
 export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsViewProps) => {
   const insets = useSafeAreaInsets();
   const [milestoneModalVisible, setMilestoneModalVisible] = useState(false);
-  const { project, engineerName, engineerPhotoURL, isLoading } = data;
+  const { project, engineerName, engineerPhotoURL, isLoading, lastViewedMilestoneId } = data;
+
+  // Scroll-restore plumbing. When the engineer returns from MilestoneDetailsView
+  // (either via hardware back intercepted in ProjectDetailsScreen or the
+  // in-view back button), ProjectDetailsView re-mounts from scratch — refs are
+  // fresh, so a mount-time useEffect fires BEFORE any card has laid out and
+  // cardYRef is still empty. Instead, the target card's own onLayout triggers
+  // the scroll once, guaranteed to run after the card knows its y position.
+  const scrollRef = useRef<ScrollView>(null);
+  const hasScrolledRef = useRef(false);
 
   if (!project) return null;
 
@@ -290,11 +287,15 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const initials = displayEngineer
     ?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() ?? "PE";
 
-  // Project Accomplishment (mirrors web calculation)
+  // Project Accomplishment — drive from the locally-computed milestone weight
+  // sum (same value as the hero ring) so this section never drifts from what
+  // the user can eyeball from the milestone cards. The web-side `actualPercent`
+  // field is still Firestore's source of truth for HCSD reporting; mobile just
+  // doesn't read it here.
   const accomplishment = computeAccomplishment(
     displayStart,
     displayCompletion,
-    project.actualPercent,
+    project.progress,
   );
   const hasTimeline = !!(displayStart && displayCompletion);
   const slippageIsBehind = accomplishment.slippage > 0;
@@ -350,18 +351,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             <FontAwesome5 name={sc.icon} size={10} color={sc.accent} />
             <Text style={[D.statusBadgeText, { color: sc.text }]}>{status}</Text>
           </View>
-          {project.projectType && PROJECT_TYPE_MAP[project.projectType] ? (
-            <View style={[D.statusBadge, { backgroundColor: PROJECT_TYPE_MAP[project.projectType].bg }]}>
-              <FontAwesome5
-                name={PROJECT_TYPE_MAP[project.projectType].icon}
-                size={10}
-                color={PROJECT_TYPE_MAP[project.projectType].accent}
-              />
-              <Text style={[D.statusBadgeText, { color: PROJECT_TYPE_MAP[project.projectType].accent }]}>
-                {project.projectType}
-              </Text>
-            </View>
-          ) : null}
           {displayLocation ? (
             <View style={D.locationChip}>
               <FontAwesome5 name="map-marker-alt" size={9} color="rgba(255,255,255,0.75)" />
@@ -415,6 +404,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
       {/* ══ SCROLLABLE CONTENT ══════════════════════════════════════ */}
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[D.scroll, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -543,14 +533,14 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 <Text style={D.detailCellValue}>{project.accountCode}</Text>
               </View>
             ) : null}
-            {(project.actualPercent !== undefined && project.actualPercent !== null) ? (
+            {(project.progress !== undefined && project.progress !== null) ? (
               <View style={D.detailCell}>
                 <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
                   <FontAwesome5 name="percentage" size={12} color={COLORS.primary} />
                 </View>
                 <Text style={D.detailCellLabel}>Actual %</Text>
                 <Text style={[D.detailCellValue, { color: COLORS.primary, fontWeight: "900" }]}>
-                  {project.actualPercent}%
+                  {project.progress}%
                 </Text>
               </View>
             ) : null}
@@ -665,7 +655,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               <View style={D.accompCell}>
                 <Text style={D.detailCellLabel}>Actual Progress</Text>
                 <Text style={D.accompValue}>
-                  {project.actualPercent ?? 0}
+                  {project.progress ?? 0}
                   <Text style={D.accompUnit}>%</Text>
                 </Text>
                 <Text style={D.accompSub}>% of work completed</Text>
@@ -707,10 +697,10 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               <View style={D.accompBarLabel}>
                 <View style={[D.accompLegendDot, { backgroundColor: COLORS.warning }]} />
                 <Text style={D.accompBarLabelText}>ACTUAL PROGRESS</Text>
-                <Text style={D.accompBarPct}>{project.actualPercent ?? 0}%</Text>
+                <Text style={D.accompBarPct}>{project.progress ?? 0}%</Text>
               </View>
               <View style={D.progressTrack}>
-                <View style={[D.progressFill, { width: `${project.actualPercent ?? 0}%` as any, backgroundColor: COLORS.warning }]} />
+                <View style={[D.progressFill, { width: `${project.progress ?? 0}%` as any, backgroundColor: COLORS.warning }]} />
               </View>
             </View>
 
@@ -843,7 +833,29 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         ) : null}
 
         {/* ── MILESTONES ── */}
-        <View>
+        <View
+          onLayout={(e) => {
+            // Scroll-restore landing target: when the engineer returns from a
+            // specific milestone, drop them at the "Construction Phases"
+            // section so they can eyeball all phases, not only the one they
+            // just viewed. Gate on State C (totalMs > 0) — if phases aren't
+            // generated yet or are still drafts, there's nothing to return to.
+            if (
+              totalMs > 0 &&
+              lastViewedMilestoneId &&
+              !hasScrolledRef.current
+            ) {
+              hasScrolledRef.current = true;
+              const y = e.nativeEvent.layout.y;
+              requestAnimationFrame(() => {
+                scrollRef.current?.scrollTo({
+                  y: Math.max(0, y - 8),
+                  animated: true,
+                });
+              });
+            }
+          }}
+        >
           {/* Section header — only shown once confirmed phases exist */}
           {totalMs > 0 ? (
             <View style={D.msHeader}>

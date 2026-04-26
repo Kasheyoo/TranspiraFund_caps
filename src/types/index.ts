@@ -9,34 +9,41 @@ export interface Proof {
   // Stable id — `${capturedAt}_${uid}` so duplicate uploads dedupe and
   // HCSD can reference a single submission unambiguously.
   id: string;
+  // Storage file name, e.g. "1712345678901.jpg".
+  fileName?: string;
+  // Multi-tenant scope (written by backend, validated by Rules)
+  tenantId?: string;
 
   // ── Storage layer ──────────────────────────────────────────────
   url: string;            // Public download URL (Firebase Storage signed)
   storagePath: string;    // Full bucket path — needed for cleanup / re-issue
 
   // ── Geo (camera-time, not upload-time) ─────────────────────────
-  latitude: number;
-  longitude: number;
+  gps?: { lat: number; lng: number };
   accuracy: number;       // GPS accuracy in meters at capture
   // Human-readable place name from server-side reverse geocode
   // (e.g. "Brgy. San Roque, Mati City, Davao Oriental"). Falls back to a
-  // "lat, lng" string when geocoding fails. Older proofs only ever stored
-  // the coord string — read sites should treat this as a freeform label.
+  // "lat, lng" string when geocoding fails.
   location: string;
 
   // ── Provenance ─────────────────────────────────────────────────
-  capturedAt: number;     // ms epoch — moment the photo was taken
-  uploadedAt: number;     // ms epoch — moment the upload completed
+  capturedAt: FirestoreTimestamp;
+  uploadedAt: FirestoreTimestamp;
   uploadedBy: string;     // PROJ_ENG uid
 
-  // Backwards-compat — older proofs only had `timestamp`. Read paths
-  // should prefer `capturedAt` and fall back to `timestamp`.
+  // ── Legacy fields (read-only for pre-contract proofs) ──────────
+  // New writes no longer emit these. Keep them optional so read sites
+  // can still render historical records that pre-date the contract.
+  latitude?: number;
+  longitude?: number;
   timestamp?: number;
 }
 
 export interface Milestone {
   id: string;
   projectId?: string;   // kept for backward compat; subcollection path is canonical
+  // Multi-tenant scope (written by backend, validated by Rules)
+  tenantId?: string;
   title: string;
   status?: string;
   sequence?: number;
@@ -52,12 +59,11 @@ export interface Milestone {
 
 export interface Project {
   id: string;
+  // Multi-tenant scope (written by backend, validated by Rules)
+  tenantId?: string;
   // ── Canonical field names written by web app HCSD ──────────────
   projectName?: string;
   projectEngineer?: string;  // holds the engineer's auth UID (yes, despite the name)
-  // Project category used by the server to pick a milestone template. One of
-  // the seven LGU categories; legacy docs may not have it, so always optional.
-  projectType?: string;
   // Notice to Proceed metadata. Only written by HCSD via the web app's
   // attachNtp Cloud Function. Mobile reads are permitted; writes are not.
   ntpFileUrl?: string;
@@ -118,6 +124,8 @@ export interface UserProfile {
   lastName?: string;
   department?: string;
   role?: string;
+  // Multi-tenant scope (written by backend, validated by Rules)
+  tenantId?: string;
   status?: string;
   firstTimeAccess?: boolean;    // legacy field (unused by web app)
   mustChangePassword?: boolean; // set by web app on account creation
@@ -125,8 +133,18 @@ export interface UserProfile {
   photoURL?: string;
 }
 
+export interface Tenant {
+  // PSGC-derived id, e.g. "cebu-city-0730600000"
+  tenantId: string;
+  lguName: string;
+  psgcCode?: string;
+  createdAt?: FirestoreTimestamp;
+}
+
 export interface AppNotification {
   id: string;
+  // Multi-tenant scope (written by backend, validated by Rules)
+  tenantId?: string;
   recipientUid: string;
   action: string;
   severity: "info" | "success" | "critical";
@@ -142,10 +160,19 @@ export interface AppNotification {
 
 export interface AuditTrail {
   id: string;
-  uid?: string;      // actor's Firebase UID — key into users/{uid}
+  // Multi-tenant scope (written by backend, validated by Rules)
+  tenantId?: string;
+  actorUid?: string; // actor's Firebase UID — key into users/{uid}
   email?: string;    // actor's email — fallback if user doc is missing
   action?: string;
-  details?: string;
+  // Structured payload for the HCSD fan-out contract. Legacy pre-contract
+  // docs stored a plain string here, so read sites still accept string.
+  details?: string | { projectId?: string; milestoneId?: string; message?: string };
+  targetId?: string;
+  createdAt?: FirestoreTimestamp;
+
+  // ── Legacy fields (read-only for pre-contract entries) ────────
+  uid?: string;
   platform?: string;
   timestamp?: FirestoreTimestamp;
 }

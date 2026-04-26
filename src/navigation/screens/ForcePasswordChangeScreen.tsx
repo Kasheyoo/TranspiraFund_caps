@@ -29,8 +29,8 @@ export function ForcePasswordChangeScreen() {
       // User just logged in + passed OTP — session is fresh
       await updatePassword(user, newPassword);
 
-      // Cloud Function sets mustChangePassword: false AND logs to
-      // both projEngAuditTrails + depwAuditTrails (Admin SDK)
+      // Clears mustChangePassword on the user record and writes the
+      // corresponding audit entry server-side.
       await callFn("completePasswordChange");
 
       // Show branded success overlay

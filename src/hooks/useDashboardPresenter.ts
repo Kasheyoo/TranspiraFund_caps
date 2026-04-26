@@ -19,12 +19,14 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
     : userProfile?.name || "Project Engineer";
   const engineerPhotoURL = userProfile?.photoURL;
 
-  const loadDashboard = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const projects = await ProjectModel.getAll();
-      if (projects.length > 0) {
-
+  // Live project stream so the "Completed" count ticks the moment the last
+  // milestone of a project is marked Completed — no need to pull-to-refresh.
+  // Status classification goes through ProjectModel.deriveStatus so a project
+  // with all milestones done reads as "Completed" even if the server-side
+  // status field hasn't flipped yet.
+  useEffect(() => {
+    const unsub = ProjectModel.subscribeToAll(
+      (projects) => {
         let inProgress = 0;
         let completed = 0;
         let delayed = 0;
@@ -32,7 +34,7 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
         let forMayor = 0;
 
         projects.forEach((proj) => {
-          const s = proj.status?.toLowerCase();
+          const s = ProjectModel.deriveStatus(proj).toLowerCase();
           if (s === "completed")                              completed++;
           else if (s === "delayed")                          delayed++;
           else if (s === "in progress" || s === "ongoing")   inProgress++;
@@ -41,25 +43,36 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
         });
 
         setStats({ progress: inProgress, done: completed, delay: delayed, draft, forMayor });
-      }
+        setIsLoading(false);
+      },
+      (error) => {
+        logger.error("Dashboard projects subscription error:", error);
+        setIsLoading(false);
+      },
+    );
+    return unsub;
+  }, []);
 
+  // Audit logs are one-shot — refreshed on mount and via onRefresh. Projects
+  // update live via the subscription above, so pull-to-refresh only re-fetches
+  // logs.
+  const loadLogs = useCallback(async () => {
+    try {
       const logs = await AuditTrailService.getAll();
       setRecentLogs(logs);
     } catch (error) {
-      logger.error("Dashboard Load Error:", error);
-    } finally {
-      setIsLoading(false);
+      logger.error("Dashboard logs load error:", error);
     }
   }, []);
 
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    loadLogs();
+  }, [loadLogs]);
 
   return {
     data: { stats, recentLogs, engineerName, engineerPhotoURL, isLoading },
-    actions: { 
-      onRefresh: loadDashboard,
+    actions: {
+      onRefresh: loadLogs,
       onViewAllActivity: () => navigation.navigate(ROUTES.AUDIT_TRAIL),
     },
   };

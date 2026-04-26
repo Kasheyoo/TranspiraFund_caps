@@ -1,4 +1,4 @@
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { onIdTokenChanged, signOut, type User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import {
   createContext,
@@ -10,8 +10,12 @@ import {
 } from "react";
 import { Alert, AppState } from "react-native";
 import { auth, db } from "../firebaseConfig";
-import type { UserProfile } from "../types";
+import type { Tenant, UserProfile } from "../types";
 import { SESSION_TIMEOUT_MS, SESSION_WARNING_MS } from "../utils/security";
+import {
+  clearSession as clearTenantSession,
+  setSession as setTenantSession,
+} from "../utils/tenant";
 
 interface AuthContextValue {
   user: User | null | undefined;
@@ -20,6 +24,12 @@ interface AuthContextValue {
   isOTPVerified: boolean;
   setIsOTPVerified: (verified: boolean) => void;
   refreshProfile: () => Promise<void>;
+  // Multi-tenant claim-derived fields. Populated after onIdTokenChanged
+  // fires with a valid PROJ_ENG account; cleared on logout or misconfig.
+  tenantId: string | null;
+  role: string | null;
+  lguName: string | null;
+  claimsLoaded: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -29,15 +39,28 @@ const AuthContext = createContext<AuthContextValue>({
   isOTPVerified: false,
   setIsOTPVerified: () => {},
   refreshProfile: async () => {},
+  tenantId: null,
+  role: null,
+  lguName: null,
+  claimsLoaded: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isOTPVerified, setIsOTPVerified] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [lguName, setLguName] = useState<string | null>(null);
+  const [claimsLoaded, setClaimsLoaded] = useState(false);
 
   // Distinguishes app-reopen (persisted session) vs fresh login
   const isInitialAuthCheckRef = useRef(true);
+  // Tracks last processed uid so token-refresh fires (same uid) don't
+  // refetch the profile or refire validation alerts.
+  const lastProcessedUidRef = useRef<string | null>(null);
+  // Dedupe the misconfig alert across the forced-signout fire-back.
+  const misconfigAlertShownRef = useRef(false);
 
   const lastActivityRef = useRef<number>(Date.now());
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -110,31 +133,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [resetActivity]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // onIdTokenChanged fires on sign-in, sign-out, AND token refresh —
+    // so claims are re-read whenever the token rotates, not just on login.
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       if (isInitialAuthCheckRef.current) {
         isInitialAuthCheckRef.current = false;
         // App just opened — always require fresh login.
         // Sign out any persisted session so user starts at landing page.
         if (firebaseUser) {
           await signOut(auth);
-          return; // onAuthStateChanged will fire again with null
+          return; // listener will fire again with null
         }
       }
 
-      // On logout → reset OTP gate so next login requires verification
-      if (!firebaseUser) setIsOTPVerified(false);
+      // Logout path — wipe every piece of derived state in one place
+      if (!firebaseUser) {
+        setIsOTPVerified(false);
+        setUser(null);
+        setUserProfile(null);
+        setTenantId(null);
+        setRole(null);
+        setLguName(null);
+        setClaimsLoaded(false);
+        clearTenantSession();
+        lastProcessedUidRef.current = null;
+        misconfigAlertShownRef.current = false;
+        return;
+      }
 
-      setUser(firebaseUser ?? null);
+      // Read custom claims. force=false uses the in-memory token, which is
+      // already fresh because onIdTokenChanged just fired.
+      let claimRole: string | undefined;
+      let claimTenantId: string | undefined;
+      try {
+        const tokenResult = await firebaseUser.getIdTokenResult();
+        claimRole = tokenResult.claims.role as string | undefined;
+        claimTenantId = tokenResult.claims.tenantId as string | undefined;
+      } catch {
+        // Treat as misconfig — fall through to the validation gate below.
+      }
 
-      if (firebaseUser) {
+      // Hard gate: mobile app is PROJ_ENG only, and tenantId is required.
+      // Anything else means the account is misprovisioned and the user
+      // needs MIS to fix it before they can use the app.
+      const isValid = claimRole === "PROJ_ENG" && !!claimTenantId;
+      if (!isValid) {
+        if (!misconfigAlertShownRef.current) {
+          misconfigAlertShownRef.current = true;
+          Alert.alert(
+            "Account Misconfigured",
+            "Your account is missing required setup. Please contact your MIS administrator.",
+          );
+        }
+        await signOut(auth);
+        return; // listener will fire again with null and reset state
+      }
+
+      const uid = firebaseUser.uid;
+      const isNewSession = uid !== lastProcessedUidRef.current;
+      lastProcessedUidRef.current = uid;
+
+      // Push session into the module-level cache so models/services can
+      // call requireTenantId() without threading it through every signature.
+      setTenantSession({
+        tenantId: claimTenantId!,
+        role: claimRole!,
+        lguName: null, // filled in below
+      });
+
+      setUser(firebaseUser);
+      setTenantId(claimTenantId!);
+      setRole(claimRole!);
+      setClaimsLoaded(true);
+
+      // Profile and tenant doc only need to be fetched once per session;
+      // token refreshes for the same uid skip the round trips.
+      if (isNewSession) {
         try {
-          const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+          const snap = await getDoc(doc(db, "users", uid));
           setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
         } catch {
           setUserProfile(null);
         }
-      } else {
-        setUserProfile(null);
+
+        try {
+          const tenantSnap = await getDoc(doc(db, "tenants", claimTenantId!));
+          if (tenantSnap.exists()) {
+            const tenantData = tenantSnap.data() as Tenant;
+            const name = tenantData.lguName ?? null;
+            setLguName(name);
+            setTenantSession({
+              tenantId: claimTenantId!,
+              role: claimRole!,
+              lguName: name,
+            });
+          }
+        } catch {
+          // lguName stays null; UI hides the row when null.
+        }
       }
     });
     return unsubscribe;
@@ -149,6 +245,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isOTPVerified,
         setIsOTPVerified,
         refreshProfile,
+        tenantId,
+        role,
+        lguName,
+        claimsLoaded,
       }}
     >
       {children}

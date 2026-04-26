@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
+import { ProjectModel } from "../models/ProjectModel";
 import type { Project } from "../types";
 
 interface ProjectListData {
@@ -46,17 +47,6 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-// ── Project Type config (mirrors ProjectDetailsView) ─────────────────────────
-const PROJECT_TYPE_MAP: Record<string, { accent: string; bg: string; icon: string }> = {
-  "Building Construction":          { accent: COLORS.primary, bg: COLORS.primarySoft, icon: "building"  },
-  "Roads & Pavement":                { accent: "#7C3AED",      bg: "#EDE9FE",           icon: "road"      },
-  "Drainage & Flood Control":        { accent: "#06B6D4",      bg: "#ECFEFF",           icon: "water"     },
-  "Water Supply":                    { accent: "#3B82F6",      bg: "#EFF6FF",           icon: "tint"      },
-  "Electrical & Lighting":           { accent: COLORS.warning, bg: COLORS.warningSoft,  icon: "bolt"      },
-  "Public Facility Rehabilitation":  { accent: COLORS.success, bg: COLORS.successSoft,  icon: "hammer"    },
-  "Other":                           { accent: "#64748B",      bg: "#F1F5F9",           icon: "briefcase" },
-};
-
 // Statuses that all map to "In Progress" on mobile
 const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
 const displayStatus = (raw: string) => ACTIVE_ALIASES[raw] ? "In Progress" : raw;
@@ -76,7 +66,7 @@ const StatsBar = ({ projects }: { projects: Project[] }) => {
   const counts = useMemo(() => {
     const c: Record<string, number> = { "In Progress": 0, "Completed": 0, "Delayed": 0 };
     projects.forEach((p) => {
-      const display = displayStatus(p.status ?? "");
+      const display = displayStatus(ProjectModel.deriveStatus(p));
       if (c[display] !== undefined) c[display]++;
     });
     return c;
@@ -117,7 +107,7 @@ const statsStyles = StyleSheet.create({
 
 // ── Project card ──────────────────────────────────────────────────────────────
 const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) => {
-  const status = displayStatus(item.status || "Pending");
+  const status = displayStatus(ProjectModel.deriveStatus(item));
   const sc     = STATUS_MAP[status] || DEFAULT_SC;
   const progress = item.progress || 0;
   const budget   = formatBudget(item.contractAmount ?? item.budget);
@@ -145,25 +135,8 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
             </Text>
           </View>
 
-          <View style={S.badgeCol}>
-            <View style={[S.badge, { backgroundColor: sc.bg }]}>
-              <Text style={[S.badgeText, { color: sc.text }]}>{status}</Text>
-            </View>
-            {item.projectType && PROJECT_TYPE_MAP[item.projectType] ? (
-              <View style={[S.typeBadge, { backgroundColor: PROJECT_TYPE_MAP[item.projectType].bg }]}>
-                <FontAwesome5
-                  name={PROJECT_TYPE_MAP[item.projectType].icon}
-                  size={8}
-                  color={PROJECT_TYPE_MAP[item.projectType].accent}
-                />
-                <Text
-                  style={[S.typeBadgeText, { color: PROJECT_TYPE_MAP[item.projectType].accent }]}
-                  numberOfLines={1}
-                >
-                  {item.projectType}
-                </Text>
-              </View>
-            ) : null}
+          <View style={[S.badge, { backgroundColor: sc.bg }]}>
+            <Text style={[S.badgeText, { color: sc.text }]}>{status}</Text>
           </View>
         </View>
 
@@ -223,7 +196,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   const filtered = useMemo(() => {
     const base = data.activeFilter === "All"
       ? data.projects
-      : data.projects.filter((p) => displayStatus(p.status ?? "") === data.activeFilter);
+      : data.projects.filter((p) => displayStatus(ProjectModel.deriveStatus(p)) === data.activeFilter);
     if (!search.trim()) return base;
     const q = search.toLowerCase();
     return base.filter((p) =>
@@ -406,16 +379,10 @@ const S = StyleSheet.create({
   cardTitle:   { fontSize: 14, fontWeight: "800", color: COLORS.textPrimary, lineHeight: 19, marginBottom: 3 },
   engineerRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   engineerText: { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600", flex: 1 },
-  badgeCol: { alignItems: "flex-end", gap: 4, flexShrink: 0, maxWidth: 120 },
   badge: {
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, flexShrink: 0,
   },
   badgeText: { fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
-  typeBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6,
-  },
-  typeBadgeText: { fontSize: 9, fontWeight: "800", flexShrink: 1 },
 
   // Chips
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 },

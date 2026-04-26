@@ -57,11 +57,15 @@ export function OTPVerificationScreen() {
     try {
       const success = await OTPService.verifyCode(code);
       if (success) {
+        // Pick up role/otpVerified claims updated by verifyOtp so subsequent
+        // callFn requests in this session carry the post-verify token.
+        await auth.currentUser?.getIdToken(true);
+
         const firstName = userProfile?.firstName || userProfile?.name?.split(" ")[0] || "Engineer";
         callFn("logMobileAuditTrail", {
           action: "Signed In",
           details: firstName,
-          syncToDEPW: false,
+          syncToHCSD: false,
         }).catch(() => {});
         setIsOTPVerified(true);
       } else {

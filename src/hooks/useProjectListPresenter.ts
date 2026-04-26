@@ -51,12 +51,18 @@ export const useProjectListPresenter = (
     return unsubscribe; // Cleans up listener on unmount
   }, []);
 
+  // Filter against the derived status (milestone-truthful) rather than the raw
+  // `project.status` field, so a project whose milestones are all Completed
+  // appears under "Completed" even before the web trigger has flipped the
+  // server-side status. Same helper the cards use, so the tab count matches
+  // what the engineer sees on each card. Pre-active web statuses (Draft /
+  // For Mayor / Ongoing) collapse to "In Progress" on mobile.
+  const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
   const filteredProjects = useMemo(() => {
     if (activeFilter === "All") return projects;
     return projects.filter((p) => {
-      const s = p.status ?? "";
-      const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
-      const display = ACTIVE_ALIASES[s] ? "In Progress" : s;
+      const raw = ProjectModel.deriveStatus(p);
+      const display = ACTIVE_ALIASES[raw] ? "In Progress" : raw;
       return display === activeFilter;
     });
   }, [projects, activeFilter]);

@@ -11,6 +11,8 @@ import { db } from "../firebaseConfig";
 import { requireAuth } from "../utils/authGuard";
 import { getCached, setCached } from "../utils/cache";
 import { logger } from "../utils/logger";
+import { logFirestoreError } from "../utils/permissionError";
+import { requireTenantId } from "../utils/tenant";
 import type { Milestone, Project } from "../types";
 
 export class ProjectModel {
@@ -101,10 +103,16 @@ export class ProjectModel {
   static async getAll(): Promise<Project[]> {
     const uid = requireAuth();
     try {
-      const cached = getCached<Project[]>("projects_all");
+      const tid = requireTenantId();
+      const cacheKey = `projects_all:${tid}`;
+      const cached = getCached<Project[]>(cacheKey);
       if (cached) return cached;
 
-      const q = query(collection(db, "projects"), where("projectEngineer", "==", uid));
+      const q = query(
+        collection(db, "projects"),
+        where("tenantId", "==", tid),
+        where("projectEngineer", "==", uid),
+      );
       const querySnapshot = await getDocs(q);
       const projects: Project[] = querySnapshot.docs.map((d) =>
         this.normalize(d.data(), d.id),
@@ -116,10 +124,10 @@ export class ProjectModel {
         projects.map((p) => p.id),
       );
       const result = this.applyProgress(projects, byProject);
-      setCached("projects_all", result);
+      setCached(cacheKey, result);
       return result;
     } catch (error) {
-      logger.error("Error fetching projects:", error);
+      logFirestoreError("Project list", error);
       return [];
     }
   }
@@ -152,39 +160,114 @@ export class ProjectModel {
 
   // ── Real-time subscriptions ──────────────────────────────────────
 
+  // Project list with live progress. The outer listener watches the engineer's
+  // projects; for each project we attach a milestones subcollection listener
+  // so status flips (Pending -> Completed) push a re-emit with fresh progress.
+  // A single getDocs on milestones would freeze the list after first paint,
+  // which is the bug we had before: details screen ticked to 100% but the
+  // list card stayed at the initial %.
   static subscribeToAll(
     onUpdate: (projects: Project[]) => void,
     onError?: (error: Error) => void,
   ): () => void {
     const uid = requireAuth();
+    const tid = requireTenantId();
 
-    return onSnapshot(
-      query(collection(db, "projects"), where("projectEngineer", "==", uid)),
-      async (snapshot) => {
+    let cancelled = false;
+    const latestProjects = new Map<string, Project>();
+    const milestonesByProject = new Map<string, Milestone[]>();
+    const milestoneUnsubs = new Map<string, () => void>();
+
+    const emit = () => {
+      if (cancelled) return;
+      const out: Project[] = [];
+      for (const project of latestProjects.values()) {
+        const milestones = (milestonesByProject.get(project.id) || []).slice().sort(
+          (a, b) => (a.sequence || 0) - (b.sequence || 0),
+        );
+        out.push({
+          ...project,
+          milestones,
+          progress: ProjectModel.computeProgress(milestones),
+        });
+      }
+      onUpdate(out);
+    };
+
+    const attachMilestoneListener = (projectId: string) => {
+      const unsub = onSnapshot(
+        collection(db, "projects", projectId, "milestones"),
+        (snap) => {
+          if (cancelled) return;
+          milestonesByProject.set(
+            projectId,
+            snap.docs.map(
+              (d) => ({ id: d.id, projectId, ...d.data() } as Milestone),
+            ),
+          );
+          emit();
+        },
+        (err) => {
+          logger.error(`subscribeToAll milestones listener error (${projectId}):`, err);
+          onError?.(err);
+        },
+      );
+      milestoneUnsubs.set(projectId, unsub);
+    };
+
+    const detachMilestoneListener = (projectId: string) => {
+      const unsub = milestoneUnsubs.get(projectId);
+      if (unsub) unsub();
+      milestoneUnsubs.delete(projectId);
+      milestonesByProject.delete(projectId);
+    };
+
+    const unsubProjects = onSnapshot(
+      query(
+        collection(db, "projects"),
+        where("tenantId", "==", tid),
+        where("projectEngineer", "==", uid),
+      ),
+      (snapshot) => {
+        if (cancelled) return;
         try {
-          const projects: Project[] = snapshot.docs.map((d) =>
-            this.normalize(d.data(), d.id),
-          );
-
-          if (projects.length === 0) {
-            onUpdate([]);
-            return;
+          const nextIds = new Set<string>();
+          latestProjects.clear();
+          for (const d of snapshot.docs) {
+            const project = this.normalize(d.data(), d.id);
+            latestProjects.set(project.id, project);
+            nextIds.add(project.id);
           }
-
-          const byProject = await this.fetchMilestonesForProjects(
-            projects.map((p) => p.id),
-          );
-          onUpdate(this.applyProgress(projects, byProject));
+          // Detach listeners for projects no longer in scope
+          for (const id of Array.from(milestoneUnsubs.keys())) {
+            if (!nextIds.has(id)) detachMilestoneListener(id);
+          }
+          // Attach listeners for newly-scoped projects
+          for (const id of nextIds) {
+            if (!milestoneUnsubs.has(id)) attachMilestoneListener(id);
+          }
+          // Emit right away so the list paints even before every milestones
+          // stream has delivered its first snapshot
+          emit();
         } catch (err) {
           logger.error("subscribeToAll processing error:", err);
           onError?.(err as Error);
         }
       },
       (err) => {
-        logger.error("subscribeToAll error:", err);
+        logFirestoreError("Project list listener", err);
         onError?.(err);
       },
     );
+
+    return () => {
+      cancelled = true;
+      for (const unsub of milestoneUnsubs.values()) unsub();
+      milestoneUnsubs.clear();
+      milestonesByProject.clear();
+      latestProjects.clear();
+      unsubProjects();
+    };
   }
 
   // Two parallel listeners — project doc + milestone subcollection — combined
@@ -262,5 +345,21 @@ export class ProjectModel {
   // ── Milestone ref helper (use this when writing proofs) ──────────
   static milestoneRef(projectId: string, milestoneId: string) {
     return doc(db, "projects", projectId, "milestones", milestoneId);
+  }
+
+  // Treat a project as "Completed" as soon as every confirmed milestone is
+  // completed, even if the stored `project.status` hasn't been flipped yet by
+  // the web-side trigger. Keeps dashboard counts + list filters in lock-step
+  // with what the engineer actually sees on the milestone cards.
+  static deriveStatus(project: Project): string {
+    const milestones = project.milestones ?? [];
+    const confirmed = milestones.filter((m) => m.confirmed !== false);
+    const allDone =
+      confirmed.length > 0 &&
+      confirmed.every(
+        (m) => m.status?.toString().toLowerCase() === "completed",
+      );
+    if (allDone) return "Completed";
+    return project.status ?? "Pending";
   }
 }

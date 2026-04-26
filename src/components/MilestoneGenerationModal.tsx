@@ -20,7 +20,6 @@ import type { Milestone } from "../types";
 type GenerateResult = {
   ok: boolean;
   count?: number;
-  projectType?: string;
   errorCode?:
     | "unauthenticated"
     | "invalid-argument"
@@ -56,11 +55,6 @@ const ERROR_COPY: Record<string, { title: string; body: string; canRetry: boolea
   "already-exists":   { title: "Already Drafted",     body: "Milestones already exist for this project. Open the review to edit them.",        canRetry: false },
   internal:           { title: "AI Unavailable",      body: "The milestone generator is temporarily unavailable. You can retry once.",         canRetry: true  },
   unknown:            { title: "Generation Failed",   body: "Something went wrong while generating milestones. Please try again.",             canRetry: true  },
-};
-
-const projectTypeLabel = (raw?: string): string => {
-  if (!raw) return "Construction";
-  return raw.split("_").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
 };
 
 export const MilestoneGenerationModal = ({
@@ -274,9 +268,7 @@ export const MilestoneGenerationModal = ({
                 <View style={{ flex: 1 }}>
                   <View style={S.reviewBadge}>
                     <FontAwesome5 name="robot" size={9} color={COLORS.primary} />
-                    <Text style={S.reviewBadgeText}>
-                      {projectTypeLabel(genResult?.projectType)} · DRAFT
-                    </Text>
+                    <Text style={S.reviewBadgeText}>DRAFT</Text>
                   </View>
                   <Text style={S.reviewTitle}>Review Milestones</Text>
                   <Text style={S.reviewSub}>

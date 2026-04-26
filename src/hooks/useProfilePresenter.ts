@@ -15,7 +15,7 @@ import { passwordVerifyRateLimiter, validatePassword } from "../utils/security";
 export const useProfilePresenter = (
   onBack: () => void,
 ) => {
-  const { userProfile: contextProfile, refreshProfile: refreshContextProfile } = useAuth();
+  const { userProfile: contextProfile, refreshProfile: refreshContextProfile, lguName } = useAuth();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(contextProfile);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -112,7 +112,7 @@ export const useProfilePresenter = (
   };
 
   return {
-    data: { userProfile: userProfile ?? contextProfile, isLoading },
+    data: { userProfile: userProfile ?? contextProfile, isLoading, lguName },
     actions: {
       goBack: onBack,
       verifyCurrentPassword,

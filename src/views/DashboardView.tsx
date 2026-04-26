@@ -192,12 +192,19 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
                   </View>
                   <View style={S.logBody}>
                     <Text style={S.logAction}>{log.action}</Text>
-                    {log.details ? (
-                      <Text style={S.logDetail} numberOfLines={1}>{log.details}</Text>
-                    ) : null}
+                    {(() => {
+                      const d = log.details;
+                      const text = typeof d === "string" ? d : d?.message;
+                      return text ? (
+                        <Text style={S.logDetail} numberOfLines={1}>{text}</Text>
+                      ) : null;
+                    })()}
                   </View>
                   <Text style={S.logTime}>
-                    {log.timestamp?.seconds ? formatTimestamp(log.timestamp.seconds) : "Recently"}
+                    {(() => {
+                      const t = log.createdAt ?? log.timestamp;
+                      return t?.seconds ? formatTimestamp(t.seconds) : "Recently";
+                    })()}
                   </Text>
                 </View>
               );

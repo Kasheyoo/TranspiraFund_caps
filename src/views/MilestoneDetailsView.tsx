@@ -13,7 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import { ToastMessage } from "../components/ToastMessage";
 import { ConfirmModal } from "../components/ConfirmModal";
-import type { Milestone, Project } from "../types";
+import { ProofImageViewer } from "../components/ProofImageViewer";
+import type { Milestone, Project, Proof } from "../types";
 
 type ToastType = "success" | "error" | "info";
 
@@ -77,6 +78,17 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [confirmingComplete, setConfirmingComplete] = useState(false);
 
+  // Fullscreen proof viewer. Engineer/time/coords are already burnt into the
+  // JPEG banner by the server — we only surface the Location chip (opens Maps)
+  // and capture-time chip, matching the web lightbox.
+  const [viewerProof, setViewerProof] = useState<Proof | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number>(0);
+
+  const openProofViewer = (p: Proof, indexFromNewest: number) => {
+    setViewerProof(p);
+    setViewerIndex(indexFromNewest);
+  };
+
   const canMarkCompleted = !isCompleted && !needsReview && proofCount > 0;
   const openMarkCompleted = () => {
     if (!actions.onMarkCompleted) return;
@@ -118,6 +130,13 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
         isBusy={confirmingComplete}
         onConfirm={submitMarkCompleted}
         onCancel={() => setConfirmCompleteOpen(false)}
+      />
+
+      {/* ══ PROOF FULLSCREEN VIEWER ══════════════════════════════ */}
+      <ProofImageViewer
+        proof={viewerProof}
+        indexLabel={viewerProof ? `#${viewerIndex} of ${proofCount}` : undefined}
+        onClose={() => setViewerProof(null)}
       />
 
       {/* ══ HERO ══════════════════════════════════════════════════ */}
@@ -273,12 +292,17 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
           <View style={S.proofList}>
             {proofs.map((p, i) => (
               <View key={i} style={S.proofCard}>
-                {/* Photo */}
-                <Image
-                  source={{ uri: p.url }}
-                  style={S.proofImage}
-                  resizeMode="cover"
-                />
+                {/* Photo — tap to open fullscreen viewer with burnt-in banner visible */}
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  onPress={() => openProofViewer(p, proofCount - i)}
+                >
+                  <Image
+                    source={{ uri: p.url }}
+                    style={S.proofImage}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
 
                 {/* Overlay badge */}
                 <View style={S.proofOverlay}>
@@ -318,8 +342,16 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
                       <Text style={S.proofInfoLabel}>CAPTURED</Text>
                       <Text style={S.proofInfoValue}>
                         {(() => {
-                          const t = p.capturedAt ?? p.timestamp;
-                          return t ? new Date(t).toLocaleString("en-PH", {
+                          // capturedAt is a Firestore Timestamp for new proofs.
+                          // Old proofs only stored ms-epoch on `timestamp` — still
+                          // read as a fallback so pre-contract records render.
+                          const raw = p.capturedAt ?? p.timestamp;
+                          let ms: number | null = null;
+                          if (typeof raw === "number") ms = raw;
+                          else if (raw && typeof raw === "object" && "seconds" in raw) {
+                            ms = raw.seconds * 1000 + Math.floor((raw.nanoseconds ?? 0) / 1e6);
+                          }
+                          return ms ? new Date(ms).toLocaleString("en-PH", {
                             month: "short", day: "numeric", year: "numeric",
                             hour: "2-digit", minute: "2-digit",
                           }) : "Date unavailable";
@@ -328,28 +360,34 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
                     </View>
                   </View>
 
-                  {/* Coordinates row */}
-                  {(p.latitude && p.longitude) ? (
-                    <>
-                      <View style={S.proofInfoDivider} />
-                      <View style={S.proofInfoRow}>
-                        <View style={[S.proofInfoIcon, { backgroundColor: COLORS.warningSoft }]}>
-                          <FontAwesome5 name="crosshairs" size={10} color={COLORS.warning} />
+                  {/* Coordinates row — prefer gps.{lat,lng}, fall back to flat
+                      latitude/longitude on pre-contract proofs. */}
+                  {(() => {
+                    const lat = p.gps?.lat ?? p.latitude;
+                    const lng = p.gps?.lng ?? p.longitude;
+                    if (lat == null || lng == null) return null;
+                    return (
+                      <>
+                        <View style={S.proofInfoDivider} />
+                        <View style={S.proofInfoRow}>
+                          <View style={[S.proofInfoIcon, { backgroundColor: COLORS.warningSoft }]}>
+                            <FontAwesome5 name="crosshairs" size={10} color={COLORS.warning} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={S.proofInfoLabel}>
+                              COORDINATES
+                              {typeof p.accuracy === "number" && p.accuracy > 0
+                                ? ` · ±${p.accuracy}m`
+                                : ""}
+                            </Text>
+                            <Text style={S.proofInfoValue}>
+                              {lat.toFixed(5)}, {lng.toFixed(5)}
+                            </Text>
+                          </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={S.proofInfoLabel}>
-                            COORDINATES
-                            {typeof p.accuracy === "number" && p.accuracy > 0
-                              ? ` · ±${p.accuracy}m`
-                              : ""}
-                          </Text>
-                          <Text style={S.proofInfoValue}>
-                            {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
-                          </Text>
-                        </View>
-                      </View>
-                    </>
-                  ) : null}
+                      </>
+                    );
+                  })()}
                 </View>
               </View>
             ))}

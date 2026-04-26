@@ -30,6 +30,7 @@ interface PasswordState {
 interface ProfileData {
   userProfile: UserProfile | null;
   isLoading: boolean;
+  lguName: string | null;
 }
 
 interface ProfileActions {
@@ -47,7 +48,7 @@ interface ProfileViewProps {
 
 export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   const insets = useSafeAreaInsets();
-  const { userProfile, isLoading } = data || {};
+  const { userProfile, isLoading, lguName } = data || {};
 
   // ── Password modal state ────────────────────────────────────
   const [modalVisible, setModalVisible] = useState(false);
@@ -255,7 +256,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
           <View style={styles.infoDivider} />
           <InfoRow icon="id-badge" label="Position" value={roleDisplay} />
           <View style={styles.infoDivider} />
-          <InfoRow icon="landmark" label="Organization" value="Construction Services Division" />
+          <InfoRow icon="landmark" label="Organization" value={lguName ?? "—"} />
         </View>
 
         {/* ── Security ─────────────────────────────────────── */}

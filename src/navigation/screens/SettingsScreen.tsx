@@ -22,7 +22,7 @@ export function SettingsScreen() {
     callFn("logMobileAuditTrail", {
       action: "Signed Out",
       details: firstName,
-      syncToDEPW: false,
+      syncToHCSD: false,
     }).catch(() => {});
     signOut(auth);
   };

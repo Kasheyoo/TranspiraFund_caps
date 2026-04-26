@@ -3,6 +3,12 @@ import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+// sharp and piexifjs are imported via `require` to avoid needing
+// `esModuleInterop` in tsconfig just for these two deps.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sharp: typeof import("sharp") = require("sharp");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const piexif = require("piexifjs");
 
 admin.initializeApp();
 
@@ -91,6 +97,206 @@ async function reverseGeocode(
 }
 
 /**
+ * Injects GPS + capture-time tags into a JPEG buffer so the photo itself is
+ * self-proving. We write our authoritative server-side coords (from the
+ * client's geolocation service, not the device camera's EXIF — which many
+ * Android camera apps don't populate) directly into the EXIF IFDs before
+ * the file lands in Storage.
+ *
+ * Returns the original buffer unchanged if injection fails (non-JPEG,
+ * malformed EXIF, etc.) so a bad EXIF library call never blocks an upload.
+ */
+function embedExifGps(
+  buffer: Buffer,
+  latitude: number,
+  longitude: number,
+  capturedAtMs: number,
+  accuracyMeters?: number,
+): Buffer {
+  try {
+    // piexifjs operates on base64-prefixed data URLs.
+    const dataUrl = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+
+    // Load any existing EXIF — keep 0th / Exif IFD fields the camera wrote.
+    let exifObj: Record<string, Record<number, unknown>>;
+    try {
+      exifObj = piexif.load(dataUrl);
+    } catch {
+      exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null as any };
+    }
+
+    const capturedAt = new Date(capturedAtMs);
+    // EXIF date format: "YYYY:MM:DD HH:MM:SS" (space-separated, colon-delimited).
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const dateTimeStr =
+      `${capturedAt.getUTCFullYear()}:${pad(capturedAt.getUTCMonth() + 1)}:${pad(capturedAt.getUTCDate())}` +
+      ` ${pad(capturedAt.getUTCHours())}:${pad(capturedAt.getUTCMinutes())}:${pad(capturedAt.getUTCSeconds())}`;
+    const gpsDateStr =
+      `${capturedAt.getUTCFullYear()}:${pad(capturedAt.getUTCMonth() + 1)}:${pad(capturedAt.getUTCDate())}`;
+
+    // 0th IFD — general image metadata
+    exifObj["0th"][piexif.ImageIFD.DateTime] = dateTimeStr;
+    exifObj["0th"][piexif.ImageIFD.Software] = "TranspiraFund Mobile";
+
+    // Exif IFD — capture-time metadata
+    exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = dateTimeStr;
+    exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = dateTimeStr;
+
+    // GPS IFD — coordinates + timestamp
+    const gps: Record<number, unknown> = {};
+    gps[piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
+    gps[piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDmsRational(Math.abs(latitude));
+    gps[piexif.GPSIFD.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
+    gps[piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDmsRational(Math.abs(longitude));
+    gps[piexif.GPSIFD.GPSMapDatum] = "WGS-84";
+    gps[piexif.GPSIFD.GPSDateStamp] = gpsDateStr;
+    gps[piexif.GPSIFD.GPSTimeStamp] = [
+      [capturedAt.getUTCHours(), 1],
+      [capturedAt.getUTCMinutes(), 1],
+      [capturedAt.getUTCSeconds(), 1],
+    ];
+    // GPS accuracy is stored as horizontal positioning error in meters.
+    if (typeof accuracyMeters === "number" && accuracyMeters > 0) {
+      // GPSHPositioningError is a RATIONAL — [numerator, denominator].
+      // Round to 2 decimals to keep the numerator sane.
+      gps[piexif.GPSIFD.GPSHPositioningError] = [Math.round(accuracyMeters * 100), 100];
+    }
+    exifObj.GPS = gps;
+
+    const exifBytes = piexif.dump(exifObj);
+    const newDataUrl: string = piexif.insert(exifBytes, dataUrl);
+    // piexif.insert returns "data:image/jpeg;base64,<...>" — strip prefix.
+    const commaIdx = newDataUrl.indexOf(",");
+    const newBase64 = commaIdx === -1 ? newDataUrl : newDataUrl.slice(commaIdx + 1);
+    return Buffer.from(newBase64, "base64");
+  } catch {
+    // Never fail the upload over EXIF. Firestore `gps` / `capturedAt` still
+    // carry the data; the photo just won't self-prove in this one case.
+    return buffer;
+  }
+}
+
+// XML-escape text for safe inclusion inside an SVG <text> node.
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// Format a ms-epoch into local Philippine time (Asia/Manila).
+// Example: "Apr 21, 2026, 5:53 PM". Matches the format the web team asked for.
+function formatManilaTime(ms: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(ms));
+}
+
+function buildEngineerLabel(profile: {
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  email?: string;
+}): string {
+  const first = (profile.firstName ?? "").trim();
+  const last = (profile.lastName ?? "").trim();
+  const fullFromParts = [first, last].filter(Boolean).join(" ");
+  const display =
+    fullFromParts || (profile.name ?? "").trim() || profile.email || "Engineer";
+  // "Engr." courtesy prefix only when we have a real human name — if we fell
+  // back to an email, don't prepend it.
+  return fullFromParts || (profile.name ?? "").trim()
+    ? `Engr. ${display}`
+    : display;
+}
+
+// Maps the raw role code stored on `users/{uid}` to the human-readable label
+// shown beneath the engineer name on the burnt-in banner. Falls back to the
+// raw code so unknown future roles still render something meaningful.
+const ROLE_LABELS: Record<string, string> = {
+  PROJ_ENG: "Project Engineer",
+  HCSD: "HCSD Officer",
+  MAYOR: "Mayor",
+  ADMIN: "Administrator",
+};
+
+function buildRoleLabel(role?: string): string {
+  const key = (role ?? "PROJ_ENG").trim() || "PROJ_ENG";
+  return ROLE_LABELS[key] ?? key;
+}
+
+function buildBannerSvg(
+  imgWidth: number,
+  imgHeight: number,
+  lines: string[],
+): Buffer {
+  const bannerHeight = Math.max(180, Math.min(Math.round(imgHeight * 0.14), 360));
+  const fontSize = Math.max(20, Math.min(Math.round(imgWidth / 45), 44));
+  const lineGap = Math.round(fontSize * 1.35);
+  const paddingX = Math.max(16, Math.round(imgWidth * 0.03));
+  const paddingTop = Math.round((bannerHeight - lineGap * (lines.length - 1)) / 2);
+
+  const texts = lines
+    .map((line, i) => {
+      const y = paddingTop + i * lineGap + fontSize;
+      return `<text x="${paddingX}" y="${y}" filter="url(#ds)">${escapeXml(line)}</text>`;
+    })
+    .join("");
+
+  // Full-image SVG so `composite({ gravity: "south" })` aligns the banner to
+  // the bottom edge without us computing absolute y-offsets.
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${imgWidth}" height="${bannerHeight}">` +
+      `<defs>` +
+        `<filter id="ds" x="-20%" y="-20%" width="140%" height="140%">` +
+          `<feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>` +
+          `<feOffset dx="0" dy="1" result="offset"/>` +
+          `<feComponentTransfer><feFuncA type="linear" slope="0.9"/></feComponentTransfer>` +
+          `<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>` +
+        `</filter>` +
+      `</defs>` +
+      `<rect x="0" y="0" width="${imgWidth}" height="${bannerHeight}" fill="black" fill-opacity="0.6"/>` +
+      `<g font-family="sans-serif" font-size="${fontSize}" font-weight="700" fill="white">` +
+        `${texts}` +
+      `</g>` +
+    `</svg>`,
+    "utf8",
+  );
+}
+
+async function burnInBanner(buffer: Buffer, lines: string[]): Promise<Buffer> {
+  if (lines.length === 0) return buffer;
+  try {
+    // Apply EXIF orientation to pixels so the banner lands on the visual
+    // bottom regardless of how the camera encoded the file. sharp's rotate()
+    // with no args reads the orientation tag and bakes the rotation in.
+    const base = sharp(buffer).rotate();
+    const meta = await base.metadata();
+    const width = meta.width ?? 0;
+    const height = meta.height ?? 0;
+    if (!width || !height) return buffer;
+
+    const svg = buildBannerSvg(width, height, lines);
+    return await base
+      .composite([{ input: svg, gravity: "south" }])
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toBuffer();
+  } catch {
+    // Never fail the upload over a cosmetic post-process. Same philosophy as
+    // embedExifGps — Firestore + EXIF still carry the evidence.
+    return buffer;
+  }
+}
+
+/**
  * Logs an audit event.
  * Always writes to `auditTrails/mobile/entries` (PROJ_ENG scope).
  * Only writes to `auditTrails/hcsd/entries` when syncToHCSD is true
@@ -100,17 +306,33 @@ async function logAuditTrail(
   uid: string,
   email: string,
   action: string,
-  details: string,
+  // Human-readable message. Surfaced in mobile's Audit Trail screen and as
+  // details.message on the audit doc so the web notification body can render
+  // it inline.
+  message: string,
   syncToHCSD = false,
+  // Project id for project-scoped events. Required by the web app's HCSD
+  // fan-out trigger on the four canonical mobile actions (Proof Uploaded,
+  // Milestones Drafted, Milestones Confirmed, Milestone Completed). Events
+  // without it are dropped with "Skipping — no projectId on <action>".
+  targetId?: string,
+  // Milestone id. Required by the fan-out trigger on milestone-scoped actions
+  // (Proof Uploaded, Milestone Completed). Omitted for batch actions like
+  // Milestones Drafted / Confirmed.
+  milestoneId?: string,
 ) {
-  const entry = {
-    uid,
-    email,
+  const detailsObj: Record<string, string> = { message };
+  if (targetId) detailsObj.projectId = targetId;
+  if (milestoneId) detailsObj.milestoneId = milestoneId;
+
+  const entry: Record<string, unknown> = {
     action,
-    details,
-    platform: "mobile",
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    actorUid: uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    details: detailsObj,
+    email,
   };
+  if (targetId) entry.targetId = targetId;
 
   // Always write to mobile audit trail (PROJ_ENG scope)
   const writes: Promise<unknown>[] = [
@@ -286,6 +508,7 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     "Milestones Drafted",
     `Project: ${projectId} (type: ${resolvedType})${suffix}`,
     true,
+    projectId,
   );
 
   return {
@@ -445,11 +668,13 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
 
-  const { action, details, syncToDEPW, syncToHCSD } = request.data as {
+  const { action, details, syncToDEPW, syncToHCSD, targetId, milestoneId } = request.data as {
     action?: string;
     details?: string;
     syncToDEPW?: boolean;  // accepted for backward compat from older app versions
     syncToHCSD?: boolean;
+    targetId?: string;     // project id for project-scoped events (HCSD fan-out trigger)
+    milestoneId?: string;  // milestone id for milestone-scoped events
   };
 
   if (!action || !details) {
@@ -459,7 +684,12 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   const uid = request.auth.uid;
   const email = request.auth.token.email || "";
 
-  await logAuditTrail(uid, email, action, details, syncToHCSD === true || syncToDEPW === true);
+  await logAuditTrail(
+    uid, email, action, details,
+    syncToHCSD === true || syncToDEPW === true,
+    typeof targetId === "string" ? targetId : undefined,
+    typeof milestoneId === "string" ? milestoneId : undefined,
+  );
 
   return { success: true };
 });
@@ -567,7 +797,12 @@ export const uploadProofPhoto = onCall(
   // IAM binding on deploy. The first deploy of this function landed without it
   // (intermittent Firebase/Cloud Run quirk for new 2nd-gen functions), which
   // surfaced as 401 "request was not authorized to invoke this service."
-  { region: "asia-southeast1", memory: "512MiB", invoker: "public" },
+  // 1GiB + 120s: sharp decodes a 10MB JPEG into a ~50MB raw pixel buffer, then
+  // composites the SVG banner and re-encodes via mozjpeg. Peak heap easily
+  // exceeds 512MiB on cold starts and surfaces as a 500 to the client. Cold
+  // start + sharp init + encode on large images can also push past the 60s
+  // onCall default.
+  { region: "asia-southeast1", memory: "1GiB", timeoutSeconds: 120, invoker: "public" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
@@ -646,7 +881,41 @@ export const uploadProofPhoto = onCall(
     const file   = bucket.file(storagePath);
     const token  = crypto.randomUUID();
 
-    await file.save(buffer, {
+    // Best-effort reverse geocode for HCSD oversight + the burn-in banner.
+    // If Nominatim is slow or down we still ship the proof — `location`
+    // falls back to a coord string (which is what older proofs already
+    // store) and the banner drops its place-name line.
+    const placeName = await reverseGeocode(latitude, longitude);
+
+    // Pull the engineer's display name + role for the banner's identity line.
+    // Missing profile is fine — buildEngineerLabel falls back to email.
+    const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+    const profile = (userSnap.data() ?? {}) as {
+      firstName?: string;
+      lastName?: string;
+      name?: string;
+      role?: string;
+      email?: string;
+    };
+
+    // Build the tamper-evident banner. Lines are drawn as pixels on the image
+    // itself so the JPEG self-proves even if EXIF is stripped downstream.
+    // Layout: Location / GPS+accuracy / Capture time / Engineer name / Role.
+    const accuracyM = Math.round(accuracy ?? 0);
+    const bannerLines: string[] = [];
+    if (placeName) bannerLines.push(placeName);
+    bannerLines.push(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}  ±${accuracyM}m`);
+    bannerLines.push(formatManilaTime(ts));
+    bannerLines.push(buildEngineerLabel({ ...profile, email }));
+    bannerLines.push(buildRoleLabel(profile.role));
+
+    const stampedBuffer = await burnInBanner(buffer, bannerLines);
+
+    // sharp's .jpeg() strips EXIF on re-encode, so we re-inject GPS +
+    // DateTimeOriginal onto the stamped bytes as the last step before upload.
+    const finalBuffer = embedExifGps(stampedBuffer, latitude, longitude, ts, accuracy);
+
+    await file.save(finalBuffer, {
       metadata: {
         contentType: "image/jpeg",
         metadata: { firebaseStorageDownloadTokens: token },
@@ -656,27 +925,24 @@ export const uploadProofPhoto = onCall(
     const encodedPath = encodeURIComponent(storagePath);
     const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
 
-    // Best-effort reverse geocode for HCSD oversight. If Nominatim is slow
-    // or down we still ship the proof — `location` just falls back to a coord
-    // string, which is what older proofs already store anyway.
-    const placeName = await reverseGeocode(latitude, longitude);
-
-    const uploadedAt = Date.now();
     const proofId   = `${ts}_${uid}`;
+    const fileName  = `${ts}.jpg`;
+    // FieldValue.serverTimestamp() is not permitted inside arrayUnion, so we
+    // use admin Timestamp objects for both capture time (from the client's
+    // camera clock) and upload time (server clock at write).
+    const capturedAtTs = admin.firestore.Timestamp.fromMillis(ts);
+    const uploadedAtTs = admin.firestore.Timestamp.now();
     const proof = {
       id: proofId,
+      fileName,
+      capturedAt: capturedAtTs,
+      uploadedAt: uploadedAtTs,
+      gps: { lat: latitude, lng: longitude },
       url: downloadURL,
       storagePath,
-      latitude,
-      longitude,
       accuracy: Math.round(accuracy ?? 0),
-      // Human-readable address when available — coord string fallback so the
-      // field is never empty (web app reads this directly for the proof list).
       location: placeName || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-      capturedAt: ts,
-      uploadedAt,
       uploadedBy: uid,
-      timestamp: ts, // legacy alias — keep for older read sites + web app
     };
 
     await milestoneRef.update({
@@ -691,6 +957,8 @@ export const uploadProofPhoto = onCall(
       "Proof Uploaded",
       `${projectData.projectName ?? projectData.title ?? "Project"} · ${m.title ?? milestoneId}`,
       true,
+      projectId,
+      milestoneId,
     );
 
     return { success: true, proof };

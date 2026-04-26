@@ -7,6 +7,7 @@ import { callFn } from "../services/CloudFunctionService";
 import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
 import { logger } from "../utils/logger";
+import { requireTenantId } from "../utils/tenant";
 import { useAuth } from "../context/AuthContext";
 import type { Milestone, Project } from "../types";
 
@@ -75,9 +76,18 @@ export const useProjectDetailsPresenter = (
   const { userProfile } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
+  // Sticky record of the last milestone the engineer opened — survives closing
+  // the sub-view so ProjectDetailsView can scroll-restore to that card on
+  // return (hardware back, gesture back, or in-view back button).
+  const [lastViewedMilestoneId, setLastViewedMilestoneId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const selectedMilestoneRef = useRef(selectedMilestone);
   selectedMilestoneRef.current = selectedMilestone;
+
+  const onSelectMilestone = (m: Milestone | null) => {
+    if (m?.id) setLastViewedMilestoneId(m.id);
+    setSelectedMilestone(m);
+  };
 
   // Toast: non-blocking confirmations + soft errors. Blocking prompts (permission
   // denied, GPS disabled) intentionally stay as Alert because the user has to
@@ -184,10 +194,12 @@ export const useProjectDetailsPresenter = (
       logger.log("[AddProof] launching camera...");
       // includeBase64:true so we can upload via Firebase's uploadString without
       // touching RN's broken fetch().blob() / XHR-blob paths for local URIs.
-      // For ~0.7-quality JPEGs (~1–3MB) the base64 memory bump is fine.
+      // quality:1.0 keeps the original JPEG — any re-encode under 1.0 on
+      // react-native-image-picker's Android path strips the EXIF APP1 segment,
+      // which wipes GPSLatitude / DateTimeOriginal that HCSD needs.
       const result = await launchCamera({
         mediaType: "photo",
-        quality: 0.7,
+        quality: 1.0,
         saveToPhotos: false,
         includeBase64: true,
       });
@@ -319,7 +331,6 @@ export const useProjectDetailsPresenter = (
   const handleGenerateMilestones = async (): Promise<{
     ok: boolean;
     count?: number;
-    projectType?: string;
     errorCode?: "unauthenticated" | "invalid-argument" | "not-found"
               | "permission-denied" | "already-exists" | "internal" | "unknown";
     errorMessage?: string;
@@ -327,10 +338,10 @@ export const useProjectDetailsPresenter = (
     try {
       requireAuth();
       const result = (await callFn("generateMilestones", { projectId })) as {
-        success: boolean; count: number; projectType: string;
+        success: boolean; count: number;
       };
       // Real-time listener will auto-update with the new milestone docs
-      return { ok: true, count: result.count, projectType: result.projectType };
+      return { ok: true, count: result.count };
     } catch (error: any) {
       logger.error("Generate milestones error:", error);
       const raw = (error?.code || error?.message || "").toLowerCase();
@@ -351,8 +362,9 @@ export const useProjectDetailsPresenter = (
     if (!project) return false;
     try {
       requireAuth();
+      const tid = requireTenantId();
       const ref = ProjectModel.milestoneRef(project.id, m.id);
-      await updateDoc(ref, { confirmed: true });
+      await updateDoc(ref, { confirmed: true, tenantId: tid });
       return true;
     } catch (error) {
       logger.error("Confirm milestone error:", error);
@@ -371,6 +383,7 @@ export const useProjectDetailsPresenter = (
     if (!project) return false;
     try {
       requireAuth();
+      const tid = requireTenantId();
       const drafts = (project.milestones ?? []).filter((m) => m.confirmed === false);
       if (drafts.length === 0) return true;
 
@@ -378,13 +391,14 @@ export const useProjectDetailsPresenter = (
         drafts.map((m) => {
           const ref = ProjectModel.milestoneRef(project.id, m.id);
           const changes = edits[m.id] ?? {};
-          return updateDoc(ref, { ...changes, confirmed: true });
+          return updateDoc(ref, { ...changes, confirmed: true, tenantId: tid });
         }),
       );
 
       callFn("logMobileAuditTrail", {
         action: "Milestones Confirmed",
         details: `${drafts.length} phase${drafts.length !== 1 ? "s" : ""} confirmed for ${project.projectName ?? project.title ?? "project"}`,
+        targetId: project.id,
         syncToHCSD: true,
       }).catch(() => {});
 
@@ -413,12 +427,15 @@ export const useProjectDetailsPresenter = (
     }
     try {
       requireAuth();
+      const tid = requireTenantId();
       const ref = ProjectModel.milestoneRef(project.id, m.id);
-      await updateDoc(ref, { status: "Completed" });
+      await updateDoc(ref, { status: "Completed", tenantId: tid });
 
       callFn("logMobileAuditTrail", {
         action: "Milestone Completed",
         details: `${project.projectName ?? project.title ?? "Project"} · ${m.title}`,
+        targetId: project.id,
+        milestoneId: m.id,
         syncToHCSD: true,
       }).catch(() => {});
 
@@ -446,11 +463,11 @@ export const useProjectDetailsPresenter = (
   };
 
   return {
-    data: { project, engineerName, engineerPhotoURL, selectedMilestone, isLoading, toast },
+    data: { project, engineerName, engineerPhotoURL, selectedMilestone, lastViewedMilestoneId, isLoading, toast },
     actions: {
       onRefresh: () => {}, // No-op — real-time listener handles updates automatically
       goBack: onBackCallback,
-      onSelectMilestone: setSelectedMilestone,
+      onSelectMilestone,
       onAddProof: handleAddProof,
       onGenerateMilestones: handleGenerateMilestones,
       onConfirmMilestone: handleConfirmMilestone,

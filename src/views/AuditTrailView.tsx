@@ -126,7 +126,8 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
               {logs.map((log, i) => {
                 const icon    = getActionIcon(log.action);
                 const isLast  = i === logs.length - 1;
-                const actor   = log.uid ? actorCache[log.uid] : undefined;
+                const actorUid = log.actorUid ?? log.uid;
+                const actor   = actorUid ? actorCache[actorUid] : undefined;
                 const actorName = actor?.firstName
                   ? `${actor.firstName} ${actor.lastName || ""}`.trim()
                   : actor?.name || log.email || "Unknown";
@@ -142,9 +143,13 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
                       {/* Text block */}
                       <View style={S.logBody}>
                         <Text style={S.logAction}>{log.action}</Text>
-                        {log.details ? (
-                          <Text style={S.logDetail} numberOfLines={2}>{log.details}</Text>
-                        ) : null}
+                        {(() => {
+                          const d = log.details;
+                          const text = typeof d === "string" ? d : d?.message;
+                          return text ? (
+                            <Text style={S.logDetail} numberOfLines={2}>{text}</Text>
+                          ) : null;
+                        })()}
 
                         {/* Actor + timestamp row — hydrated from users/{uid} */}
                         <View style={S.logMeta}>
@@ -154,7 +159,10 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
                           </Text>
                           <View style={S.logMetaDot} />
                           <Text style={S.logTime}>
-                            {log.timestamp?.seconds ? formatTimestamp(log.timestamp.seconds) : "Recently"}
+                            {(() => {
+                              const t = log.createdAt ?? log.timestamp;
+                              return t?.seconds ? formatTimestamp(t.seconds) : "Recently";
+                            })()}
                           </Text>
                         </View>
                       </View>
