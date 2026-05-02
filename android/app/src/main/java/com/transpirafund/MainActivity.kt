@@ -15,12 +15,10 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    // Prevent screenshots and screen recording (government financial app)
     window.setFlags(
       WindowManager.LayoutParams.FLAG_SECURE,
       WindowManager.LayoutParams.FLAG_SECURE
     )
-    // Force teal on every layer to eliminate any white flash
     window.decorView.setBackgroundColor(Color.parseColor("#0F766E"))
     window.statusBarColor = Color.parseColor("#0F766E")
     window.navigationBarColor = Color.parseColor("#0F766E")

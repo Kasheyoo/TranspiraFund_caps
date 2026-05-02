@@ -1,9 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { Alert } from "react-native";
 import { auth } from "../firebaseConfig";
-import { OTPService } from "../services/OTPService";
 import {
   isValidEmail,
   loginRateLimiter,

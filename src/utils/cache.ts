@@ -18,7 +18,3 @@ export function getCached<T>(key: string, ttlMs = 5 * 60 * 1000): T | null {
 export function setCached<T>(key: string, data: T): void {
   _cache[key] = { data, ts: Date.now() };
 }
-
-export function invalidateCache(key: string): void {
-  delete _cache[key];
-}

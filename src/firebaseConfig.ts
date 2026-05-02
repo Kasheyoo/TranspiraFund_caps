@@ -1,6 +1,10 @@
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 import { initializeApp } from "firebase/app";
-import { getReactNativePersistence, initializeAuth } from "firebase/auth";
+import { initializeAuth } from "firebase/auth";
+// getReactNativePersistence ships in firebase/auth's react-native conditional
+// export only, so tsc (default condition) doesn't see it though Metro does.
+// @ts-expect-error — RN-only export, missing from public typings
+import { getReactNativePersistence } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 

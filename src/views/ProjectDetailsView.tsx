@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,8 +14,9 @@ import { useRef, useState } from "react";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
 import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal";
+import { NtpViewerModal } from "../components/NtpViewerModal";
+import { ProjectOrdersCard } from "../components/ProjectOrdersCard";
 
-// ── Interfaces ────────────────────────────────────────────────────────────────
 interface ProjectDetailsData {
   project: Project | null;
   engineerName?: string | null;
@@ -52,7 +52,6 @@ interface ProjectDetailsViewProps {
   onBack: () => void;
 }
 
-// ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; icon: string }> = {
   "In Progress": { accent: COLORS.primary, bg: COLORS.primarySoft,  text: COLORS.primary, icon: "spinner"            },
   "Completed":   { accent: COLORS.success, bg: COLORS.successSoft,  text: COLORS.success, icon: "check-circle"       },
@@ -63,11 +62,9 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-// Pre-active statuses set by the web app workflow — always display as In Progress on mobile
 const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
 const displayStatus = (raw: string) => ACTIVE_ALIASES[raw] ? "In Progress" : raw;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const formatBudget = (v?: number): string => {
   if (!v) return "—";
   if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(2)}M`;
@@ -75,15 +72,6 @@ const formatBudget = (v?: number): string => {
   return `₱${v.toLocaleString()}`;
 };
 
-const formatDateString = (raw?: string | null): string | null => {
-  if (!raw) return null;
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-};
-
-// Mirrors the web Project Accomplishment calculation in
-// TranspiraFund-WebApp-LGU/client/src/pages/hcsd/ProjectDetail.jsx
 const computeAccomplishment = (
   start?: string | null,
   end?: string | null,
@@ -112,7 +100,6 @@ const computeAccomplishment = (
   };
 };
 
-// ── Milestone card ────────────────────────────────────────────────────────────
 interface MilestoneCardProps {
   m: Milestone;
   index: number;
@@ -130,11 +117,8 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
   const isActive   = isUnlocked && !isDone;
   const isLocked   = !isUnlocked;
   const proofCount = m.proofs?.length ?? 0;
-  // AI-generated milestones must be confirmed by the engineer before
-  // they can accept proofs / advance status (per the AI generation spec).
   const needsReview = m.confirmed === false;
 
-  // State colors
   const circleColor = isDone ? COLORS.success : isDelayed ? COLORS.error : isActive ? COLORS.primary : "#CBD5E1";
   const cardBg      = isDone ? COLORS.successSoft : isActive ? "#F8FFFE" : COLORS.surface;
   const borderColor = isDone ? "#A7F3D0" : isDelayed ? COLORS.errorSoft : isActive ? COLORS.accentBorder : COLORS.border;
@@ -142,7 +126,6 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
 
   return (
     <View style={D.msWrapper}>
-      {/* Vertical connector line */}
       {!isLast && <View style={[D.connector, { backgroundColor: lineColor }]} />}
 
       <TouchableOpacity
@@ -154,7 +137,6 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
         }
         activeOpacity={isLocked ? 1 : 0.82}
       >
-        {/* Left: step indicator */}
         <View style={[D.stepCircle, { backgroundColor: circleColor }]}>
           <FontAwesome5
             name={isDone ? "check" : isDelayed ? "exclamation" : isLocked ? "lock" : "dot-circle"}
@@ -163,15 +145,9 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
           />
         </View>
 
-        {/* Center: content */}
         <View style={D.msContent}>
           <View style={D.msTitleRow}>
             <Text style={D.msPhase}>Phase {m.sequence ?? index + 1}</Text>
-            {typeof m.weightPercentage === "number" && m.weightPercentage > 0 ? (
-              <View style={D.weightBadge}>
-                <Text style={D.weightBadgeText}>{m.weightPercentage}%</Text>
-              </View>
-            ) : null}
             {needsReview && (
               <View style={D.reviewBadge}>
                 <FontAwesome5 name="exclamation" size={8} color={COLORS.warning} />
@@ -201,7 +177,6 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
           </View>
         </View>
 
-        {/* Right: action buttons */}
         {!isLocked ? (
           <View style={D.msActions}>
             {!isDone && !needsReview && (
@@ -237,18 +212,12 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
   );
 };
 
-// ── Main view ─────────────────────────────────────────────────────────────────
 export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsViewProps) => {
   const insets = useSafeAreaInsets();
   const [milestoneModalVisible, setMilestoneModalVisible] = useState(false);
+  const [ntpViewerVisible, setNtpViewerVisible] = useState(false);
   const { project, engineerName, engineerPhotoURL, isLoading, lastViewedMilestoneId } = data;
 
-  // Scroll-restore plumbing. When the engineer returns from MilestoneDetailsView
-  // (either via hardware back intercepted in ProjectDetailsScreen or the
-  // in-view back button), ProjectDetailsView re-mounts from scratch — refs are
-  // fresh, so a mount-time useEffect fires BEFORE any card has laid out and
-  // cardYRef is still empty. Instead, the target card's own onLayout triggers
-  // the scroll once, guaranteed to run after the card knows its y position.
   const scrollRef = useRef<ScrollView>(null);
   const hasScrolledRef = useRef(false);
 
@@ -256,25 +225,23 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
   const status   = displayStatus(project.status || "Pending");
   const sc       = STATUS_MAP[status] || DEFAULT_SC;
-  const progress = Math.min(100, Math.max(0, project.progress || 0));
 
-  // Drafts (confirmed === false) live in the review modal — they do NOT
-  // appear in the project details until the engineer confirms them. Anything
-  // confirmed: true OR confirmed === undefined (legacy data) is shown.
   const allMilestones      = project.milestones ?? [];
   const draftMilestones    = allMilestones.filter((m) => m.confirmed === false);
   const visibleMilestones  = allMilestones.filter((m) => m.confirmed !== false);
+  const DONE_STATUSES = new Set(["done", "complete", "completed"]);
   const completedMs        = visibleMilestones.filter(
-    (m) => m.status?.toString().toLowerCase() === "completed",
+    (m) => DONE_STATUSES.has(m.status?.toString().toLowerCase() ?? ""),
   ).length;
-  const totalMs            = visibleMilestones.length;     // confirmed-only count
+  const totalMs            = visibleMilestones.length;
   const draftCount         = draftMilestones.length;
   const hasDraftsOnly      = totalMs === 0 && draftCount > 0;
 
+  const progress = typeof project.actualPercent === "number"
+    ? project.actualPercent
+    : totalMs > 0 ? Math.round((completedMs / totalMs) * 100) : 0;
+
   const displayTitle    = project.projectName    ?? project.title    ?? "Untitled Project";
-  // project.projectEngineer is the engineer's UID (per firestore rules). The
-  // resolved display name comes from AuthContext via the presenter — the
-  // signed-in PROJ_ENG is always the assigned engineer on their own projects.
   const displayEngineer = engineerName ?? null;
   const displayLocation = project.barangay
     ? project.sitioStreet ? `${project.sitioStreet}, ${project.barangay}` : project.barangay
@@ -283,19 +250,13 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const displayCompletion = project.originalDateCompletion ?? project.completionDate ?? null;
   const displayBudget     = formatBudget(project.contractAmount ?? project.budget);
 
-  // Engineer initials
   const initials = displayEngineer
     ?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() ?? "PE";
 
-  // Project Accomplishment — drive from the locally-computed milestone weight
-  // sum (same value as the hero ring) so this section never drifts from what
-  // the user can eyeball from the milestone cards. The web-side `actualPercent`
-  // field is still Firestore's source of truth for HCSD reporting; mobile just
-  // doesn't read it here.
   const accomplishment = computeAccomplishment(
     displayStart,
     displayCompletion,
-    project.progress,
+    progress,
   );
   const hasTimeline = !!(displayStart && displayCompletion);
   const slippageIsBehind = accomplishment.slippage > 0;
@@ -305,11 +266,9 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   return (
     <View style={D.root}>
 
-      {/* ══ HERO ═══════════════════════════════════════════════════ */}
       <View style={[D.hero, { paddingTop: insets.top + 10 }]}>
         <View style={D.orb1} /><View style={D.orb2} /><View style={D.orb3} />
 
-        {/* Top bar: back + code chip */}
         <View style={D.heroTopBar}>
           <TouchableOpacity onPress={onBack} style={D.backBtn} activeOpacity={0.8}>
             <FontAwesome5 name="arrow-left" size={14} color="#fff" />
@@ -322,13 +281,10 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           ) : null}
         </View>
 
-        {/* HCSD label */}
         <Text style={D.heroLabel}>CONSTRUCTION SERVICES DIVISION</Text>
 
-        {/* Project title */}
         <Text style={D.heroTitle} numberOfLines={3}>{displayTitle}</Text>
 
-        {/* Engineer row */}
         {displayEngineer ? (
           <View style={D.engineerRow}>
             <View style={D.engineerAvatar}>
@@ -345,7 +301,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </View>
         ) : null}
 
-        {/* Status + location + duration row */}
         <View style={D.heroBadgeRow}>
           <View style={[D.statusBadge, { backgroundColor: sc.bg }]}>
             <FontAwesome5 name={sc.icon} size={10} color={sc.accent} />
@@ -368,9 +323,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         </View>
       </View>
 
-      {/* ══ FLOATING METRICS CARD ═══════════════════════════════════ */}
       <View style={D.metricsCard}>
-        {/* Contract Amount */}
         <View style={D.metricCol}>
           <View style={[D.metricIconBox, { backgroundColor: COLORS.primarySoft }]}>
             <FontAwesome5 name="file-invoice-dollar" size={13} color={COLORS.primary} />
@@ -381,7 +334,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
         <View style={D.metricDivider} />
 
-        {/* Milestones */}
         <View style={D.metricCol}>
           <View style={[D.metricIconBox, { backgroundColor: COLORS.successSoft }]}>
             <FontAwesome5 name="layer-group" size={13} color={COLORS.success} />
@@ -392,7 +344,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
 
         <View style={D.metricDivider} />
 
-        {/* Progress */}
         <View style={D.metricCol}>
           <View style={[D.metricIconBox, { backgroundColor: sc.bg }]}>
             <FontAwesome5 name="chart-line" size={13} color={sc.accent} />
@@ -402,14 +353,12 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         </View>
       </View>
 
-      {/* ══ SCROLLABLE CONTENT ══════════════════════════════════════ */}
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[D.scroll, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ── PROGRESS BAR ── */}
         <View style={D.card}>
           <View style={D.progressHeader}>
             <Text style={D.cardSectionLabel}>OVERALL PROGRESS</Text>
@@ -418,7 +367,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           <View style={D.progressTrack}>
             <View style={[D.progressFill, { width: `${progress}%` as any, backgroundColor: sc.accent }]} />
           </View>
-          {/* Milestone step dots */}
           {totalMs > 0 && (
             <View style={D.stepDots}>
               {project.milestones!.map((m, i) => {
@@ -437,7 +385,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </Text>
         </View>
 
-        {/* ── DATE TIMELINE ── */}
         {(displayStart || displayCompletion || project.ntpReceivedDate) ? (
           <View style={D.card}>
             <Text style={D.cardSectionLabel}>PROJECT TIMELINE</Text>
@@ -500,11 +447,9 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </View>
         ) : null}
 
-        {/* ── PROJECT DETAILS ── */}
         <View style={D.card}>
           <Text style={D.cardSectionLabel}>PROJECT DETAILS</Text>
 
-          {/* Two-column grid for key details */}
           <View style={D.detailGrid}>
             {project.fundingSource ? (
               <View style={D.detailCell}>
@@ -533,17 +478,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 <Text style={D.detailCellValue}>{project.accountCode}</Text>
               </View>
             ) : null}
-            {(project.progress !== undefined && project.progress !== null) ? (
-              <View style={D.detailCell}>
-                <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
-                  <FontAwesome5 name="percentage" size={12} color={COLORS.primary} />
-                </View>
-                <Text style={D.detailCellLabel}>Actual %</Text>
-                <Text style={[D.detailCellValue, { color: COLORS.primary, fontWeight: "900" }]}>
-                  {project.progress}%
-                </Text>
-              </View>
-            ) : null}
             {(project.incurredAmount !== undefined && project.incurredAmount !== null) ? (
               <View style={D.detailCell}>
                 <View style={[D.detailIcon, { backgroundColor: COLORS.successSoft }]}>
@@ -557,7 +491,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             ) : null}
           </View>
 
-          {/* Description */}
           {project.description ? (
             <View style={D.descBox}>
               <View style={D.descLabelRow}>
@@ -569,13 +502,12 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           ) : null}
         </View>
 
-        {/* ── NOTICE TO PROCEED ── */}
         <View style={D.card}>
           <Text style={D.cardSectionLabel}>NOTICE TO PROCEED</Text>
           {project.ntpFileUrl ? (
             <TouchableOpacity
               style={D.ntpRow}
-              onPress={() => Linking.openURL(project.ntpFileUrl!)}
+              onPress={() => setNtpViewerVisible(true)}
               activeOpacity={0.85}
             >
               <View style={D.ntpIconBox}>
@@ -594,7 +526,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           )}
         </View>
 
-        {/* ── ASSIGNED PERSONNEL ── */}
         {(displayEngineer || project.projectInspector || project.materialInspector || project.electricalInspector) ? (
           <View style={D.card}>
             <Text style={D.cardSectionLabel}>ASSIGNED PERSONNEL</Text>
@@ -639,7 +570,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </View>
         ) : null}
 
-        {/* ── PROJECT ACCOMPLISHMENT (computed) ── */}
         {hasTimeline ? (
           <View style={D.card}>
             <Text style={D.cardSectionLabel}>PROJECT ACCOMPLISHMENT</Text>
@@ -651,14 +581,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                   <Text style={D.accompUnit}>%</Text>
                 </Text>
                 <Text style={D.accompSub}>% of contract period used</Text>
-              </View>
-              <View style={D.accompCell}>
-                <Text style={D.detailCellLabel}>Actual Progress</Text>
-                <Text style={D.accompValue}>
-                  {project.progress ?? 0}
-                  <Text style={D.accompUnit}>%</Text>
-                </Text>
-                <Text style={D.accompSub}>% of work completed</Text>
               </View>
               <View style={[D.accompCell, slippageIsBehind && D.accompCellWarn]}>
                 <Text style={D.detailCellLabel}>Slippage</Text>
@@ -682,7 +604,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               </View>
             </View>
 
-            {/* Dual progress bars */}
             <View style={D.accompBarBlock}>
               <View style={D.accompBarLabel}>
                 <View style={[D.accompLegendDot, { backgroundColor: "#64748B" }]} />
@@ -693,17 +614,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 <View style={[D.progressFill, { width: `${accomplishment.timeElapsed}%` as any, backgroundColor: "#64748B" }]} />
               </View>
             </View>
-            <View style={D.accompBarBlock}>
-              <View style={D.accompBarLabel}>
-                <View style={[D.accompLegendDot, { backgroundColor: COLORS.warning }]} />
-                <Text style={D.accompBarLabelText}>ACTUAL PROGRESS</Text>
-                <Text style={D.accompBarPct}>{project.progress ?? 0}%</Text>
-              </View>
-              <View style={D.progressTrack}>
-                <View style={[D.progressFill, { width: `${project.progress ?? 0}%` as any, backgroundColor: COLORS.warning }]} />
-              </View>
-            </View>
-
             {slippageIsBehind ? (
               <View style={D.slippageAlert}>
                 <FontAwesome5 name="exclamation-triangle" size={12} color={COLORS.warning} />
@@ -719,95 +629,13 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </View>
         ) : null}
 
-        {/* ── PROJECT ORDERS ── */}
-        {(project.resumeOrderNumber || project.validationOrderNumber || project.suspensionOrderNumber) ? (
-          <View style={D.card}>
-            <Text style={D.cardSectionLabel}>PROJECT ORDERS</Text>
+        <ProjectOrdersCard
+          resumeOrder={project.resumeOrder}
+          validationOrder={project.validationOrder}
+          suspensionOrder={project.suspensionOrder}
+          timeExtension={project.timeExtension}
+        />
 
-            {project.resumeOrderNumber || project.resumeOrderDate || project.timeExtensionOnOrder ? (
-              <View style={D.orderBlock}>
-                <View style={D.orderHeaderRow}>
-                  <View style={[D.detailIcon, { backgroundColor: COLORS.successSoft }]}>
-                    <FontAwesome5 name="play" size={10} color={COLORS.success} />
-                  </View>
-                  <Text style={D.orderHeaderText}>RESUME ORDER</Text>
-                </View>
-                <View style={D.orderGrid}>
-                  {project.resumeOrderNumber ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Order Number</Text>
-                      <Text style={D.detailCellValue}>{project.resumeOrderNumber}</Text>
-                    </View>
-                  ) : null}
-                  {project.resumeOrderDate ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Order Date</Text>
-                      <Text style={D.detailCellValue}>{formatDateString(project.resumeOrderDate)}</Text>
-                    </View>
-                  ) : null}
-                  {project.timeExtensionOnOrder ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Time Extension</Text>
-                      <Text style={D.detailCellValue}>{project.timeExtensionOnOrder}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
-
-            {project.validationOrderNumber || project.validationOrderDate ? (
-              <View style={D.orderBlock}>
-                <View style={D.orderHeaderRow}>
-                  <View style={[D.detailIcon, { backgroundColor: COLORS.primarySoft }]}>
-                    <FontAwesome5 name="clipboard-check" size={10} color={COLORS.primary} />
-                  </View>
-                  <Text style={D.orderHeaderText}>VALIDATION ORDER</Text>
-                </View>
-                <View style={D.orderGrid}>
-                  {project.validationOrderNumber ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Order Number</Text>
-                      <Text style={D.detailCellValue}>{project.validationOrderNumber}</Text>
-                    </View>
-                  ) : null}
-                  {project.validationOrderDate ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Order Date</Text>
-                      <Text style={D.detailCellValue}>{formatDateString(project.validationOrderDate)}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
-
-            {project.suspensionOrderNumber || project.suspensionOrderDate ? (
-              <View style={[D.orderBlock, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 0 }]}>
-                <View style={D.orderHeaderRow}>
-                  <View style={[D.detailIcon, { backgroundColor: COLORS.errorSoft }]}>
-                    <FontAwesome5 name="pause" size={10} color={COLORS.error} />
-                  </View>
-                  <Text style={D.orderHeaderText}>SUSPENSION ORDER</Text>
-                </View>
-                <View style={D.orderGrid}>
-                  {project.suspensionOrderNumber ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Order Number</Text>
-                      <Text style={D.detailCellValue}>{project.suspensionOrderNumber}</Text>
-                    </View>
-                  ) : null}
-                  {project.suspensionOrderDate ? (
-                    <View style={D.orderCell}>
-                      <Text style={D.detailCellLabel}>Order Date</Text>
-                      <Text style={D.detailCellValue}>{formatDateString(project.suspensionOrderDate)}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* ── REMARKS & ACTION TAKEN ── */}
         {(project.remarks || project.actionTaken) ? (
           <View style={D.card}>
             <Text style={D.cardSectionLabel}>REMARKS & ACTION TAKEN</Text>
@@ -832,14 +660,8 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           </View>
         ) : null}
 
-        {/* ── MILESTONES ── */}
         <View
           onLayout={(e) => {
-            // Scroll-restore landing target: when the engineer returns from a
-            // specific milestone, drop them at the "Construction Phases"
-            // section so they can eyeball all phases, not only the one they
-            // just viewed. Gate on State C (totalMs > 0) — if phases aren't
-            // generated yet or are still drafts, there's nothing to return to.
             if (
               totalMs > 0 &&
               lastViewedMilestoneId &&
@@ -856,7 +678,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
             }
           }}
         >
-          {/* Section header — only shown once confirmed phases exist */}
           {totalMs > 0 ? (
             <View style={D.msHeader}>
               <View>
@@ -871,7 +692,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
           ) : null}
 
           {totalMs === 0 && draftCount === 0 ? (
-            // ── State A: nothing exists yet → CTA to generate
             <View style={D.emptyMsCard}>
               <View style={D.emptyMsIconBox}>
                 <FontAwesome5 name="layer-group" size={28} color={COLORS.primary} />
@@ -888,7 +708,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               </TouchableOpacity>
             </View>
           ) : hasDraftsOnly ? (
-            // ── State B: AI drafted, awaiting engineer review/confirm
             <View style={D.resumeCard}>
               <View style={D.resumeIconBox}>
                 <FontAwesome5 name="search" size={26} color={COLORS.warning} />
@@ -905,7 +724,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               </TouchableOpacity>
             </View>
           ) : (
-            // ── State C: confirmed phases — render the timeline
             visibleMilestones.map((m, index) => (
               <MilestoneCard
                 key={m.id || index}
@@ -931,15 +749,20 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         onSaveAndConfirmAll={actions.onSaveAndConfirmAll}
         onDeleteMilestone={actions.onDeleteMilestone}
       />
+
+      <NtpViewerModal
+        visible={ntpViewerVisible}
+        onClose={() => setNtpViewerVisible(false)}
+        fileUrl={project.ntpFileUrl}
+        fileName={project.ntpFileName}
+      />
     </View>
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const D = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
 
-  // ── Hero ──────────────────────────────────────────────────────
   hero: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 22, paddingBottom: 28, overflow: "hidden",
@@ -1001,7 +824,6 @@ const D = StyleSheet.create({
   },
   locationText: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.9)", flex: 1 },
 
-  // ── Floating metrics card ─────────────────────────────────────
   metricsCard: {
     flexDirection: "row",
     marginHorizontal: 18,
@@ -1022,10 +844,8 @@ const D = StyleSheet.create({
   metricValue: { fontSize: 16, fontWeight: "900", color: COLORS.textPrimary },
   metricLabel: { fontSize: 10, fontWeight: "700", color: COLORS.textTertiary },
 
-  // ── Scroll ───────────────────────────────────────────────────
   scroll: { paddingHorizontal: 18, gap: 14 },
 
-  // ── Generic card ─────────────────────────────────────────────
   card: {
     backgroundColor: COLORS.surface, borderRadius: 20, padding: 18,
     borderWidth: 1, borderColor: COLORS.border,
@@ -1037,7 +857,6 @@ const D = StyleSheet.create({
     letterSpacing: 1, marginBottom: 14,
   },
 
-  // ── Progress ─────────────────────────────────────────────────
   progressHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   progressPct:    { fontSize: 28, fontWeight: "900" },
   progressTrack:  {
@@ -1049,7 +868,6 @@ const D = StyleSheet.create({
   stepDot:        { height: 5, flex: 1, minWidth: 10, borderRadius: 3 },
   progressCaption:{ fontSize: 12, color: COLORS.textSecondary, fontWeight: "600" },
 
-  // ── Timeline ─────────────────────────────────────────────────
   timeline: { gap: 0 },
   timelineItem: {
     flexDirection: "row", alignItems: "center", gap: 12,
@@ -1063,7 +881,6 @@ const D = StyleSheet.create({
   tlLabel: { fontSize: 11, fontWeight: "700", color: COLORS.textSecondary, flex: 1 },
   tlValue: { fontSize: 13, fontWeight: "700", color: COLORS.textPrimary },
 
-  // ── Details grid ─────────────────────────────────────────────
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 0 },
   detailCell: {
     flex: 1, minWidth: "45%",
@@ -1086,7 +903,6 @@ const D = StyleSheet.create({
   descLabel: { fontSize: 10, fontWeight: "800", color: COLORS.textTertiary, letterSpacing: 0.6 },
   descText:  { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
 
-  // ── NTP viewer ────────────────────────────────────────────────
   ntpRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: COLORS.background, borderRadius: 14,
@@ -1105,7 +921,6 @@ const D = StyleSheet.create({
     fontStyle: "italic",
   },
 
-  // ── Personnel grid (Assigned Personnel) ───────────────────────
   personnelGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   personnelCell: {
     flex: 1, minWidth: "45%",
@@ -1114,7 +929,6 @@ const D = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border,
   },
 
-  // ── Project Accomplishment ────────────────────────────────────
   accompGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 6 },
   accompCell: {
     flex: 1, minWidth: "45%",
@@ -1149,26 +963,8 @@ const D = StyleSheet.create({
     fontSize: 12, color: COLORS.warning, flex: 1, lineHeight: 17, fontWeight: "600",
   },
 
-  // ── Project Orders ────────────────────────────────────────────
-  orderBlock: {
-    paddingBottom: 12, marginBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-  orderHeaderRow: {
-    flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10,
-  },
-  orderHeaderText: {
-    fontSize: 10, fontWeight: "900", color: COLORS.textSecondary, letterSpacing: 0.8,
-  },
-  orderGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  orderCell: {
-    flex: 1, minWidth: "45%", gap: 4,
-  },
-
-  // ── Remarks ───────────────────────────────────────────────────
   remarkBlock: { marginBottom: 12 },
 
-  // ── Milestones header ─────────────────────────────────────────
   msHeader: {
     flexDirection: "row", justifyContent: "space-between",
     alignItems: "flex-start", marginBottom: 14,
@@ -1176,7 +972,6 @@ const D = StyleSheet.create({
   msSectionLabel: { fontSize: 10, fontWeight: "900", color: COLORS.textTertiary, letterSpacing: 1 },
   msSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 3, fontWeight: "600" },
 
-  // Generate button
   generateBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: COLORS.primary,
@@ -1189,7 +984,6 @@ const D = StyleSheet.create({
   generateBtnText:     { fontSize: 12, fontWeight: "800", color: "#fff" },
   generateBtnTextDone: { color: COLORS.success },
 
-  // Empty milestones
   emptyMsCard: {
     backgroundColor: COLORS.surface, borderRadius: 20,
     padding: 32, alignItems: "center", gap: 10,
@@ -1210,7 +1004,6 @@ const D = StyleSheet.create({
   },
   emptyMsBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
 
-  // Resume Review card — drafts exist, waiting on engineer
   resumeCard: {
     backgroundColor: COLORS.warningSoft,
     borderRadius: 20, padding: 26, alignItems: "center", gap: 8,
@@ -1235,7 +1028,6 @@ const D = StyleSheet.create({
   },
   resumeBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
 
-  // ── Milestone card ────────────────────────────────────────────
   msWrapper:  { position: "relative" },
   connector: {
     position: "absolute", left: 19, top: 54, width: 2,
@@ -1261,12 +1053,6 @@ const D = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
   proofBadgeText: { fontSize: 9, fontWeight: "800", color: COLORS.primary },
-  weightBadge: {
-    backgroundColor: COLORS.background,
-    borderWidth: 1, borderColor: COLORS.border,
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
-  },
-  weightBadgeText: { fontSize: 9, fontWeight: "800", color: COLORS.textSecondary },
   reviewBadge: {
     flexDirection: "row", alignItems: "center", gap: 3,
     backgroundColor: COLORS.warningSoft,
@@ -1296,7 +1082,6 @@ const D = StyleSheet.create({
   msStatusDot:  { width: 5, height: 5, borderRadius: 3 },
   msStatusText: { fontSize: 10, fontWeight: "700" },
 
-  // Right actions
   msActions: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
   cameraBtn: {
     width: 38, height: 38, borderRadius: 12,

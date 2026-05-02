@@ -16,16 +16,11 @@ import { requireTenantId } from "../utils/tenant";
 import type { Milestone, Project } from "../types";
 
 export class ProjectModel {
-  // ── Field normalizer ─────────────────────────────────────────────
-  // Maps canonical web-app field names to the display aliases the
-  // mobile views use.  Both sets of fields end up on the Project object
-  // so views that reference either name continue to work.
   private static normalize(raw: Record<string, unknown>, id: string): Project {
-    const r = raw as Project;
+    const r = raw as unknown as Project;
     return {
-      id,
       ...r,
-      // Display aliases derived from canonical names (fall back to old names)
+      id,
       title:          r.projectName      ?? r.title,
       engineer:       r.projectEngineer  ?? r.engineer,
       startDate:      r.officialDateStarted  ?? r.startDate,
@@ -35,21 +30,23 @@ export class ProjectModel {
           ? `${r.sitioStreet}, ${r.barangay}`
           : r.barangay
         : r.location,
-      // budget alias for displays that show currency
       budget: r.contractAmount ?? r.budget,
     };
   }
 
-  // ── Milestone subcollection helper ───────────────────────────────
   private static async fetchMilestonesForProjects(
     projectIds: string[],
+    tid: string,
   ): Promise<Record<string, Milestone[]>> {
     const byProject: Record<string, Milestone[]> = {};
     await Promise.all(
       projectIds.map(async (projectId) => {
         try {
           const snaps = await getDocs(
-            collection(db, "projects", projectId, "milestones"),
+            query(
+              collection(db, "projects", projectId, "milestones"),
+              where("tenantId", "==", tid),
+            ),
           );
           byProject[projectId] = snaps.docs.map(
             (d) => ({ id: d.id, projectId, ...d.data() } as Milestone),
@@ -73,32 +70,22 @@ export class ProjectModel {
       return {
         ...project,
         milestones,
-        progress: ProjectModel.computeProgress(milestones),
+        progress: typeof project.actualPercent === "number"
+          ? project.actualPercent
+          : ProjectModel.computeProgress(milestones),
       };
     });
   }
 
-  // AI-generated milestones carry a weightPercentage; sum the completed
-  // weights for true work-effort progress. Legacy milestones (no weights)
-  // fall back to count-based progress so old data still renders sensibly.
   private static computeProgress(milestones: Milestone[]): number {
-    if (milestones.length === 0) return 0;
-    const hasWeights = milestones.some(
-      (m) => typeof m.weightPercentage === "number" && m.weightPercentage > 0,
-    );
-    if (hasWeights) {
-      const completedWeight = milestones
-        .filter((m) => m.status?.toString().toLowerCase() === "completed")
-        .reduce((sum, m) => sum + (m.weightPercentage || 0), 0);
-      return Math.min(100, Math.round(completedWeight));
-    }
-    const completed = milestones.filter(
-      (m) => m.status?.toString().toLowerCase() === "completed",
+    const confirmed = milestones.filter((m) => m.confirmed !== false);
+    if (confirmed.length === 0) return 0;
+    const DONE = new Set(["done", "complete", "completed"]);
+    const completed = confirmed.filter(
+      (m) => DONE.has(m.status?.toString().toLowerCase() ?? ""),
     ).length;
-    return Math.round((completed / milestones.length) * 100);
+    return Math.round((completed / confirmed.length) * 100);
   }
-
-  // ── One-time fetches ─────────────────────────────────────────────
 
   static async getAll(): Promise<Project[]> {
     const uid = requireAuth();
@@ -122,6 +109,7 @@ export class ProjectModel {
 
       const byProject = await this.fetchMilestonesForProjects(
         projects.map((p) => p.id),
+        tid,
       );
       const result = this.applyProgress(projects, byProject);
       setCached(cacheKey, result);
@@ -136,6 +124,7 @@ export class ProjectModel {
     requireAuth();
     try {
       if (!projectId) return null;
+      const tid = requireTenantId();
       const docRef = doc(db, "projects", projectId);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return null;
@@ -143,13 +132,18 @@ export class ProjectModel {
       const projectData = this.normalize(docSnap.data(), docSnap.id);
 
       const milestoneSnaps = await getDocs(
-        collection(db, "projects", projectId, "milestones"),
+        query(
+          collection(db, "projects", projectId, "milestones"),
+          where("tenantId", "==", tid),
+        ),
       );
       projectData.milestones = milestoneSnaps.docs
         .map((d) => ({ id: d.id, projectId, ...d.data() } as Milestone))
         .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
 
-      projectData.progress = ProjectModel.computeProgress(projectData.milestones);
+      projectData.progress = typeof projectData.actualPercent === "number"
+        ? projectData.actualPercent
+        : ProjectModel.computeProgress(projectData.milestones);
 
       return projectData;
     } catch (error) {
@@ -158,14 +152,6 @@ export class ProjectModel {
     }
   }
 
-  // ── Real-time subscriptions ──────────────────────────────────────
-
-  // Project list with live progress. The outer listener watches the engineer's
-  // projects; for each project we attach a milestones subcollection listener
-  // so status flips (Pending -> Completed) push a re-emit with fresh progress.
-  // A single getDocs on milestones would freeze the list after first paint,
-  // which is the bug we had before: details screen ticked to 100% but the
-  // list card stayed at the initial %.
   static subscribeToAll(
     onUpdate: (projects: Project[]) => void,
     onError?: (error: Error) => void,
@@ -188,7 +174,9 @@ export class ProjectModel {
         out.push({
           ...project,
           milestones,
-          progress: ProjectModel.computeProgress(milestones),
+          progress: typeof project.actualPercent === "number"
+            ? project.actualPercent
+            : ProjectModel.computeProgress(milestones),
         });
       }
       onUpdate(out);
@@ -196,7 +184,10 @@ export class ProjectModel {
 
     const attachMilestoneListener = (projectId: string) => {
       const unsub = onSnapshot(
-        collection(db, "projects", projectId, "milestones"),
+        query(
+          collection(db, "projects", projectId, "milestones"),
+          where("tenantId", "==", tid),
+        ),
         (snap) => {
           if (cancelled) return;
           milestonesByProject.set(
@@ -238,16 +229,12 @@ export class ProjectModel {
             latestProjects.set(project.id, project);
             nextIds.add(project.id);
           }
-          // Detach listeners for projects no longer in scope
           for (const id of Array.from(milestoneUnsubs.keys())) {
             if (!nextIds.has(id)) detachMilestoneListener(id);
           }
-          // Attach listeners for newly-scoped projects
           for (const id of nextIds) {
             if (!milestoneUnsubs.has(id)) attachMilestoneListener(id);
           }
-          // Emit right away so the list paints even before every milestones
-          // stream has delivered its first snapshot
           emit();
         } catch (err) {
           logger.error("subscribeToAll processing error:", err);
@@ -270,16 +257,13 @@ export class ProjectModel {
     };
   }
 
-  // Two parallel listeners — project doc + milestone subcollection — combined
-  // into a single onUpdate stream. Subcollection writes (e.g. generateMilestones
-  // batch-writing milestone docs) don't touch the parent doc, so a project-doc-
-  // only listener silently misses them and the UI stays stale.
   static subscribeToProject(
     projectId: string,
     onUpdate: (project: Project | null) => void,
     onError?: (error: Error) => void,
   ): () => void {
     requireAuth();
+    const tid = requireTenantId();
 
     let latestProject: Project | null = null;
     let latestMilestones: Milestone[] = [];
@@ -298,7 +282,9 @@ export class ProjectModel {
       onUpdate({
         ...latestProject,
         milestones: sorted,
-        progress: ProjectModel.computeProgress(sorted),
+        progress: typeof latestProject.actualPercent === "number"
+          ? latestProject.actualPercent
+          : ProjectModel.computeProgress(sorted),
       });
     };
 
@@ -322,7 +308,10 @@ export class ProjectModel {
     );
 
     const unsubMilestones = onSnapshot(
-      collection(db, "projects", projectId, "milestones"),
+      query(
+        collection(db, "projects", projectId, "milestones"),
+        where("tenantId", "==", tid),
+      ),
       (snap) => {
         latestMilestones = snap.docs.map(
           (d) => ({ id: d.id, projectId, ...d.data() } as Milestone),
@@ -331,7 +320,9 @@ export class ProjectModel {
         emit();
       },
       (err) => {
+        milestonesLoaded = true;
         logger.error("subscribeToProject (milestones) error:", err);
+        emit();
         onError?.(err);
       },
     );
@@ -342,15 +333,10 @@ export class ProjectModel {
     };
   }
 
-  // ── Milestone ref helper (use this when writing proofs) ──────────
   static milestoneRef(projectId: string, milestoneId: string) {
     return doc(db, "projects", projectId, "milestones", milestoneId);
   }
 
-  // Treat a project as "Completed" as soon as every confirmed milestone is
-  // completed, even if the stored `project.status` hasn't been flipped yet by
-  // the web-side trigger. Keeps dashboard counts + list filters in lock-step
-  // with what the engineer actually sees on the milestone cards.
   static deriveStatus(project: Project): string {
     const milestones = project.milestones ?? [];
     const confirmed = milestones.filter((m) => m.confirmed !== false);

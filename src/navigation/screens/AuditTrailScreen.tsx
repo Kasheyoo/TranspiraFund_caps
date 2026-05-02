@@ -3,33 +3,42 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { AuditTrailService } from "../../services/AuditTrailService";
 import type { AuditTrail, UserProfile } from "../../types";
+import { logger } from "../../utils/logger";
 import { AuditTrailView } from "../../views/AuditTrailView";
 
 export function AuditTrailScreen() {
   const navigation = useNavigation();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, claimsLoaded, tenantId } = useAuth();
   const [logs, setLogs] = useState<AuditTrail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchLogs = useCallback(async () => {
+  useEffect(() => {
+    if (!claimsLoaded || !tenantId) return;
+
+    setIsLoading(true);
+    const unsubscribe = AuditTrailService.subscribe(
+      (data) => {
+        setLogs(data);
+        setIsLoading(false);
+      },
+      () => setIsLoading(false),
+    );
+    return unsubscribe;
+  }, [claimsLoaded, tenantId]);
+
+  const onRefresh = useCallback(async () => {
+    if (!claimsLoaded || !tenantId) return;
     setIsLoading(true);
     try {
       const data = await AuditTrailService.getAll();
       setLogs(data);
     } catch (error) {
-      console.warn("Failed to fetch audit trails", error);
+      logger.warn("Failed to fetch audit trails", error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [claimsLoaded, tenantId]);
 
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
-
-  // Mobile audit trail entries are always written by the logged-in PROJ_ENG.
-  // The actor cache is keyed by UID and hydrated from users/{uid} — here we
-  // use the profile already loaded in AuthContext (no extra Firestore read).
   const actorCache = useMemo<Record<string, UserProfile>>(() => {
     if (!user?.uid || !userProfile) return {};
     return { [user.uid]: userProfile };
@@ -40,7 +49,7 @@ export function AuditTrailScreen() {
       logs={logs}
       isLoading={isLoading}
       actorCache={actorCache}
-      onRefresh={fetchLogs}
+      onRefresh={onRefresh}
       onBack={() => navigation.goBack()}
     />
   );

@@ -1,10 +1,6 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { Modal, StyleSheet, Text, View } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-} from "react-native-reanimated";
+import { Modal, StyleSheet, View } from "react-native";
+import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { COLORS } from "../constants";
 import { PrimaryButton } from "./SharedComponents";
 

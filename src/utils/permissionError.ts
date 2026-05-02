@@ -1,6 +1,6 @@
 import { logger } from "./logger";
 
-export function isPermissionDenied(err: unknown): boolean {
+function isPermissionDenied(err: unknown): boolean {
   return (
     typeof err === "object" &&
     err !== null &&

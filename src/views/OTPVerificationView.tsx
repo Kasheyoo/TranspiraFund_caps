@@ -201,12 +201,6 @@ export const OTPVerificationView = ({
     if (code.length === CELL_COUNT) onSubmit(code);
   };
 
-  const resetOtp = () => {
-    setOtp(Array(CELL_COUNT).fill(""));
-    setFocusedIndex(0);
-    inputRefs.current[0]?.focus();
-  };
-
   const isComplete = otp.every((d) => d !== "");
   const maskedEmail = email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) =>
     a + b.replace(/./g, "*") + c,

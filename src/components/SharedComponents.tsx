@@ -1,12 +1,8 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useState } from "react";
 import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
-  View,
   type ViewStyle,
 } from "react-native";
 import Animated, {
@@ -68,48 +64,6 @@ export const PrimaryButton = ({
   );
 };
 
-interface BlockInputProps {
-  icon: string;
-  placeholder: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  isPassword?: boolean;
-}
-
-export const BlockInput = ({
-  icon,
-  placeholder,
-  value,
-  onChangeText,
-  isPassword,
-}: BlockInputProps) => {
-  const [show, setShow] = useState(false);
-  return (
-    <View style={styles.inputContainer}>
-      <View style={styles.iconBox}>
-        <FontAwesome5 name={icon} size={16} color={COLORS.textGrey} />
-      </View>
-      <TextInput
-        style={styles.input}
-        placeholder={placeholder}
-        placeholderTextColor={COLORS.textLight}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={isPassword && !show}
-      />
-      {isPassword && (
-        <TouchableOpacity onPress={() => setShow(!show)} style={styles.eyeBtn}>
-          <FontAwesome5
-            name={show ? "eye" : "eye-slash"}
-            size={16}
-            color={COLORS.textGrey}
-          />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
-
 const styles = StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary,
@@ -127,29 +81,5 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     textAlign: "center",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 16,
-    marginBottom: 16,
-    height: 56,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  iconBox: { width: 48, alignItems: "center", justifyContent: "center" },
-  input: {
-    flex: 1,
-    height: "100%",
-    fontSize: 16,
-    color: COLORS.textDark,
-    paddingRight: 16,
-  },
-  eyeBtn: {
-    paddingHorizontal: 16,
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
   },
 });

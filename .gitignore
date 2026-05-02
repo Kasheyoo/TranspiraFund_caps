@@ -1,6 +1,16 @@
 # dependencies
 node_modules/
 
+# IDE / editor
+.idea/
+*.iml
+
+# Claude Code harness internals
+.claude/scheduled_tasks.lock
+
+# Python venv (SLM experimentation)
+transpira_slm_env/
+
 # Native build artifacts
 .kotlin/
 *.orig.*

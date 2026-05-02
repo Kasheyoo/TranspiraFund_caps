@@ -4,6 +4,12 @@ import { Alert, PermissionsAndroid, Platform } from "react-native";
 import { launchCamera } from "react-native-image-picker";
 import Geolocation from "react-native-geolocation-service";
 import { callFn } from "../services/CloudFunctionService";
+import {
+  uploadProofPhotoWithProgress,
+  type ProofUploadArgs,
+  type ProofUploadHandle,
+  type ProofUploadStage,
+} from "../services/ProofUploadService";
 import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
 import { logger } from "../utils/logger";
@@ -11,11 +17,9 @@ import { requireTenantId } from "../utils/tenant";
 import { useAuth } from "../context/AuthContext";
 import type { Milestone, Project } from "../types";
 
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg"];
 
-// PermissionsAndroid is Android-only. iOS handles permissions via Info.plist
-// + automatic prompts at first use, so we short-circuit to "granted" there.
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS !== "android") return true;
   const granted = await PermissionsAndroid.request(
@@ -29,9 +33,6 @@ const requestLocationPermission = async (): Promise<boolean> => {
   return granted === PermissionsAndroid.RESULTS.GRANTED;
 };
 
-// Camera permission MUST be requested explicitly. The library's launchCamera
-// will silently fail with errorCode "permission" if we don't — which presents
-// to the user as "the button does nothing." This is the fix for that bug.
 const requestCameraPermission = async (): Promise<boolean> => {
   if (Platform.OS !== "android") return true;
   const granted = await PermissionsAndroid.request(
@@ -45,11 +46,6 @@ const requestCameraPermission = async (): Promise<boolean> => {
   return granted === PermissionsAndroid.RESULTS.GRANTED;
 };
 
-// Fast pre-flight to confirm Location Services (GPS hardware) is actually ON.
-// Permission alone isn't enough — the user can have granted ACCESS_FINE_LOCATION
-// but still have GPS turned off in Quick Settings. We probe with a tight
-// timeout so the user sees a clear "turn on Location" prompt BEFORE the camera
-// opens, instead of taking a photo and then failing on the geotag at upload time.
 type GpsPreflight =
   | { ok: true }
   | { ok: false; reason: "disabled" | "unavailable" | "timeout" | "denied" };
@@ -59,7 +55,6 @@ const preflightGps = (): Promise<GpsPreflight> =>
     Geolocation.getCurrentPosition(
       () => resolve({ ok: true }),
       (err: { code: number; message: string }) => {
-        // Geolocation error codes: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
         if (err.code === 1) return resolve({ ok: false, reason: "denied" });
         if (err.code === 2) return resolve({ ok: false, reason: "disabled" });
         if (err.code === 3) return resolve({ ok: false, reason: "timeout" });
@@ -76,9 +71,6 @@ export const useProjectDetailsPresenter = (
   const { userProfile } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
-  // Sticky record of the last milestone the engineer opened — survives closing
-  // the sub-view so ProjectDetailsView can scroll-restore to that card on
-  // return (hardware back, gesture back, or in-view back button).
   const [lastViewedMilestoneId, setLastViewedMilestoneId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const selectedMilestoneRef = useRef(selectedMilestone);
@@ -89,9 +81,6 @@ export const useProjectDetailsPresenter = (
     setSelectedMilestone(m);
   };
 
-  // Toast: non-blocking confirmations + soft errors. Blocking prompts (permission
-  // denied, GPS disabled) intentionally stay as Alert because the user has to
-  // go to device Settings — that's a hard gate, not a fire-and-forget message.
   type ToastType = "success" | "error" | "info";
   const [toast, setToast] = useState<{ visible: boolean; type: ToastType; message: string }>({
     visible: false, type: "success", message: "",
@@ -100,16 +89,81 @@ export const useProjectDetailsPresenter = (
     setToast({ visible: true, type, message });
   const dismissToast = () => setToast((t) => ({ ...t, visible: false }));
 
-  // The signed-in PROJ_ENG is always the engineer assigned to this project
-  // (firestore rules enforce projectEngineer == request.auth.uid). So pull
-  // the display name and photo straight from AuthContext — same source the
-  // Dashboard and Settings use, so updates sync everywhere.
+  type ProofUploadState = {
+    stage: ProofUploadStage;
+    percent: number;
+    error?: string;
+  };
+  const [proofUpload, setProofUpload] = useState<ProofUploadState | null>(null);
+  const lastUploadArgsRef = useRef<ProofUploadArgs | null>(null);
+  const uploadHandleRef = useRef<ProofUploadHandle | null>(null);
+
+  const mapUploadError = (error: any): string => {
+    const code = String(error?.code || "").toLowerCase();
+    const raw = String(error?.message || "").toLowerCase();
+    if (code.includes("unauthenticated") || raw.includes("unauthenticated")) {
+      return "Session expired. Please sign in again.";
+    }
+    if (code.includes("permission-denied") || raw.includes("permission")) {
+      return "You're not the assigned engineer for this project.";
+    }
+    if (code.includes("failed-precondition") || raw.includes("failed-precondition")) {
+      return "Confirm this phase before uploading proof.";
+    }
+    if (code.includes("invalid-argument") || raw.includes("invalid")) {
+      return "Photo or location data is invalid. Please try again.";
+    }
+    if (code.includes("not-found") || raw.includes("not found")) {
+      return "Project or milestone could not be found.";
+    }
+    return error?.message || "Could not save the proof. Please try again.";
+  };
+
+  const startProofUpload = (args: ProofUploadArgs) => {
+    lastUploadArgsRef.current = args;
+    setProofUpload({ stage: "preparing", percent: 0 });
+
+    const handle = uploadProofPhotoWithProgress(args, (p) => {
+      setProofUpload((cur) =>
+        cur ? { ...cur, stage: p.stage, percent: p.percent } : cur,
+      );
+    });
+    uploadHandleRef.current = handle;
+
+    handle.promise
+      .then(() => {
+        setProofUpload({ stage: "done", percent: 100 });
+        setTimeout(() => {
+          setProofUpload((cur) => (cur?.stage === "done" ? null : cur));
+        }, 800);
+        showToast("success", "Geotagged proof saved successfully.");
+      })
+      .catch((error: any) => {
+        logger.error("[AddProof] upload error:", error);
+        setProofUpload({
+          stage: "error",
+          percent: 0,
+          error: mapUploadError(error),
+        });
+      });
+  };
+
+  const onRetryProofUpload = () => {
+    const args = lastUploadArgsRef.current;
+    if (!args) return;
+    startProofUpload(args);
+  };
+
+  const onDismissProofUpload = () => {
+    uploadHandleRef.current?.abort();
+    setProofUpload(null);
+  };
+
   const engineerName = userProfile?.firstName
     ? `Engr. ${userProfile.firstName} ${userProfile.lastName || ""}`.trim()
     : userProfile?.name || null;
   const engineerPhotoURL = userProfile?.photoURL;
 
-  // Real-time subscription to this project + its milestones
   useEffect(() => {
     if (!projectId) return;
     setIsLoading(true);
@@ -137,20 +191,15 @@ export const useProjectDetailsPresenter = (
 
   const handleAddProof = async (m: Milestone) => {
     try {
-      // Auth guard
       requireAuth();
       logger.log("[AddProof] start", { milestoneId: m.id });
 
-      // Cap at 5 proofs — server enforces the same gate, but checking here
-      // avoids a wasted camera launch + GPS fix + upload round-trip.
       const currentProofCount = Array.isArray(m.proofs) ? m.proofs.length : 0;
       if (currentProofCount >= 5) {
         showToast("info", "Maximum of 5 proofs reached for this phase.");
         return;
       }
 
-      // 1. CAMERA permission — must be requested explicitly or launchCamera
-      // silently no-ops with errorCode "permission".
       const cameraGranted = await requestCameraPermission();
       logger.log("[AddProof] camera permission:", cameraGranted);
       if (!cameraGranted) {
@@ -161,7 +210,6 @@ export const useProjectDetailsPresenter = (
         return;
       }
 
-      // 2. LOCATION permission
       const locationGranted = await requestLocationPermission();
       logger.log("[AddProof] location permission:", locationGranted);
       if (!locationGranted) {
@@ -172,8 +220,6 @@ export const useProjectDetailsPresenter = (
         return;
       }
 
-      // 3. Hard-require live GPS BEFORE the camera opens. Stops the user from
-      // capturing a photo that we'd then have to reject for missing geotag.
       const preflight = await preflightGps();
       logger.log("[AddProof] gps preflight:", preflight);
       if (!preflight.ok) {
@@ -188,15 +234,7 @@ export const useProjectDetailsPresenter = (
         return;
       }
 
-      // 4. Launch camera. saveToPhotos:false keeps the photo out of the gallery
-      // (mobile evidence stays inside our pipeline). cameraType:back is the
-      // sensible default for site documentation.
       logger.log("[AddProof] launching camera...");
-      // includeBase64:true so we can upload via Firebase's uploadString without
-      // touching RN's broken fetch().blob() / XHR-blob paths for local URIs.
-      // quality:1.0 keeps the original JPEG — any re-encode under 1.0 on
-      // react-native-image-picker's Android path strips the EXIF APP1 segment,
-      // which wipes GPSLatitude / DateTimeOriginal that HCSD needs.
       const result = await launchCamera({
         mediaType: "photo",
         quality: 1.0,
@@ -209,8 +247,6 @@ export const useProjectDetailsPresenter = (
         hasAssets: !!result.assets?.length,
       });
 
-      // Surface explicit camera errors — silent failure here is what users
-      // were experiencing as "the button does nothing."
       if (result.errorCode) {
         const codeMessages: Record<string, string> = {
           camera_unavailable: "This device doesn't have an accessible camera.",
@@ -222,7 +258,6 @@ export const useProjectDetailsPresenter = (
       }
 
       if (result.didCancel) {
-        // User backed out of the camera — no-op, no alert.
         return;
       }
 
@@ -234,40 +269,30 @@ export const useProjectDetailsPresenter = (
       {
         const asset = result.assets[0];
 
-        // Validate file type
         const fileType = asset.type || "";
         if (!ALLOWED_IMAGE_TYPES.includes(fileType.toLowerCase())) {
           Alert.alert("Invalid File", "Only JPEG and PNG images are allowed.");
           return;
         }
 
-        // Validate file size
         const fileSize = (asset as any).fileSize || 0;
         if (fileSize > MAX_IMAGE_SIZE_BYTES) {
           Alert.alert("File Too Large", "Image must be under 10MB.");
           return;
         }
 
-        // Bail early if base64 didn't come back — we can't upload without it.
         if (!asset.base64) {
           logger.error("[AddProof] missing base64 on captured asset", { uri: asset.uri });
           Alert.alert("Capture Error", "The photo couldn't be read from the camera. Please try again.");
           return;
         }
 
-        setIsLoading(true);
-
-        // image-picker's `timestamp` on Asset is typed as string (ISO),
-        // but on Android it sometimes comes back as a number — handle both.
         const rawTs = (asset as any).timestamp;
         const capturedAt =
           typeof rawTs === "number" ? rawTs
           : typeof rawTs === "string" ? Date.parse(rawTs) || Date.now()
           : Date.now();
 
-        // GPS — high accuracy, fail loud if the device couldn't get a fix.
-        // We capture accuracy too so HCSD can judge the quality of the
-        // geotag (urban canyons can give 50m+ readings on consumer GPS).
         const userLocation = await new Promise<{
           latitude: number;
           longitude: number;
@@ -283,51 +308,23 @@ export const useProjectDetailsPresenter = (
 
         const { latitude, longitude, accuracy } = userLocation;
 
-        // Server-side upload via Cloud Function. The Firebase JS SDK's Storage
-        // module throws "Creating blobs from 'ArrayBufferView' are not supported"
-        // in React Native — the polyfill rejects the Blob construction path
-        // both `uploadBytes` and `uploadString` end up using. So the function
-        // accepts base64, uploads via Admin SDK, and atomically appends the
-        // proof to the milestone doc. Same pattern as `uploadProfilePhoto`.
-        logger.log("[AddProof] uploading via uploadProofPhoto, base64 len:", asset.base64.length);
-        await callFn("uploadProofPhoto", {
-          projectId:   project!.id,
+        logger.log("[AddProof] dispatching upload, base64 len:", asset.base64.length);
+        startProofUpload({
+          projectId: project!.id,
           milestoneId: m.id,
-          base64:      asset.base64,
+          base64: asset.base64,
           capturedAt,
           latitude,
           longitude,
           accuracy,
         });
-        logger.log("[AddProof] upload complete (function returned)");
-
-        // Audit + arrayUnion are both done server-side by the function — the
-        // realtime listener picks up the new proof from the milestone doc.
-
-        showToast("success", "Geotagged proof saved successfully.");
       }
     } catch (error: any) {
-      logger.error("[AddProof] upload error:", error);
-      // Map common server-side error codes to short, user-readable copy.
-      // The function throws HttpsError with codes like "permission-denied" /
-      // "failed-precondition" / "invalid-argument" — surface those directly
-      // instead of the opaque "Failed to save evidence log."
-      const code = String(error?.code || "");
-      const detail =
-        code.includes("unauthenticated")     ? "Session expired. Please sign in again."
-      : code.includes("permission-denied")   ? "You're not the assigned engineer for this project."
-      : code.includes("failed-precondition") ? "Confirm this phase before uploading proof."
-      : code.includes("invalid-argument")    ? "Photo or location data is invalid. Please try again."
-      : code.includes("not-found")           ? "Project or milestone could not be found."
-      : error?.message                       || "Could not save the proof. Please try again.";
-      showToast("error", detail);
-    } finally {
-      setIsLoading(false);
+      logger.error("[AddProof] pre-upload error:", error);
+      showToast("error", error?.message || "Couldn't capture the proof. Please try again.");
     }
   };
 
-  // Maps the spec's documented error codes to user-facing UX outcomes.
-  // Returned to the caller (the modal) so it can render the right state.
   const handleGenerateMilestones = async (): Promise<{
     ok: boolean;
     count?: number;
@@ -340,7 +337,6 @@ export const useProjectDetailsPresenter = (
       const result = (await callFn("generateMilestones", { projectId })) as {
         success: boolean; count: number;
       };
-      // Real-time listener will auto-update with the new milestone docs
       return { ok: true, count: result.count };
     } catch (error: any) {
       logger.error("Generate milestones error:", error);
@@ -356,8 +352,6 @@ export const useProjectDetailsPresenter = (
     }
   };
 
-  // Engineer must review each AI-generated milestone before progress tracking
-  // unlocks. Toggles `confirmed: true` on the milestone subcollection doc.
   const handleConfirmMilestone = async (m: Milestone): Promise<boolean> => {
     if (!project) return false;
     try {
@@ -373,10 +367,6 @@ export const useProjectDetailsPresenter = (
     }
   };
 
-  // Batch endpoint used by the milestone review modal. The caller hands over
-  // edits keyed by milestone id (only the fields the engineer actually changed),
-  // and we apply them together with `confirmed: true` in parallel — one
-  // `updateDoc` per milestone. Anything not in `edits` is just confirmed as-is.
   const handleSaveAndConfirmAll = async (
     edits: Record<string, Partial<Milestone>>,
   ): Promise<boolean> => {
@@ -410,10 +400,6 @@ export const useProjectDetailsPresenter = (
     }
   };
 
-  // Engineer marks a milestone "Completed". Gated on at least one proof
-  // (UI also disables the button) and on the milestone being confirmed.
-  // Status is the canonical signal HCSD/web read for progress %, so we log
-  // this to HCSD audit so the office sees the field call live.
   const handleMarkCompleted = async (m: Milestone): Promise<boolean> => {
     if (!project) return false;
     if (m.status === "Completed") return true;
@@ -447,8 +433,6 @@ export const useProjectDetailsPresenter = (
     }
   };
 
-  // Drafts only — firestore rules block client-side milestone delete, and
-  // the cloud function refuses to delete confirmed milestones.
   const handleDeleteMilestone = async (m: Milestone): Promise<boolean> => {
     if (!project) return false;
     try {
@@ -463,9 +447,9 @@ export const useProjectDetailsPresenter = (
   };
 
   return {
-    data: { project, engineerName, engineerPhotoURL, selectedMilestone, lastViewedMilestoneId, isLoading, toast },
+    data: { project, engineerName, engineerPhotoURL, selectedMilestone, lastViewedMilestoneId, isLoading, toast, proofUpload },
     actions: {
-      onRefresh: () => {}, // No-op — real-time listener handles updates automatically
+      onRefresh: () => {},
       goBack: onBackCallback,
       onSelectMilestone,
       onAddProof: handleAddProof,
@@ -475,6 +459,8 @@ export const useProjectDetailsPresenter = (
       onDeleteMilestone: handleDeleteMilestone,
       onMarkCompleted: handleMarkCompleted,
       onDismissToast: dismissToast,
+      onRetryProofUpload,
+      onDismissProofUpload,
     },
   };
 };

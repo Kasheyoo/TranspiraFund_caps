@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { OTPService } from "../services/OTPService";
 import { isValidEmail, sanitizeInput } from "../utils/security";
 
-export type ForgotStep = "email" | "otp" | "password" | "success";
+type ForgotStep = "email" | "otp" | "password" | "success";
 
 const RESEND_COOLDOWN = 60; // seconds
 
