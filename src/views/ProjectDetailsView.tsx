@@ -1066,13 +1066,6 @@ const D = StyleSheet.create({
     borderWidth: 1, borderColor: "#FDE68A",
     alignItems: "center", justifyContent: "center",
   },
-  reviewBanner: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10,
-    backgroundColor: COLORS.warningSoft,
-    borderWidth: 1, borderColor: "#FDE68A",
-    borderRadius: 14, padding: 12, marginBottom: 12,
-  },
-  reviewBannerText: { flex: 1, fontSize: 12, color: COLORS.warning, lineHeight: 17, fontWeight: "600" },
   msTitle: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 18, marginBottom: 6 },
   msStatusRow: { flexDirection: "row" },
   msStatusPill: {

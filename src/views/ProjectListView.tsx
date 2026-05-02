@@ -377,8 +377,6 @@ const S = StyleSheet.create({
   },
   titleCol:    { flex: 1 },
   cardTitle:   { fontSize: 14, fontWeight: "800", color: COLORS.textPrimary, lineHeight: 19, marginBottom: 3 },
-  engineerRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  engineerText: { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600", flex: 1 },
   badge: {
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, flexShrink: 0,
   },
