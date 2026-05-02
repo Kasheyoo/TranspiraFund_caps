@@ -1,15 +1,12 @@
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
   onSnapshot,
   query,
   where,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { requireAuth } from "../utils/authGuard";
-import { getCached, setCached } from "../utils/cache";
 import { logger } from "../utils/logger";
 import { logFirestoreError } from "../utils/permissionError";
 import { requireTenantId } from "../utils/tenant";
@@ -34,49 +31,6 @@ export class ProjectModel {
     };
   }
 
-  private static async fetchMilestonesForProjects(
-    projectIds: string[],
-    tid: string,
-  ): Promise<Record<string, Milestone[]>> {
-    const byProject: Record<string, Milestone[]> = {};
-    await Promise.all(
-      projectIds.map(async (projectId) => {
-        try {
-          const snaps = await getDocs(
-            query(
-              collection(db, "projects", projectId, "milestones"),
-              where("tenantId", "==", tid),
-            ),
-          );
-          byProject[projectId] = snaps.docs.map(
-            (d) => ({ id: d.id, projectId, ...d.data() } as Milestone),
-          );
-        } catch {
-          byProject[projectId] = [];
-        }
-      }),
-    );
-    return byProject;
-  }
-
-  private static applyProgress(
-    projects: Project[],
-    byProject: Record<string, Milestone[]>,
-  ): Project[] {
-    return projects.map((project) => {
-      const milestones = (byProject[project.id] || []).sort(
-        (a, b) => (a.sequence || 0) - (b.sequence || 0),
-      );
-      return {
-        ...project,
-        milestones,
-        progress: typeof project.actualPercent === "number"
-          ? project.actualPercent
-          : ProjectModel.computeProgress(milestones),
-      };
-    });
-  }
-
   private static computeProgress(milestones: Milestone[]): number {
     const confirmed = milestones.filter((m) => m.confirmed !== false);
     if (confirmed.length === 0) return 0;
@@ -85,71 +39,6 @@ export class ProjectModel {
       (m) => DONE.has(m.status?.toString().toLowerCase() ?? ""),
     ).length;
     return Math.round((completed / confirmed.length) * 100);
-  }
-
-  static async getAll(): Promise<Project[]> {
-    const uid = requireAuth();
-    try {
-      const tid = requireTenantId();
-      const cacheKey = `projects_all:${tid}`;
-      const cached = getCached<Project[]>(cacheKey);
-      if (cached) return cached;
-
-      const q = query(
-        collection(db, "projects"),
-        where("tenantId", "==", tid),
-        where("projectEngineer", "==", uid),
-      );
-      const querySnapshot = await getDocs(q);
-      const projects: Project[] = querySnapshot.docs.map((d) =>
-        this.normalize(d.data(), d.id),
-      );
-
-      if (projects.length === 0) return [];
-
-      const byProject = await this.fetchMilestonesForProjects(
-        projects.map((p) => p.id),
-        tid,
-      );
-      const result = this.applyProgress(projects, byProject);
-      setCached(cacheKey, result);
-      return result;
-    } catch (error) {
-      logFirestoreError("Project list", error);
-      return [];
-    }
-  }
-
-  static async getById(projectId: string): Promise<Project | null> {
-    requireAuth();
-    try {
-      if (!projectId) return null;
-      const tid = requireTenantId();
-      const docRef = doc(db, "projects", projectId);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) return null;
-
-      const projectData = this.normalize(docSnap.data(), docSnap.id);
-
-      const milestoneSnaps = await getDocs(
-        query(
-          collection(db, "projects", projectId, "milestones"),
-          where("tenantId", "==", tid),
-        ),
-      );
-      projectData.milestones = milestoneSnaps.docs
-        .map((d) => ({ id: d.id, projectId, ...d.data() } as Milestone))
-        .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
-
-      projectData.progress = typeof projectData.actualPercent === "number"
-        ? projectData.actualPercent
-        : ProjectModel.computeProgress(projectData.milestones);
-
-      return projectData;
-    } catch (error) {
-      logger.error("ProjectModel Error:", error);
-      return null;
-    }
   }
 
   static subscribeToAll(
