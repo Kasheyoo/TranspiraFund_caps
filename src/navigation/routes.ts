@@ -3,7 +3,6 @@ export const ROUTES = {
   LANDING: "Landing",
   LOGIN: "Login",
   FORGOT_PASSWORD: "ForgotPassword",
-  FORCE_PASSWORD_CHANGE: "ForcePasswordChange",
 
   // Main tabs
   DASHBOARD: "Dashboard",
