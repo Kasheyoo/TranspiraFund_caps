@@ -1,50 +1,51 @@
-# Welcome to your Expo app 👋
+# TranspiraFund Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Bare React Native (Android-only) client for the TranspiraFund LGU project-monitoring system. Companion app to the TranspiraFund web application; shares the `transpirafund-webapp` Firebase project.
 
-## Get started
+## Stack
 
-1. Install dependencies
+- React Native 0.84 (bare workflow — not Expo)
+- Firebase v12 (Auth, Firestore, Storage, Cloud Functions)
+- React Navigation v7
 
-   ```bash
-   npm install
-   ```
+## Prerequisites
 
-2. Start the app
+- Node 20+
+- JDK 17 (Microsoft Build of OpenJDK)
+- Android SDK (via Android Studio) with NDK 27.1+
+- An Android emulator or physical device for testing
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Setup
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Run (development)
 
-## Learn more
+```bash
+npm start            # Metro bundler in one terminal
+npm run android      # Build + install debug APK to a connected device/emulator
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Build (release APK)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+cd android
+./gradlew assembleRelease
+```
 
-## Join the community
+The release APK is signed with the keystore referenced by `TRANSPIRAFUND_RELEASE_STORE_FILE` (and related Gradle properties); without those properties the release build falls back to the debug keystore.
 
-Join our community of developers creating universal apps.
+## Cloud Functions
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This repo deploys its own mobile-codebase Cloud Functions from `functions/`. To deploy:
+
+```bash
+cd functions
+npm install
+npm run build
+firebase deploy --only functions:mobile
+```
+
+`firestore.rules` is also deployed from this repo (`firebase deploy --only firestore:rules`). Storage rules are owned by the web repo — do not add a `storage` block to this repo's `firebase.json`.
