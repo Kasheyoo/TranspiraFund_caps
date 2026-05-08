@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { PrivacyOverlay } from "../components/PrivacyOverlay";
 import { WelcomeOverlay } from "../components/WelcomeOverlay";
+import { DeviceLockRequiredScreen } from "../components/DeviceLockRequiredScreen";
 import { AuthNavigator } from "./AuthNavigator";
 import { MainNavigator } from "./MainNavigator";
 import { ForcePasswordChangeScreen } from "./screens/ForcePasswordChangeScreen";
 import { OTPVerificationScreen } from "./screens/OTPVerificationScreen";
+import { isDeviceSecure } from "../utils/deviceSecurity";
 
 export function AppNavigator() {
   const { user, isOTPVerified, isFirstTimeUser, userProfile, claimsLoaded } =
@@ -23,6 +25,21 @@ export function AppNavigator() {
     });
     return () => sub.remove();
   }, []);
+
+  // Device-lock gate (Placement B): block the main app when the device has
+  // no PIN/pattern/password/biometric. null = still resolving the first
+  // check, so render a spinner rather than briefly flashing the unlocked UI.
+  const [deviceSecure, setDeviceSecure] = useState<boolean | null>(null);
+  const recheckDeviceSecurity = useCallback(() => {
+    isDeviceSecure().then(setDeviceSecure);
+  }, []);
+  useEffect(() => {
+    recheckDeviceSecurity();
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") recheckDeviceSecurity();
+    });
+    return () => sub.remove();
+  }, [recheckDeviceSecurity]);
 
   const firstName =
     userProfile?.firstName ||
@@ -55,6 +72,23 @@ export function AppNavigator() {
   } else if (isFirstTimeUser) {
     // First-time login → force password change before entering the app
     gate = <ForcePasswordChangeScreen />;
+  } else if (deviceSecure === null) {
+    // First device-security probe still pending — match the claims-loading
+    // teal spinner so we don't briefly flash the main app UI.
+    gate = (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#0F766E",
+        }}
+      >
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  } else if (deviceSecure === false) {
+    gate = <DeviceLockRequiredScreen onRecheck={recheckDeviceSecurity} />;
   } else {
     // Fully authenticated and verified → main app with welcome animation
     gate = (
