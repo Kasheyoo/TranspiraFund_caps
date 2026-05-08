@@ -1,5 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -56,7 +56,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   const [updating, setUpdating] = useState(false);
   const [isCurrentCorrect, setIsCurrentCorrect] = useState<boolean | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [verifyTimer, setVerifyTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const verifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -87,19 +87,26 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
 
   const photoToShow = pendingPhotoUri || (userProfile?.photoURL || "");
 
+  // Cancel any pending password-verify timer if the screen unmounts mid-debounce,
+  // so the async verify doesn't fire setState after unmount.
+  useEffect(() => {
+    return () => {
+      if (verifyTimerRef.current) clearTimeout(verifyTimerRef.current);
+    };
+  }, []);
+
   // ── Password handlers ────────────────────────────────────────
   const handleCurrentPasswordChange = (text: string) => {
     setPasswords((prev) => ({ ...prev, current: text }));
     setIsCurrentCorrect(null);
-    if (verifyTimer) clearTimeout(verifyTimer);
+    if (verifyTimerRef.current) clearTimeout(verifyTimerRef.current);
     if (text.length >= 6) {
-      const t = setTimeout(async () => {
+      verifyTimerRef.current = setTimeout(async () => {
         setVerifying(true);
         const valid = await actions.verifyCurrentPassword(text);
         setIsCurrentCorrect(valid);
         setVerifying(false);
       }, 500);
-      setVerifyTimer(t);
     }
   };
 

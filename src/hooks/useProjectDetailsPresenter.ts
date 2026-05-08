@@ -137,6 +137,15 @@ export const useProjectDetailsPresenter = (
   const [proofUpload, setProofUpload] = useState<ProofUploadState | null>(null);
   const lastUploadArgsRef = useRef<ProofUploadArgs | null>(null);
   const uploadHandleRef = useRef<ProofUploadHandle | null>(null);
+  // Tracks the auto-dismiss timer fired after a successful proof upload — cleared
+  // on unmount and on retry so it can't setState on an unmounted presenter.
+  const proofDoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (proofDoneTimerRef.current) clearTimeout(proofDoneTimerRef.current);
+    };
+  }, []);
 
   const mapUploadError = (error: any): string => {
     const code = String(error?.code || "").toLowerCase();
@@ -173,7 +182,8 @@ export const useProjectDetailsPresenter = (
     handle.promise
       .then(() => {
         setProofUpload({ stage: "done", percent: 100 });
-        setTimeout(() => {
+        if (proofDoneTimerRef.current) clearTimeout(proofDoneTimerRef.current);
+        proofDoneTimerRef.current = setTimeout(() => {
           setProofUpload((cur) => (cur?.stage === "done" ? null : cur));
         }, 800);
         showToast("success", "Geotagged proof saved successfully.");

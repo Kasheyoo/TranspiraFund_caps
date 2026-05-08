@@ -19,6 +19,13 @@ export const useProjectListPresenter = (
 
   // Track which projects have already been synced this session — avoids duplicate calls
   const syncedIds = useRef<Set<string>>(new Set());
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
@@ -69,8 +76,9 @@ export const useProjectListPresenter = (
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     // Real-time listener handles data — just give user visual feedback
-    setTimeout(() => setIsRefreshing(false), 1200);
+    refreshTimerRef.current = setTimeout(() => setIsRefreshing(false), 1200);
   }, []);
 
   return {

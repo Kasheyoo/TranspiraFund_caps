@@ -95,6 +95,7 @@ export const ProofUploadModal = ({
 
   useEffect(() => {
     if (!visible) return;
+    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
     const sub = AppState.addEventListener("change", (next) => {
       const prev = lastForegroundRef.current;
       lastForegroundRef.current = next;
@@ -104,10 +105,14 @@ export const ProofUploadModal = ({
         (stage === "uploading" || stage === "preparing" || stage === "finalizing")
       ) {
         setResuming(true);
-        setTimeout(() => setResuming(false), 1500);
+        if (resumeTimer) clearTimeout(resumeTimer);
+        resumeTimer = setTimeout(() => setResuming(false), 1500);
       }
     });
-    return () => sub.remove();
+    return () => {
+      if (resumeTimer) clearTimeout(resumeTimer);
+      sub.remove();
+    };
   }, [visible, stage]);
 
   const isError = stage === "error";
