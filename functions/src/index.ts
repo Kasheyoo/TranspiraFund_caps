@@ -414,6 +414,29 @@ async function enforceRateLimit(
   });
 }
 
+// ─── assertSameTenant ────────────────────────────────────────────────────────
+//
+//  Defence-in-depth on top of Firestore rules. The caller's tenantId comes
+//  from the verified ID-token claim (set by the web admin when the user is
+//  provisioned). The target's tenantId comes from whatever doc the call is
+//  about to touch. Mismatch — including missing values on either side —
+//  rejects the call. Strict by design: a project without tenantId is legacy
+//  data that mobile shouldn't be writing to anyway.
+//
+function assertSameTenant(
+  callerTenantId: unknown,
+  targetTenantId: unknown,
+): void {
+  if (
+    typeof callerTenantId !== "string" ||
+    typeof targetTenantId !== "string" ||
+    !callerTenantId ||
+    callerTenantId !== targetTenantId
+  ) {
+    throw new HttpsError("permission-denied", "Cross-tenant operation rejected.");
+  }
+}
+
 // ─── generateMilestones ───────────────────────────────────────────────────────
 //
 //  Called by PROJ_ENG from the mobile app when a project has no milestones.
@@ -525,6 +548,7 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("not-found", "Project not found.");
   }
   const projectData = projectSnap.data() ?? {};
+  assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
   if (projectData.projectEngineer && projectData.projectEngineer !== request.auth.uid) {
     throw new HttpsError("permission-denied", "Only the assigned engineer can generate milestones.");
   }
@@ -614,6 +638,7 @@ export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (requ
     throw new HttpsError("not-found", "Project not found.");
   }
   const projectData = projectSnap.data() ?? {};
+  assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
   if (projectData.projectEngineer && projectData.projectEngineer !== request.auth.uid) {
     throw new HttpsError("permission-denied", "Only the assigned engineer can edit milestones.");
   }
@@ -670,7 +695,8 @@ export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("not-found", "Project not found.");
   }
 
-  const projectData = projectSnap.data() as { status?: string };
+  const projectData = projectSnap.data() as { status?: string; tenantId?: string };
+  assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
   const currentStatus = (projectData?.status ?? "").toLowerCase();
 
   // Only update if still in a pre-active workflow state
@@ -751,6 +777,10 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   const uid = request.auth.uid;
   const email = request.auth.token.email || "";
 
+  const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+  const userTenantId = (userSnap.data() ?? {}).tenantId;
+  assertSameTenant(request.auth.token.tenantId, userTenantId);
+
   await logAuditTrail(
     uid, email, action, details,
     syncToHCSD === true || syncToDEPW === true,
@@ -797,6 +827,11 @@ export const uploadProfilePhoto = onCall(
 
     const uid = request.auth.uid;
     const email = request.auth.token.email || "";
+
+    const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+    const userTenantId = (userSnap.data() ?? {}).tenantId;
+    assertSameTenant(request.auth.token.tenantId, userTenantId);
+
     const bucket = admin.storage().bucket();
     const file = bucket.file(`profile-photos/${uid}`);
 
@@ -935,6 +970,7 @@ export const uploadProofPhoto = onCall(
       throw new HttpsError("not-found", "Project not found.");
     }
     const projectData = projectSnap.data() ?? {};
+    assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
     if (projectData.projectEngineer && projectData.projectEngineer !== uid) {
       throw new HttpsError("permission-denied", "Only the assigned engineer can upload proofs for this project.");
     }
