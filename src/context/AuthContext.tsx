@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { AppState } from "react-native";
 import { SecurityNoticeOverlay } from "../components/SecurityNoticeOverlay";
 import { auth, db } from "../firebaseConfig";
 import type { Tenant, UserProfile } from "../types";
@@ -47,6 +46,9 @@ interface AuthContextValue {
   role: string | null;
   lguName: string | null;
   claimsLoaded: boolean;
+  // Real touch-driven activity ping. The session timer reads this — see
+  // ActivityTracker in App.tsx for the throttled wrapper that calls it.
+  resetActivity: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -60,6 +62,7 @@ const AuthContext = createContext<AuthContextValue>({
   role: null,
   lguName: null,
   claimsLoaded: false,
+  resetActivity: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -134,14 +137,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [user, resetActivity]);
-
-  // Track app foreground activity
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") resetActivity();
-    });
-    return () => subscription.remove();
-  }, [resetActivity]);
 
   useEffect(() => {
     // onIdTokenChanged fires on sign-in, sign-out, AND token refresh —
@@ -269,6 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         lguName,
         claimsLoaded,
+        resetActivity,
       }}
     >
       {children}
