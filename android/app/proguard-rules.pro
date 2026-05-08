@@ -100,6 +100,14 @@
 # ───────────────────────────────────────────────────────────────────
 # react-native-pdf (uses AndroidPdfViewer + react-native-blob-util)
 # ───────────────────────────────────────────────────────────────────
+# The JS side calls requireNativeComponent('RCTPdf') and subscribes to
+# events emitted by org.wonday.pdf.events.*; without explicit keeps R8
+# renames PdfView/RNPDFPackage/TopChangeEvent and screens that import
+# react-native-pdf crash on module load in release builds.
+-keep class org.wonday.pdf.** { *; }
+-keep class org.wonday.pdf.events.** { *; }
+-dontwarn org.wonday.pdf.**
+
 -keep class com.github.barteksc.pdfviewer.** { *; }
 -keepclassmembers class com.github.barteksc.pdfviewer.** { *; }
 -keep class com.shockwave.** { *; }
@@ -111,9 +119,12 @@
 -keepclassmembers class com.ReactNativeBlobUtil.** { *; }
 
 # ───────────────────────────────────────────────────────────────────
-# get-random-values (uses java.security.SecureRandom — no rules
-# needed beyond keeping its module class which is covered by RN core)
+# react-native-get-random-values — Firebase Auth + crypto.getRandomValues
+# polyfill. Native classes live under org.linusu.** (NOT under com.facebook
+# or any other namespace covered above), so they need their own keep rule.
 # ───────────────────────────────────────────────────────────────────
+-keep class org.linusu.** { *; }
+-dontwarn org.linusu.**
 
 # ───────────────────────────────────────────────────────────────────
 # Native modules in this app (DeviceSecurity ships in Phase 3)
