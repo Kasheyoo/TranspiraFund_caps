@@ -221,6 +221,8 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPassword}
+                    contextMenuHidden
+                    selectTextOnFocus={false}
                     placeholder="Enter your password"
                     placeholderTextColor={COLORS.textTertiary}
                     editable={!isLocked}

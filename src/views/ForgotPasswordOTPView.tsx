@@ -91,7 +91,8 @@ const OTPCell = ({
           onFocus={onFocus}
           keyboardType="numeric"
           maxLength={6}
-          selectTextOnFocus
+          contextMenuHidden
+          selectTextOnFocus={false}
           autoFocus={index === 0}
           editable={!isLoading}
         />

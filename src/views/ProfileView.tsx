@@ -340,6 +340,8 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               <TextInput
                 style={styles.textInput}
                 secureTextEntry={!showCurrent}
+                contextMenuHidden
+                selectTextOnFocus={false}
                 placeholder="Current Password"
                 placeholderTextColor={COLORS.textTertiary}
                 value={passwords.current}
@@ -370,6 +372,8 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               <TextInput
                 style={styles.textInput}
                 secureTextEntry={!showNew}
+                contextMenuHidden
+                selectTextOnFocus={false}
                 placeholder="New Password"
                 placeholderTextColor={COLORS.textTertiary}
                 value={passwords.new}
@@ -394,6 +398,8 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               <TextInput
                 style={styles.textInput}
                 secureTextEntry={!showConfirm}
+                contextMenuHidden
+                selectTextOnFocus={false}
                 placeholder="Confirm New Password"
                 placeholderTextColor={COLORS.textTertiary}
                 value={passwords.confirm}

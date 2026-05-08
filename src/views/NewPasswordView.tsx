@@ -223,6 +223,8 @@ export const NewPasswordView = ({
                     <TextInput
                       style={styles.inputText}
                       secureTextEntry={!showCurrent}
+                      contextMenuHidden
+                      selectTextOnFocus={false}
                       value={currentPassword}
                       onChangeText={setCurrentPassword}
                       placeholder="Enter current password"
@@ -281,6 +283,8 @@ export const NewPasswordView = ({
                   <TextInput
                     style={styles.inputText}
                     secureTextEntry={!showNew}
+                    contextMenuHidden
+                    selectTextOnFocus={false}
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Create a strong password"
@@ -340,6 +344,8 @@ export const NewPasswordView = ({
                   <TextInput
                     style={styles.inputText}
                     secureTextEntry={!showConfirm}
+                    contextMenuHidden
+                    selectTextOnFocus={false}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     placeholder="Re-enter your password"
