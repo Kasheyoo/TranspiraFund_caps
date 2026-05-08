@@ -68,7 +68,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
     }
 
     // Rate limiting
-    const rateLimitCheck = loginRateLimiter.check(cleanEmail);
+    const rateLimitCheck = await loginRateLimiter.check(cleanEmail);
     if (!rateLimitCheck.allowed) {
       setLockoutSeconds(rateLimitCheck.lockoutSeconds);
       setErrorMessage(
@@ -80,7 +80,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, cleanEmail, password);
-      loginRateLimiter.reset(cleanEmail);
+      await loginRateLimiter.reset(cleanEmail);
       if (rememberMe) {
         await AsyncStorage.setItem("saved_email", cleanEmail);
       } else {
@@ -89,9 +89,9 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       if (navigationCallback) navigationCallback();
     } catch (error) {
       const err = error as { code?: string };
-      loginRateLimiter.recordAttempt(cleanEmail);
+      await loginRateLimiter.recordAttempt(cleanEmail);
 
-      const check = loginRateLimiter.check(cleanEmail);
+      const check = await loginRateLimiter.check(cleanEmail);
       if (!check.allowed) {
         setLockoutSeconds(check.lockoutSeconds);
         setErrorMessage(

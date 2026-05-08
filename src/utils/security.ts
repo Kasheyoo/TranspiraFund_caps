@@ -1,3 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 export const sanitizeInput = (text: string, maxLength = 256): string => {
   if (!text || typeof text !== "string") return "";
   const cleaned = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
@@ -45,7 +47,40 @@ interface RateLimitEntry {
   lockedUntil: number | null;
 }
 
-const rateLimitStore: Record<string, RateLimitEntry> = {};
+const STORAGE_PREFIX = "rate_limit:";
+
+const readEntry = async (key: string): Promise<RateLimitEntry | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RateLimitEntry;
+    if (
+      typeof parsed?.attempts !== "number" ||
+      typeof parsed?.firstAttempt !== "number"
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeEntry = async (key: string, entry: RateLimitEntry): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(entry));
+  } catch {
+    // Non-fatal: a failed persist falls back to "allowed" on next check.
+  }
+};
+
+const removeEntry = async (key: string): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_PREFIX + key);
+  } catch {
+    // Best-effort.
+  }
+};
 
 class RateLimiter {
   private maxAttempts: number;
@@ -58,9 +93,11 @@ class RateLimiter {
     this.lockoutMs = lockoutMs;
   }
 
-  check(key: string): { allowed: boolean; remainingAttempts: number; lockoutSeconds: number } {
+  async check(
+    key: string,
+  ): Promise<{ allowed: boolean; remainingAttempts: number; lockoutSeconds: number }> {
     const now = Date.now();
-    const entry = rateLimitStore[key];
+    const entry = await readEntry(key);
 
     if (!entry) {
       return { allowed: true, remainingAttempts: this.maxAttempts, lockoutSeconds: 0 };
@@ -72,31 +109,40 @@ class RateLimiter {
     }
 
     if (now - entry.firstAttempt > this.windowMs) {
-      delete rateLimitStore[key];
+      await removeEntry(key);
       return { allowed: true, remainingAttempts: this.maxAttempts, lockoutSeconds: 0 };
     }
 
     const remaining = this.maxAttempts - entry.attempts;
-    return { allowed: remaining > 0, remainingAttempts: Math.max(0, remaining), lockoutSeconds: 0 };
+    return {
+      allowed: remaining > 0,
+      remainingAttempts: Math.max(0, remaining),
+      lockoutSeconds: 0,
+    };
   }
 
-  recordAttempt(key: string): void {
+  async recordAttempt(key: string): Promise<void> {
     const now = Date.now();
-    const entry = rateLimitStore[key];
+    const entry = await readEntry(key);
 
     if (!entry || now - entry.firstAttempt > this.windowMs) {
-      rateLimitStore[key] = { attempts: 1, firstAttempt: now, lockedUntil: null };
+      await writeEntry(key, { attempts: 1, firstAttempt: now, lockedUntil: null });
       return;
     }
 
-    entry.attempts++;
-    if (entry.attempts >= this.maxAttempts) {
-      entry.lockedUntil = now + this.lockoutMs;
+    const next: RateLimitEntry = {
+      attempts: entry.attempts + 1,
+      firstAttempt: entry.firstAttempt,
+      lockedUntil: entry.lockedUntil,
+    };
+    if (next.attempts >= this.maxAttempts) {
+      next.lockedUntil = now + this.lockoutMs;
     }
+    await writeEntry(key, next);
   }
 
-  reset(key: string): void {
-    delete rateLimitStore[key];
+  async reset(key: string): Promise<void> {
+    await removeEntry(key);
   }
 }
 

@@ -36,7 +36,7 @@ export const useProfilePresenter = (
   const verifyCurrentPassword = async (password: string): Promise<boolean> => {
     if (!password || password.length < 6) return false;
 
-    const rateLimitCheck = passwordVerifyRateLimiter.check("verify_password");
+    const rateLimitCheck = await passwordVerifyRateLimiter.check("verify_password");
     if (!rateLimitCheck.allowed) return false;
 
     try {
@@ -45,10 +45,10 @@ export const useProfilePresenter = (
         password,
       );
       await reauthenticateWithCredential(auth.currentUser!, credential);
-      passwordVerifyRateLimiter.reset("verify_password");
+      await passwordVerifyRateLimiter.reset("verify_password");
       return true;
     } catch {
-      passwordVerifyRateLimiter.recordAttempt("verify_password");
+      await passwordVerifyRateLimiter.recordAttempt("verify_password");
       return false;
     }
   };
