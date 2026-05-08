@@ -397,7 +397,7 @@ async function enforceRateLimit(
     }
 
     const attempts = (entry.attempts ?? 0) + 1;
-    if (attempts >= opts.max) {
+    if (attempts > opts.max) {
       tx.set(ref, {
         attempts,
         windowStart: entry.windowStart,
