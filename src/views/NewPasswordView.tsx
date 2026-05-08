@@ -2,6 +2,7 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   ScrollView,
   StatusBar,
@@ -115,6 +116,20 @@ export const NewPasswordView = ({
   const [showConfirm, setShowConfirm] = useState(false);
   const [showCurrent, setShowCurrent] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+
+  // Wipe every password field when the app leaves the foreground so a
+  // half-typed password never persists in memory while the app is
+  // backgrounded.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const requirements = useMemo(() => validatePassword(newPassword), [newPassword]);
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;

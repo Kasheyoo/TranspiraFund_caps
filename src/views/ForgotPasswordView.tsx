@@ -2,6 +2,7 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   ScrollView,
   StatusBar,
@@ -69,6 +70,16 @@ export const ForgotPasswordView = ({
   const [resetEmail, setResetEmail] = useState("");
   const [error, setError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+
+  // Wipe the email field on background — the form is short-lived and the
+  // user will retype on return; matches the same hygiene applied to the
+  // password / OTP screens.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") setResetEmail("");
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleSend = () => {
     setError("");

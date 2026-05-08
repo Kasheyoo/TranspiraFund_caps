@@ -1,7 +1,8 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   ScrollView,
   StatusBar,
@@ -114,6 +115,17 @@ export const ForgotPasswordOTPView = ({
   const [otp, setOtp] = useState<string[]>(Array(CELL_COUNT).fill(""));
   const [focusedIndex, setFocusedIndex] = useState(0);
   const inputRefs = useRef<(TextInput | null)[]>(Array(CELL_COUNT).fill(null));
+
+  // Wipe the OTP buffer whenever the app leaves the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        setOtp(Array(CELL_COUNT).fill(""));
+        setFocusedIndex(0);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleChange = (text: string, index: number) => {
     if (text.length > 1) {

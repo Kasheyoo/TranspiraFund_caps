@@ -2,6 +2,7 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Image,
   KeyboardAvoidingView,
   ScrollView,
@@ -99,6 +100,16 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
   const handleLogin = useCallback(() => {
     if (!isLoading && !isLocked) onLogin?.();
   }, [isLoading, isLocked, onLogin]);
+
+  // Wipe the password the moment the app leaves the foreground so it
+  // never sits in memory while the user is in another app or the recents
+  // screen. Email is left alone so "Remember me" still works on return.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") setPassword?.("");
+    });
+    return () => sub.remove();
+  }, [setPassword]);
 
   return (
     <KeyboardAvoidingView
