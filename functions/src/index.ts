@@ -950,10 +950,21 @@ export const uploadProofPhoto = onCall(
       throw new HttpsError("failed-precondition", "This phase is still a draft. Confirm it before uploading proof.");
     }
 
+    const existingProofs = Array.isArray(m.proofs) ? m.proofs : [];
+    const ts = typeof capturedAt === "number" ? capturedAt : Date.now();
+    const proofId = `${ts}_${uid}`;
+
+    // Idempotency: if a previous call with this same (capturedAt, uid) already
+    // landed, return the stored proof and skip Storage upload + array union.
+    // Lets a client safely retry a flaky network without doubling up storage.
+    const existingProof = existingProofs.find((p: { id?: string }) => p?.id === proofId);
+    if (existingProof) {
+      return { success: true, proof: existingProof, idempotent: true };
+    }
+
     // Hard cap: max 5 proofs per milestone. Marking the phase Completed is
     // allowed at any count >= 1 — the cap only blocks the 6th upload to keep
     // Storage bounded and HCSD review tractable.
-    const existingProofs = Array.isArray(m.proofs) ? m.proofs : [];
     if (existingProofs.length >= 5) {
       throw new HttpsError("failed-precondition", "This phase already has the maximum of 5 proofs.");
     }
@@ -971,7 +982,6 @@ export const uploadProofPhoto = onCall(
     // milestoneIds in older docs sometimes carry user-typed values.
     const safeProjectId   = projectId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
     const safeMilestoneId = milestoneId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
-    const ts = typeof capturedAt === "number" ? capturedAt : Date.now();
 
     const storagePath = `projects/${safeProjectId}/milestones/${safeMilestoneId}/proofs/${ts}.jpg`;
     const bucket = admin.storage().bucket();
@@ -1022,7 +1032,6 @@ export const uploadProofPhoto = onCall(
     const encodedPath = encodeURIComponent(storagePath);
     const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
 
-    const proofId   = `${ts}_${uid}`;
     const fileName  = `${ts}.jpg`;
     // FieldValue.serverTimestamp() is not permitted inside arrayUnion, so we
     // use admin Timestamp objects for both capture time (from the client's
