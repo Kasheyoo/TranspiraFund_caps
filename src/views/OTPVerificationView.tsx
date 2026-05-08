@@ -326,7 +326,7 @@ export const OTPVerificationView = ({
             {errorMessage ? (
               <Animated.View entering={FadeInDown.duration(250)} style={styles.alertBanner}>
                 <FontAwesome5 name="exclamation-circle" size={14} color={COLORS.error} />
-                <Text style={styles.alertText}>Incorrect code · Please try again</Text>
+                <Text style={styles.alertText}>{errorMessage}</Text>
               </Animated.View>
             ) : null}
 
