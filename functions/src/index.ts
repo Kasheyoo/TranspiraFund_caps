@@ -320,6 +320,12 @@ async function logAuditTrail(
   // (Proof Uploaded, Milestone Completed). Omitted for batch actions like
   // Milestones Drafted / Confirmed.
   milestoneId?: string,
+  // Tenant id for the actor. The mobile audit trail screen filters entries by
+  // `where("tenantId", "==", tid)`, so entries written without it never show
+  // up in the user's UI. Resolved per-call from the verified ID-token claim
+  // (or the actor's user doc for the first-time password-change path where
+  // the token may predate the claim assignment).
+  tenantId?: string,
 ) {
   const detailsObj: Record<string, string> = { message };
   if (targetId) detailsObj.projectId = targetId;
@@ -333,6 +339,7 @@ async function logAuditTrail(
     email,
   };
   if (targetId) entry.targetId = targetId;
+  if (tenantId) entry.tenantId = tenantId;
 
   // Always write to mobile audit trail (PROJ_ENG scope)
   const writes: Promise<unknown>[] = [
@@ -600,6 +607,8 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     `Project: ${projectId} (type: ${resolvedType})${suffix}`,
     true,
     projectId,
+    undefined,
+    typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
   );
 
   return {
@@ -666,6 +675,9 @@ export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (requ
     "Milestone Draft Removed",
     `Project ${projectId} · phase: ${m.title ?? milestoneId}`,
     true,
+    undefined,
+    undefined,
+    typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
   );
 
   return { success: true };
@@ -717,6 +729,9 @@ export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (r
     "Project Status Updated",
     `Project ${projectId}: "${projectData.status}" → "In Progress" (engineer assigned)`,
     true, // sync to HCSD audit trail
+    undefined,
+    undefined,
+    typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
   );
 
   return { success: true };
@@ -743,9 +758,20 @@ export const completePasswordChange = onCall({ region: "asia-southeast1" }, asyn
 
   await userRef.update({ mustChangePassword: false });
 
-  // PASSWORD_CHANGE → syncs to DEPW (security event)
+  // PASSWORD_CHANGE → syncs to DEPW (security event). Force-password-change
+  // runs on first login, where the ID token may predate the tenantId claim
+  // assignment — fall back to the user doc field so the audit entry is still
+  // tenant-scoped and shows up in the engineer's Audit Trail screen.
   const email = request.auth.token.email || "";
-  await logAuditTrail(uid, email, "Password Set", "First-time login", true);
+  const tokenTenantId =
+    typeof request.auth.token.tenantId === "string" ? request.auth.token.tenantId : undefined;
+  const docTenantId = (userDoc.data() ?? {}).tenantId;
+  const tenantId =
+    tokenTenantId ?? (typeof docTenantId === "string" ? docTenantId : undefined);
+  await logAuditTrail(
+    uid, email, "Password Set", "First-time login", true,
+    undefined, undefined, tenantId,
+  );
 
   return { success: true };
 });
@@ -786,6 +812,7 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
     syncToHCSD === true || syncToDEPW === true,
     typeof targetId === "string" ? targetId : undefined,
     typeof milestoneId === "string" ? milestoneId : undefined,
+    typeof userTenantId === "string" ? userTenantId : undefined,
   );
 
   return { success: true };
@@ -844,7 +871,11 @@ export const uploadProfilePhoto = onCall(
         photoChangedAt: Date.now(),
       });
       try { await admin.auth().updateUser(uid, { photoURL: null as never }); } catch { /* ok */ }
-      await logAuditTrail(uid, email, "Profile Photo Removed", "Profile photo removed", false);
+      await logAuditTrail(
+        uid, email, "Profile Photo Removed", "Profile photo removed", false,
+        undefined, undefined,
+        typeof userTenantId === "string" ? userTenantId : undefined,
+      );
 
       return { success: true, photoURL: "" };
     }
@@ -876,7 +907,11 @@ export const uploadProfilePhoto = onCall(
       photoChangedAt: Date.now(),
     });
     try { await admin.auth().updateUser(uid, { photoURL }); } catch { /* ok */ }
-    await logAuditTrail(uid, email, "Profile Photo Updated", "Profile photo updated", false);
+    await logAuditTrail(
+      uid, email, "Profile Photo Updated", "Profile photo updated", false,
+      undefined, undefined,
+      typeof userTenantId === "string" ? userTenantId : undefined,
+    );
 
     return { success: true, photoURL };
   },
@@ -1101,6 +1136,7 @@ export const uploadProofPhoto = onCall(
       true,
       projectId,
       milestoneId,
+      typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
     );
 
     return { success: true, proof };
@@ -1336,6 +1372,11 @@ export const resetPasswordWithOtp = onCall(
     // Delete OTP record (one-time use — consumed)
     await otpRef.delete();
 
+    // Resolve the actor's tenant from their user doc — this is the
+    // unauthenticated reset path so there's no token to read claims from.
+    const actorSnap = await admin.firestore().doc(`users/${otpData.uid}`).get();
+    const actorTenantId = (actorSnap.data() ?? {}).tenantId;
+
     // Log audit trail (no DEPW sync — user-initiated reset)
     await logAuditTrail(
       otpData.uid,
@@ -1343,6 +1384,9 @@ export const resetPasswordWithOtp = onCall(
       "Password Reset",
       "Verified via email OTP",
       false,
+      undefined,
+      undefined,
+      typeof actorTenantId === "string" ? actorTenantId : undefined,
     );
 
     return { success: true };
