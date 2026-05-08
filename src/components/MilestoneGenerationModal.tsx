@@ -2,7 +2,6 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -67,6 +66,8 @@ export const MilestoneGenerationModal = ({
 }: MilestoneGenerationModalProps) => {
   const [phase, setPhase] = useState<Phase>("idle");
   const [genResult, setGenResult] = useState<GenerateResult | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Milestone | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   // Per-milestone local edits — only the keys the engineer actually changed
   // are persisted on Confirm All. Stored by milestone id so deleted drafts
@@ -81,12 +82,16 @@ export const MilestoneGenerationModal = ({
     if (visible) {
       setEdits({});
       setGenResult(null);
+      setPendingDelete(null);
+      setDeleteBusy(false);
       if (draftMilestones.length > 0) setPhase("review");
       else setPhase("idle");
     } else {
       setPhase("idle");
       setGenResult(null);
       setEdits({});
+      setPendingDelete(null);
+      setDeleteBusy(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -129,26 +134,30 @@ export const MilestoneGenerationModal = ({
   };
 
   const handleDelete = (m: Milestone) => {
-    Alert.alert(
-      "Remove this phase?",
-      `"${valueFor(m, "title") ?? m.title}" will be discarded. You can always re-generate later if you change your mind.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            const ok = await onDeleteMilestone(m);
-            if (ok) {
-              setEdits((prev) => {
-                const { [m.id]: _drop, ...rest } = prev;
-                return rest;
-              });
-            }
-          },
-        },
-      ],
-    );
+    setPendingDelete(m);
+  };
+
+  const cancelPendingDelete = () => {
+    if (deleteBusy) return;
+    setPendingDelete(null);
+  };
+
+  const confirmPendingDelete = async () => {
+    const m = pendingDelete;
+    if (!m || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      const ok = await onDeleteMilestone(m);
+      if (ok) {
+        setEdits((prev) => {
+          const { [m.id]: _drop, ...rest } = prev;
+          return rest;
+        });
+      }
+    } finally {
+      setDeleteBusy(false);
+      setPendingDelete(null);
+    }
   };
 
   const handleConfirmAll = async () => {
@@ -363,8 +372,48 @@ export const MilestoneGenerationModal = ({
                 )}
               </ScrollView>
 
-              {/* Footer */}
-              {sortedDrafts.length > 0 && (
+              {/* Footer — inline delete confirmation replaces the regular
+                  Save Later / Confirm All buttons while a delete is pending. */}
+              {sortedDrafts.length > 0 && pendingDelete ? (
+                <View style={S.deleteBar}>
+                  <View style={S.deleteBarHeader}>
+                    <View style={S.deleteBarIconRing}>
+                      <FontAwesome5 name="trash-alt" size={14} color={COLORS.error} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={S.deleteBarTitle}>Remove this phase?</Text>
+                      <Text style={S.deleteBarBody} numberOfLines={2}>
+                        "{(valueFor(pendingDelete, "title") as string) ?? pendingDelete.title}" will be discarded. You can re-generate later.
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={S.deleteBarActions}>
+                    <TouchableOpacity
+                      style={S.secondaryBtn}
+                      onPress={cancelPendingDelete}
+                      activeOpacity={0.85}
+                      disabled={deleteBusy}
+                    >
+                      <Text style={S.secondaryBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[S.primaryBtn, S.deleteBarConfirm, deleteBusy && { opacity: 0.7 }]}
+                      onPress={confirmPendingDelete}
+                      activeOpacity={0.85}
+                      disabled={deleteBusy}
+                    >
+                      {deleteBusy ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <FontAwesome5 name="trash-alt" size={13} color="#fff" />
+                          <Text style={S.primaryBtnText}>Remove</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : sortedDrafts.length > 0 ? (
                 <View style={S.reviewFooter}>
                   <TouchableOpacity style={S.secondaryBtn} onPress={onClose} activeOpacity={0.85}>
                     <Text style={S.secondaryBtnText}>Save Later</Text>
@@ -374,7 +423,7 @@ export const MilestoneGenerationModal = ({
                     <Text style={S.primaryBtnText}>Confirm All</Text>
                   </TouchableOpacity>
                 </View>
-              )}
+              ) : null}
             </View>
           )}
 
@@ -635,6 +684,29 @@ const S = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: COLORS.border,
     backgroundColor: COLORS.surface,
   },
+
+  deleteBar: {
+    paddingHorizontal: 18, paddingVertical: 14, gap: 12,
+    borderTopWidth: 1, borderTopColor: "#FECACA",
+    backgroundColor: COLORS.errorSoft,
+  },
+  deleteBarHeader: {
+    flexDirection: "row", alignItems: "flex-start", gap: 12,
+  },
+  deleteBarIconRing: {
+    width: 36, height: 36, borderRadius: 11,
+    backgroundColor: "#fff",
+    borderWidth: 1, borderColor: "#FECACA",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  deleteBarTitle: {
+    fontSize: 14, fontWeight: "900", color: COLORS.error, marginBottom: 2,
+  },
+  deleteBarBody: {
+    fontSize: 12, color: COLORS.error, fontWeight: "600", lineHeight: 17,
+  },
+  deleteBarActions: { flexDirection: "row", gap: 10 },
+  deleteBarConfirm: { backgroundColor: COLORS.error },
 
   allRemovedBox: {
     alignItems: "center", padding: 24, gap: 8,

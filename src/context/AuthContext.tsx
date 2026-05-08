@@ -8,7 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, AppState } from "react-native";
+import { AppState } from "react-native";
+import { SecurityNoticeOverlay } from "../components/SecurityNoticeOverlay";
 import { auth, db } from "../firebaseConfig";
 import type { Tenant, UserProfile } from "../types";
 import { SESSION_TIMEOUT_MS, SESSION_WARNING_MS } from "../utils/security";
@@ -16,6 +17,22 @@ import {
   clearSession as clearTenantSession,
   setSession as setTenantSession,
 } from "../utils/tenant";
+
+type SecurityNotice =
+  | {
+      kind: "session-expired";
+    }
+  | {
+      kind: "session-warning";
+    }
+  | {
+      kind: "misconfigured";
+    };
+
+const SESSION_WARNING_COUNTDOWN_SEC = Math.max(
+  1,
+  Math.round((SESSION_TIMEOUT_MS - SESSION_WARNING_MS) / 1000),
+);
 
 interface AuthContextValue {
   user: User | null | undefined;
@@ -53,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null);
   const [lguName, setLguName] = useState<string | null>(null);
   const [claimsLoaded, setClaimsLoaded] = useState(false);
+  const [notice, setNotice] = useState<SecurityNotice | null>(null);
 
   // Distinguishes app-reopen (persisted session) vs fresh login
   const isInitialAuthCheckRef = useRef(true);
@@ -102,17 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (elapsed >= SESSION_TIMEOUT_MS) {
         signOut(auth);
-        Alert.alert(
-          "Session Expired",
-          "You have been logged out due to inactivity.",
-        );
+        setNotice({ kind: "session-expired" });
       } else if (elapsed >= SESSION_WARNING_MS && !warningShownRef.current) {
         warningShownRef.current = true;
-        Alert.alert(
-          "Session Warning",
-          "Your session will expire in 5 minutes due to inactivity.",
-          [{ text: "Continue", onPress: resetActivity }],
-        );
+        setNotice({ kind: "session-warning" });
       }
     }, 30_000);
 
@@ -180,10 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isValid) {
         if (!misconfigAlertShownRef.current) {
           misconfigAlertShownRef.current = true;
-          Alert.alert(
-            "Account Misconfigured",
-            "Your account is missing required setup. Please contact your MIS administrator.",
-          );
+          setNotice({ kind: "misconfigured" });
         }
         await signOut(auth);
         return; // listener will fire again with null and reset state
@@ -236,6 +244,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  const dismissNotice = useCallback(() => setNotice(null), []);
+
+  const handleSessionWarningContinue = useCallback(() => {
+    resetActivity();
+    setNotice(null);
+  }, [resetActivity]);
+
+  const handleSessionWarningSignOut = useCallback(() => {
+    setNotice(null);
+    signOut(auth);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -252,6 +272,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+
+      <SecurityNoticeOverlay
+        visible={notice?.kind === "session-expired"}
+        severity="critical"
+        title="Session Expired"
+        message="You have been signed out due to inactivity. Sign in again to continue."
+        primaryLabel="Sign in again"
+        onPrimary={dismissNotice}
+      />
+
+      <SecurityNoticeOverlay
+        visible={notice?.kind === "session-warning"}
+        severity="warning"
+        title="Session Warning"
+        message="Your session will expire soon due to inactivity. Tap Continue to stay signed in."
+        countdownSeconds={SESSION_WARNING_COUNTDOWN_SEC}
+        onCountdownExpire={handleSessionWarningSignOut}
+        primaryLabel="Continue"
+        onPrimary={handleSessionWarningContinue}
+        secondaryLabel="Sign out now"
+        onSecondary={handleSessionWarningSignOut}
+      />
+
+      <SecurityNoticeOverlay
+        visible={notice?.kind === "misconfigured"}
+        severity="critical"
+        title="Account Misconfigured"
+        message="Your account is missing required setup. Please contact your MIS administrator."
+        primaryLabel="OK"
+        onPrimary={dismissNotice}
+      />
     </AuthContext.Provider>
   );
 }

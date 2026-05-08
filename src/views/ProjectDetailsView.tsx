@@ -1,7 +1,6 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -13,9 +12,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal";
 import { NtpViewerModal } from "../components/NtpViewerModal";
 import { ProjectOrdersCard } from "../components/ProjectOrdersCard";
+import { ToastMessage } from "../components/ToastMessage";
+
+type ToastType = "success" | "error" | "info";
+type ConfirmTone = "primary" | "success" | "danger" | "warning";
 
 interface ProjectDetailsData {
   project: Project | null;
@@ -23,6 +27,15 @@ interface ProjectDetailsData {
   engineerPhotoURL?: string;
   isLoading: boolean;
   lastViewedMilestoneId?: string | null;
+  toast?: { visible: boolean; type: ToastType; message: string };
+  confirmModal?: {
+    tone: ConfirmTone;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+  } | null;
 }
 
 interface GenerateMilestonesResult {
@@ -44,6 +57,8 @@ interface ProjectDetailsActions {
     edits: Record<string, Partial<Milestone>>,
   ) => Promise<boolean>;
   onDeleteMilestone: (m: Milestone) => Promise<boolean>;
+  onDismissToast?: () => void;
+  onDismissConfirmModal?: () => void;
 }
 
 interface ProjectDetailsViewProps {
@@ -108,9 +123,10 @@ interface MilestoneCardProps {
   isLast: boolean;
   onSelect: () => void;
   onProof: () => void;
+  onLocked: () => void;
 }
 
-const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof }: MilestoneCardProps) => {
+const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof, onLocked }: MilestoneCardProps) => {
   const isUnlocked = isFirst || prevDone;
   const isDone     = m.status?.toString().toLowerCase() === "completed";
   const isDelayed  = m.status?.toString().toLowerCase() === "delayed";
@@ -130,11 +146,7 @@ const MilestoneCard = ({ m, index, isFirst, prevDone, isLast, onSelect, onProof 
 
       <TouchableOpacity
         style={[D.msCard, { backgroundColor: cardBg, borderColor }]}
-        onPress={() =>
-          isLocked
-            ? Alert.alert("Milestone Locked", "Complete the previous milestone to unlock this one.")
-            : onSelect()
-        }
+        onPress={() => (isLocked ? onLocked() : onSelect())}
         activeOpacity={isLocked ? 1 : 0.82}
       >
         <View style={[D.stepCircle, { backgroundColor: circleColor }]}>
@@ -216,7 +228,8 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const insets = useSafeAreaInsets();
   const [milestoneModalVisible, setMilestoneModalVisible] = useState(false);
   const [ntpViewerVisible, setNtpViewerVisible] = useState(false);
-  const { project, engineerName, engineerPhotoURL, isLoading, lastViewedMilestoneId } = data;
+  const [localToast, setLocalToast] = useState<{ type: ToastType; message: string } | null>(null);
+  const { project, engineerName, engineerPhotoURL, isLoading, lastViewedMilestoneId, toast, confirmModal } = data;
 
   const scrollRef = useRef<ScrollView>(null);
   const hasScrolledRef = useRef(false);
@@ -734,6 +747,12 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
                 isLast={index === totalMs - 1}
                 onSelect={() => actions.onSelectMilestone(m)}
                 onProof={() => actions.onAddProof(m)}
+                onLocked={() =>
+                  setLocalToast({
+                    type: "info",
+                    message: "Complete the previous milestone to unlock this one.",
+                  })
+                }
               />
             ))
           )}
@@ -755,6 +774,33 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         onClose={() => setNtpViewerVisible(false)}
         fileUrl={project.ntpFileUrl}
         fileName={project.ntpFileName}
+      />
+
+      {toast ? (
+        <ToastMessage
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          onHide={() => actions.onDismissToast?.()}
+        />
+      ) : null}
+
+      <ToastMessage
+        visible={!!localToast}
+        type={localToast?.type ?? "info"}
+        message={localToast?.message ?? ""}
+        onHide={() => setLocalToast(null)}
+      />
+
+      <ConfirmModal
+        visible={!!confirmModal}
+        tone={confirmModal?.tone ?? "warning"}
+        title={confirmModal?.title ?? ""}
+        message={confirmModal?.message ?? ""}
+        confirmLabel={confirmModal?.confirmLabel ?? "OK"}
+        cancelLabel={confirmModal?.cancelLabel ?? "Cancel"}
+        onConfirm={() => confirmModal?.onConfirm()}
+        onCancel={() => actions.onDismissConfirmModal?.()}
       />
     </View>
   );

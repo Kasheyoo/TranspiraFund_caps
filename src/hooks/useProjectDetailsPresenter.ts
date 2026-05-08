@@ -1,6 +1,6 @@
 import { updateDoc } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { Alert, PermissionsAndroid, Platform } from "react-native";
+import { Linking, PermissionsAndroid, Platform } from "react-native";
 import { launchCamera } from "react-native-image-picker";
 import Geolocation from "react-native-geolocation-service";
 import { callFn } from "../services/CloudFunctionService";
@@ -88,6 +88,46 @@ export const useProjectDetailsPresenter = (
   const showToast = (type: ToastType, message: string) =>
     setToast({ visible: true, type, message });
   const dismissToast = () => setToast((t) => ({ ...t, visible: false }));
+
+  type ConfirmTone = "primary" | "success" | "danger" | "warning";
+  type ConfirmModalState = {
+    tone: ConfirmTone;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+  } | null;
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(null);
+  const dismissConfirmModal = () => setConfirmModal(null);
+
+  const askOpenSettings = (title: string, message: string) => {
+    setConfirmModal({
+      tone: "warning",
+      title,
+      message,
+      confirmLabel: "Open Settings",
+      cancelLabel: "Cancel",
+      onConfirm: () => {
+        setConfirmModal(null);
+        Linking.openSettings().catch(() => {});
+      },
+    });
+  };
+
+  const askRetry = (title: string, message: string, onRetry: () => void) => {
+    setConfirmModal({
+      tone: "warning",
+      title,
+      message,
+      confirmLabel: "Try Again",
+      cancelLabel: "Cancel",
+      onConfirm: () => {
+        setConfirmModal(null);
+        onRetry();
+      },
+    });
+  };
 
   type ProofUploadState = {
     stage: ProofUploadStage;
@@ -203,7 +243,7 @@ export const useProjectDetailsPresenter = (
       const cameraGranted = await requestCameraPermission();
       logger.log("[AddProof] camera permission:", cameraGranted);
       if (!cameraGranted) {
-        Alert.alert(
+        askOpenSettings(
           "Camera Permission Required",
           "TranspiraFund needs camera access to capture proof of work. Enable Camera permission for this app in Settings, then try again.",
         );
@@ -213,7 +253,7 @@ export const useProjectDetailsPresenter = (
       const locationGranted = await requestLocationPermission();
       logger.log("[AddProof] location permission:", locationGranted);
       if (!locationGranted) {
-        Alert.alert(
+        askOpenSettings(
           "Location Permission Required",
           "TranspiraFund needs location access to geo-tag every proof. Enable Location permission for this app in Settings, then try again.",
         );
@@ -223,14 +263,29 @@ export const useProjectDetailsPresenter = (
       const preflight = await preflightGps();
       logger.log("[AddProof] gps preflight:", preflight);
       if (!preflight.ok) {
-        const messages: Record<typeof preflight.reason, { title: string; body: string }> = {
-          denied:      { title: "Location Permission Off", body: "Enable Location permission for TranspiraFund in your device Settings, then try again." },
-          disabled:    { title: "Turn On Location",        body: "Location Services is OFF on your device. Open Quick Settings and turn on Location, then try again." },
-          timeout:     { title: "No GPS Signal",           body: "Couldn't get a GPS fix. Step outside or near a window for clear sky, then try again." },
-          unavailable: { title: "Location Unavailable",    body: "Your device couldn't provide a location fix. Check that Location Services is on and try again." },
-        };
-        const msg = messages[preflight.reason];
-        Alert.alert(msg.title, msg.body);
+        if (preflight.reason === "denied") {
+          askOpenSettings(
+            "Location Permission Off",
+            "Enable Location permission for TranspiraFund in your device Settings, then try again.",
+          );
+        } else if (preflight.reason === "disabled") {
+          askOpenSettings(
+            "Turn On Location",
+            "Location Services is OFF on your device. Open Quick Settings and turn on Location, then try again.",
+          );
+        } else if (preflight.reason === "timeout") {
+          askRetry(
+            "No GPS Signal",
+            "Couldn't get a GPS fix. Step outside or near a window for clear sky, then try again.",
+            () => handleAddProof(m),
+          );
+        } else {
+          askRetry(
+            "Location Unavailable",
+            "Your device couldn't provide a location fix. Check that Location Services is on and try again.",
+            () => handleAddProof(m),
+          );
+        }
         return;
       }
 
@@ -253,7 +308,7 @@ export const useProjectDetailsPresenter = (
           permission:         "Camera permission was denied. Enable it in Settings and try again.",
           others:             result.errorMessage || "Couldn't open the camera.",
         };
-        Alert.alert("Camera Error", codeMessages[result.errorCode] || result.errorMessage || "Couldn't open the camera.");
+        showToast("error", codeMessages[result.errorCode] || result.errorMessage || "Couldn't open the camera.");
         return;
       }
 
@@ -262,7 +317,7 @@ export const useProjectDetailsPresenter = (
       }
 
       if (!result.assets || !result.assets[0]) {
-        Alert.alert("No Photo", "No image was captured. Please try again.");
+        showToast("error", "No image was captured. Please try again.");
         return;
       }
 
@@ -271,19 +326,19 @@ export const useProjectDetailsPresenter = (
 
         const fileType = asset.type || "";
         if (!ALLOWED_IMAGE_TYPES.includes(fileType.toLowerCase())) {
-          Alert.alert("Invalid File", "Only JPEG and PNG images are allowed.");
+          showToast("error", "Only JPEG and PNG images are allowed.");
           return;
         }
 
         const fileSize = (asset as any).fileSize || 0;
         if (fileSize > MAX_IMAGE_SIZE_BYTES) {
-          Alert.alert("File Too Large", "Image must be under 10MB.");
+          showToast("error", "Image must be under 10MB.");
           return;
         }
 
         if (!asset.base64) {
           logger.error("[AddProof] missing base64 on captured asset", { uri: asset.uri });
-          Alert.alert("Capture Error", "The photo couldn't be read from the camera. Please try again.");
+          showToast("error", "The photo couldn't be read from the camera. Please try again.");
           return;
         }
 
@@ -362,7 +417,7 @@ export const useProjectDetailsPresenter = (
       return true;
     } catch (error) {
       logger.error("Confirm milestone error:", error);
-      Alert.alert("Error", "Failed to confirm milestone. Please try again.");
+      showToast("error", "Failed to confirm milestone. Please try again.");
       return false;
     }
   };
@@ -395,7 +450,7 @@ export const useProjectDetailsPresenter = (
       return true;
     } catch (error) {
       logger.error("Confirm all milestones error:", error);
-      Alert.alert("Error", "Failed to confirm milestones. Please try again.");
+      showToast("error", "Failed to confirm milestones. Please try again.");
       return false;
     }
   };
@@ -404,11 +459,11 @@ export const useProjectDetailsPresenter = (
     if (!project) return false;
     if (m.status === "Completed") return true;
     if (m.confirmed === false) {
-      Alert.alert("Confirm First", "Confirm this phase before marking it completed.");
+      showToast("info", "Confirm this phase before marking it completed.");
       return false;
     }
     if (!Array.isArray(m.proofs) || m.proofs.length === 0) {
-      Alert.alert("Proof Required", "Attach at least one geotagged photo before marking this phase completed.");
+      showToast("info", "Attach at least one geotagged photo before marking this phase completed.");
       return false;
     }
     try {
@@ -428,7 +483,7 @@ export const useProjectDetailsPresenter = (
       return true;
     } catch (error) {
       logger.error("Mark completed error:", error);
-      Alert.alert("Error", "Failed to mark this phase completed. Please try again.");
+      showToast("error", "Failed to mark this phase completed. Please try again.");
       return false;
     }
   };
@@ -441,13 +496,17 @@ export const useProjectDetailsPresenter = (
       return true;
     } catch (error) {
       logger.error("Delete milestone error:", error);
-      Alert.alert("Error", "Failed to remove this phase. Please try again.");
+      showToast("error", "Failed to remove this phase. Please try again.");
       return false;
     }
   };
 
   return {
-    data: { project, engineerName, engineerPhotoURL, selectedMilestone, lastViewedMilestoneId, isLoading, toast, proofUpload },
+    data: {
+      project, engineerName, engineerPhotoURL,
+      selectedMilestone, lastViewedMilestoneId, isLoading,
+      toast, proofUpload, confirmModal,
+    },
     actions: {
       onRefresh: () => {},
       goBack: onBackCallback,
@@ -459,6 +518,7 @@ export const useProjectDetailsPresenter = (
       onDeleteMilestone: handleDeleteMilestone,
       onMarkCompleted: handleMarkCompleted,
       onDismissToast: dismissToast,
+      onDismissConfirmModal: dismissConfirmModal,
       onRetryProofUpload,
       onDismissProofUpload,
     },
