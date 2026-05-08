@@ -10,6 +10,7 @@ import {
 } from "react";
 import { SecurityNoticeOverlay } from "../components/SecurityNoticeOverlay";
 import { auth, db } from "../firebaseConfig";
+import { callFn } from "../services/CloudFunctionService";
 import type { Tenant, UserProfile } from "../types";
 import { SESSION_TIMEOUT_MS, SESSION_WARNING_MS } from "../utils/security";
 import {
@@ -122,6 +123,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const elapsed = Date.now() - lastActivityRef.current;
 
       if (elapsed >= SESSION_TIMEOUT_MS) {
+        // Log BEFORE signOut so the call still has an authenticated user
+        // attached. Best-effort — failures don't block the sign-out.
+        callFn("logMobileAuditTrail", {
+          action: "Session Expired (Idle)",
+          success: false,
+        }).catch(() => {});
         signOut(auth);
         setNotice({ kind: "session-expired" });
       } else if (elapsed >= SESSION_WARNING_MS && !warningShownRef.current) {
@@ -187,6 +194,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!misconfigAlertShownRef.current) {
           misconfigAlertShownRef.current = true;
           setNotice({ kind: "misconfigured" });
+          // Log before signOut — auth.currentUser is still set here.
+          callFn("logMobileAuditTrail", {
+            action: "Login Blocked - Misconfigured",
+            success: false,
+            details: {
+              role: claimRole ?? null,
+              hasTenantId: !!claimTenantId,
+            },
+          }).catch(() => {});
         }
         await signOut(auth);
         return; // listener will fire again with null and reset state

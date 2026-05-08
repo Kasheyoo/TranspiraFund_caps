@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { auth } from "../firebaseConfig";
+import { callFn } from "../services/CloudFunctionService";
 import {
   isValidEmail,
   loginRateLimiter,
@@ -9,6 +10,17 @@ import {
   sanitizeInput,
 } from "../utils/security";
 import { logger } from "../utils/logger";
+
+// Best-effort audit logger. Login Failed / Account Locked happen *before*
+// the user is signed in, so callFn will throw "Not authenticated" and the
+// catch swallows it — server-side rate-limit logging covers those cases.
+const logSecurityEvent = (payload: {
+  action: string;
+  success: boolean;
+  details?: Record<string, unknown>;
+}) => {
+  callFn("logMobileAuditTrail", payload).catch(() => {});
+};
 
 export const useLoginPresenter = (navigationCallback?: () => void) => {
   const [email, setEmail] = useState("");
@@ -74,6 +86,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       setErrorMessage(
         `Too many login attempts. Please wait ${rateLimitCheck.lockoutSeconds}s.`,
       );
+      logSecurityEvent({ action: "Account Locked", success: false });
       return;
     }
 
@@ -91,12 +104,19 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       const err = error as { code?: string };
       await loginRateLimiter.recordAttempt(cleanEmail);
 
+      logSecurityEvent({
+        action: "Login Failed",
+        success: false,
+        details: { reason: err.code || "unknown" },
+      });
+
       const check = await loginRateLimiter.check(cleanEmail);
       if (!check.allowed) {
         setLockoutSeconds(check.lockoutSeconds);
         setErrorMessage(
           `Account temporarily locked. Try again in ${check.lockoutSeconds}s.`,
         );
+        logSecurityEvent({ action: "Account Locked", success: false });
       } else {
         setErrorMessage(sanitizeFirebaseError(err.code));
       }

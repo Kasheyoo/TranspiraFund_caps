@@ -67,6 +67,10 @@ export const useProfilePresenter = (
       );
       await reauthenticateWithCredential(auth.currentUser!, credential);
       await updatePassword(auth.currentUser!, newPassword);
+      callFn("logMobileAuditTrail", {
+        action: "Password Changed",
+        success: true,
+      }).catch(() => {});
       return true;
     } catch {
       return false;
