@@ -47,6 +47,16 @@
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 
+# Firestore's RPC channel — Firestore re-marshals every doc payload through
+# gRPC + protobuf reflection. Without these keep rules, R8 renames internal
+# message classes and Firestore RPCs throw at runtime in release builds.
+-keep class io.grpc.** { *; }
+-keep interface io.grpc.** { *; }
+-keep class com.google.protobuf.** { *; }
+-keep interface com.google.protobuf.** { *; }
+-dontwarn io.grpc.**
+-dontwarn com.google.protobuf.**
+
 # ───────────────────────────────────────────────────────────────────
 # Reanimated v4 + Worklets
 # ───────────────────────────────────────────────────────────────────
@@ -141,5 +151,7 @@
 # ───────────────────────────────────────────────────────────────────
 # R8 compatibility
 # ───────────────────────────────────────────────────────────────────
--allowaccessmodification
--repackageclasses ''
+# Note: -allowaccessmodification and -repackageclasses '' were intentionally
+# left out. Both repackage classes that aren't explicitly -kept, which breaks
+# Firebase Firestore's gRPC channel and any other library that resolves
+# classes by canonical name at runtime.
