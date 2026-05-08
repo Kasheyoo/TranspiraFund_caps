@@ -907,6 +907,24 @@ export const uploadProofPhoto = onCall(
       throw new HttpsError("invalid-argument", "Geotag coordinates are required.");
     }
 
+    // Reject low-quality GPS fixes — anything coarser than 50m may have been
+    // captured indoors or with a stale fix and isn't trustworthy as proof.
+    if (typeof accuracy === "number" && accuracy > 50) {
+      throw new HttpsError("invalid-argument", "GPS accuracy too low — move to a clearer area.");
+    }
+    // Tamper guard: reject obviously-wrong client clocks. 60s tolerance covers
+    // benign clock skew; 15-min window forces near-realtime upload so engineers
+    // can't queue old captures.
+    if (typeof capturedAt === "number") {
+      const now = Date.now();
+      if (capturedAt > now + 60_000) {
+        throw new HttpsError("invalid-argument", "Photo timestamp is in the future.");
+      }
+      if (now - capturedAt > 15 * 60_000) {
+        throw new HttpsError("invalid-argument", "Photo is too old to upload.");
+      }
+    }
+
     const uid   = request.auth.uid;
     const email = request.auth.token.email || "";
 
