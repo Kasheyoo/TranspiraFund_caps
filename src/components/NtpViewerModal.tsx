@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,8 +12,20 @@ import {
   View,
 } from "react-native";
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import Pdf from "react-native-pdf";
 import { COLORS } from "../constants";
+
+// react-native-pdf is loaded lazily — only when the user actually opens an
+// NTP modal with a PDF source. The library transitively pulls in
+// react-native-blob-util and runs codegen-side initialization on import; if
+// either piece misbehaves on a given device, eager-importing it crashed the
+// whole Project Details screen on tap. Loading on demand keeps that blast
+// radius contained to the PDF modal itself.
+type PdfComponent = React.ComponentType<{
+  source: { uri: string; cache?: boolean };
+  style?: object;
+  trustAllCerts?: boolean;
+  renderActivityIndicator?: () => React.ReactElement;
+}>;
 
 interface Props {
   visible: boolean;
@@ -37,6 +50,18 @@ export const NtpViewerModal = ({ visible, onClose, fileUrl, fileName }: Props) =
   const sheetW = Math.min(width - 24, 720);
   const contentW = sheetW - 24;
   const contentH = Math.max(220, height - 220);
+
+  // Resolve the Pdf component on-demand. require() throws synchronously if
+  // resolution fails — wrap so the rest of the modal keeps rendering and the
+  // user can still tap "Open externally" instead of seeing the app close.
+  const Pdf: PdfComponent | null = useMemo(() => {
+    if (!visible || kind !== "pdf") return null;
+    try {
+      return require("react-native-pdf").default as PdfComponent;
+    } catch {
+      return null;
+    }
+  }, [visible, kind]);
 
   const openExternal = () => {
     if (!fileUrl) return;
@@ -83,7 +108,7 @@ export const NtpViewerModal = ({ visible, onClose, fileUrl, fileName }: Props) =
                 style={{ width: contentW, height: contentH }}
                 resizeMode="contain"
               />
-            ) : kind === "pdf" ? (
+            ) : kind === "pdf" && Pdf ? (
               <Pdf
                 source={{ uri: fileUrl, cache: true }}
                 style={{ width: contentW, height: contentH, backgroundColor: COLORS.background }}
@@ -92,6 +117,24 @@ export const NtpViewerModal = ({ visible, onClose, fileUrl, fileName }: Props) =
                   <ActivityIndicator color={COLORS.primary} />
                 )}
               />
+            ) : kind === "pdf" ? (
+              <View style={S.unsupported}>
+                <View style={S.unsupportedIconBox}>
+                  <FontAwesome5 name="file-pdf" size={26} color={COLORS.textTertiary} />
+                </View>
+                <Text style={S.unsupportedTitle}>PDF preview unavailable</Text>
+                <Text style={S.unsupportedBody}>
+                  Open this document in your default PDF viewer.
+                </Text>
+                <TouchableOpacity
+                  style={S.primaryBtn}
+                  onPress={openExternal}
+                  activeOpacity={0.85}
+                >
+                  <FontAwesome5 name="external-link-alt" size={11} color="#fff" />
+                  <Text style={S.primaryBtnText}>Open externally</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={S.unsupported}>
                 <View style={S.unsupportedIconBox}>
