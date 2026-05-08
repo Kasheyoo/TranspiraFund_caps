@@ -353,6 +353,67 @@ async function logAuditTrail(
   await Promise.all(writes);
 }
 
+// ─── enforceRateLimit ────────────────────────────────────────────────────────
+//
+//  Server-side counterpart to RateLimiter in src/utils/security.ts. Per
+//  (key, action) pair we keep a Firestore doc with attempts, windowStart,
+//  and lockedUntil. When the caller exceeds `max` within `windowMs`, we
+//  set lockedUntil = now + lockoutMs and throw resource-exhausted. Every
+//  subsequent call within the lockout window short-circuits with the same
+//  error until the lockout expires.
+//
+//  Identifier (`key`) is action-dependent — use the user's uid for callers
+//  with `request.auth`, and a hash of their email for unauthenticated
+//  callers (OTP send / verify / reset). Hashing avoids storing raw email
+//  in the rateLimits collection.
+//
+async function enforceRateLimit(
+  key: string,
+  action: string,
+  opts: { max: number; windowMs: number; lockoutMs: number },
+): Promise<void> {
+  const docId = `${key}_${action}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 1500);
+  const ref = admin.firestore().doc(`rateLimits/${docId}`);
+  const now = Date.now();
+
+  await admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const entry = snap.exists
+      ? (snap.data() as { attempts?: number; windowStart?: number; lockedUntil?: number | null })
+      : null;
+
+    if (entry?.lockedUntil && entry.lockedUntil > now) {
+      const wait = Math.ceil((entry.lockedUntil - now) / 1000);
+      throw new HttpsError(
+        "resource-exhausted",
+        `Too many requests. Please wait ${wait}s and try again.`,
+      );
+    }
+
+    // Window expired (or first call) — start a fresh window with attempt #1.
+    if (!entry || !entry.windowStart || now - entry.windowStart > opts.windowMs) {
+      tx.set(ref, { attempts: 1, windowStart: now, lockedUntil: null });
+      return;
+    }
+
+    const attempts = (entry.attempts ?? 0) + 1;
+    if (attempts >= opts.max) {
+      tx.set(ref, {
+        attempts,
+        windowStart: entry.windowStart,
+        lockedUntil: now + opts.lockoutMs,
+      });
+      const wait = Math.ceil(opts.lockoutMs / 1000);
+      throw new HttpsError(
+        "resource-exhausted",
+        `Too many requests. Please wait ${wait}s and try again.`,
+      );
+    }
+
+    tx.update(ref, { attempts });
+  });
+}
+
 // ─── generateMilestones ───────────────────────────────────────────────────────
 //
 //  Called by PROJ_ENG from the mobile app when a project has no milestones.
@@ -445,6 +506,12 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
+  await enforceRateLimit(request.auth.uid, "generateMilestones", {
+    max: 10,
+    windowMs: 24 * 60 * 60 * 1000,
+    lockoutMs: 24 * 60 * 60 * 1000,
+  });
 
   const { projectId } = (request.data ?? {}) as { projectId?: string };
   if (!projectId) {
@@ -717,6 +784,12 @@ export const uploadProfilePhoto = onCall(
       throw new HttpsError("unauthenticated", "Authentication required.");
     }
 
+    await enforceRateLimit(request.auth.uid, "uploadProfilePhoto", {
+      max: 5,
+      windowMs: 60 * 60 * 1000,
+      lockoutMs: 60 * 60 * 1000,
+    });
+
     const { base64, contentType } = (request.data ?? {}) as {
       base64?: string;
       contentType?: string;
@@ -807,6 +880,12 @@ export const uploadProofPhoto = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
     }
+
+    await enforceRateLimit(request.auth.uid, "uploadProofPhoto", {
+      max: 20,
+      windowMs: 60 * 60 * 1000,
+      lockoutMs: 60 * 60 * 1000,
+    });
 
     const {
       projectId, milestoneId, base64,
@@ -983,6 +1062,12 @@ export const sendPasswordResetOtp = onCall(
     const normalizedEmail = email.toLowerCase().trim();
     const emailHash = hashValue(normalizedEmail);
 
+    await enforceRateLimit(emailHash, "sendPasswordResetOtp", {
+      max: 5,
+      windowMs: 60 * 1000,
+      lockoutMs: 5 * 60 * 1000,
+    });
+
     try {
       // 1. Look up user by email — silent if not found
       let uid: string;
@@ -1072,6 +1157,12 @@ export const verifyPasswordResetOtp = onCall(
     const normalizedEmail = email.toLowerCase().trim();
     const emailHash = hashValue(normalizedEmail);
 
+    await enforceRateLimit(emailHash, "verifyPasswordResetOtp", {
+      max: 10,
+      windowMs: 60 * 1000,
+      lockoutMs: 5 * 60 * 1000,
+    });
+
     const otpRef = admin.firestore().doc(`passwordResetOtps/${emailHash}`);
     const otpSnap = await otpRef.get();
 
@@ -1139,6 +1230,12 @@ export const resetPasswordWithOtp = onCall(
 
     const normalizedEmail = email.toLowerCase().trim();
     const emailHash = hashValue(normalizedEmail);
+
+    await enforceRateLimit(emailHash, "resetPasswordWithOtp", {
+      max: 5,
+      windowMs: 60 * 1000,
+      lockoutMs: 10 * 60 * 1000,
+    });
 
     const otpRef = admin.firestore().doc(`passwordResetOtps/${emailHash}`);
     const otpSnap = await otpRef.get();
