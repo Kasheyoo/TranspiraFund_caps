@@ -21,8 +21,8 @@
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
 -keep class com.facebook.jni.** { *; }
--keep class com.facebook.proguard.annotations.DoNotStrip *
--keep class com.facebook.proguard.annotations.KeepGettersAndSetters *
+-keep class com.facebook.proguard.annotations.DoNotStrip { *; }
+-keep class com.facebook.proguard.annotations.KeepGettersAndSetters { *; }
 -keep @com.facebook.proguard.annotations.DoNotStrip class * { *; }
 -keep @com.facebook.proguard.annotations.KeepGettersAndSetters class * { *; }
 -keepclassmembers class * {
