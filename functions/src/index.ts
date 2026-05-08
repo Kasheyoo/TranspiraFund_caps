@@ -789,15 +789,34 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
 
   const { action, details, syncToDEPW, syncToHCSD, targetId, milestoneId } = request.data as {
     action?: string;
-    details?: string;
+    // Mobile call sites historically pass `details` as a string OR object
+    // (e.g. `{ reason: "invalid-credential" }`). The audit trail UI renders
+    // entry.details.message as plain text, so we coerce both shapes to a
+    // readable string below rather than rejecting the call.
+    details?: string | Record<string, unknown>;
     syncToDEPW?: boolean;  // accepted for backward compat from older app versions
     syncToHCSD?: boolean;
     targetId?: string;     // project id for project-scoped events (HCSD fan-out trigger)
     milestoneId?: string;  // milestone id for milestone-scoped events
   };
 
-  if (!action || !details) {
-    throw new HttpsError("invalid-argument", "action and details are required.");
+  if (!action) {
+    throw new HttpsError("invalid-argument", "action is required.");
+  }
+
+  // Normalize details to a single string the UI can render.
+  // - string → use as-is
+  // - object → flatten to "k=v" pairs (compact, human-skimmable)
+  // - missing → fall back to the action label so the entry isn't blank
+  let message: string;
+  if (typeof details === "string") {
+    message = details;
+  } else if (details && typeof details === "object") {
+    message = Object.entries(details)
+      .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
+      .join(", ");
+  } else {
+    message = action;
   }
 
   const uid = request.auth.uid;
@@ -808,7 +827,7 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   assertSameTenant(request.auth.token.tenantId, userTenantId);
 
   await logAuditTrail(
-    uid, email, action, details,
+    uid, email, action, message,
     syncToHCSD === true || syncToDEPW === true,
     typeof targetId === "string" ? targetId : undefined,
     typeof milestoneId === "string" ? milestoneId : undefined,
