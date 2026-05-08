@@ -53,6 +53,3 @@ android/local.properties
 
 # iOS (not used — bare React Native Android only)
 ios/
-
-# Proguard (generated)
-android/app/proguard-rules.pro
