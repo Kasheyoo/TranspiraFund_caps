@@ -1,7 +1,9 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -70,6 +72,21 @@ export const MilestoneGenerationModal = ({
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   const [edits, setEdits] = useState<Record<string, Partial<Milestone>>>({});
+
+  const cardScale = useRef(new Animated.Value(0.94)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(cardScale,   { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(cardOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
+    } else {
+      cardScale.setValue(0.94);
+      cardOpacity.setValue(0);
+    }
+  }, [visible, cardScale, cardOpacity]);
 
   useEffect(() => {
     if (visible) {
@@ -186,8 +203,12 @@ export const MilestoneGenerationModal = ({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         pointerEvents="box-none"
       >
-        <View
-          style={[S.card, phase === "review" && S.cardReview]}
+        <Animated.View
+          style={[
+            S.card,
+            phase === "review" && S.cardReview,
+            { transform: [{ scale: cardScale }], opacity: cardOpacity },
+          ]}
           pointerEvents="box-none"
         >
           <View style={S.orb1} /><View style={S.orb2} />
@@ -202,12 +223,12 @@ export const MilestoneGenerationModal = ({
 
               <View style={S.aiBadge}>
                 <FontAwesome5 name="bolt" size={9} color={COLORS.primary} />
-                <Text style={S.aiBadgeText}>POWERED BY CLAUDE HAIKU 4.5</Text>
+                <Text style={S.aiBadgeText}>AI GENERATED MILESTONE</Text>
               </View>
 
               <Text style={S.title}>Generate Milestones with AI</Text>
               <Text style={S.desc}>
-                Claude will draft 5–12 construction phases for this project. You'll review every phase, edit anything that needs adjusting, and remove what doesn't apply — nothing is saved to the project until you confirm.
+                AI will draft 5–12 construction phases for this project. You'll review every phase, edit anything that needs adjusting, and remove what doesn't apply — nothing is saved to the project until you confirm.
               </Text>
 
               <View style={S.divider} />
@@ -246,7 +267,7 @@ export const MilestoneGenerationModal = ({
               </View>
               <Text style={S.title}>Generating Milestones…</Text>
               <Text style={S.desc}>
-                Claude is analyzing the project metadata and drafting phases. This usually takes 5–15 seconds.
+                Analyzing the project metadata and drafting phases. This usually takes 5–15 seconds.
               </Text>
               <View style={S.loadingHint}>
                 <FontAwesome5 name="info-circle" size={11} color={COLORS.textTertiary} />
@@ -473,7 +494,7 @@ export const MilestoneGenerationModal = ({
               })()}
             </View>
           )}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

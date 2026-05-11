@@ -23,12 +23,17 @@ interface Props {
   onDismiss?: () => void;
 }
 
+const UPLOAD_CAP = 92;
+const FINALIZE_TARGET = 97;
+
+const displayPct = (percent: number) => Math.min(UPLOAD_CAP, Math.max(0, percent));
+
 const baseLabel = (stage: ProofUploadStage, percent: number): string => {
   switch (stage) {
     case "preparing":
       return "Preparing...";
     case "uploading":
-      return `Uploading ${percent}%`;
+      return `Uploading ${displayPct(percent)}%`;
     case "finalizing":
       return "Finalizing...";
     case "done":
@@ -36,20 +41,6 @@ const baseLabel = (stage: ProofUploadStage, percent: number): string => {
     case "error":
       return "Upload failed";
   }
-};
-
-const targetPct = (stage: ProofUploadStage, percent: number): number => {
-  if (stage === "preparing") return 4;
-  if (stage === "uploading") return Math.max(4, Math.min(99, percent));
-  if (stage === "finalizing") return 99;
-  if (stage === "done") return 100;
-  return 0;
-};
-
-const barDuration = (stage: ProofUploadStage): number => {
-  if (stage === "uploading") return 120;
-  if (stage === "done") return 240;
-  return 200;
 };
 
 export const ProofUploadModal = ({
@@ -97,12 +88,43 @@ export const ProofUploadModal = ({
   }, [visible, stage, shimmer, widthAnim, checkScale]);
 
   useEffect(() => {
-    Animated.timing(widthAnim, {
-      toValue: targetPct(stage, percent),
-      duration: barDuration(stage),
-      easing: stage === "uploading" ? Easing.linear : Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+    if (stage === "preparing") {
+      Animated.timing(widthAnim, {
+        toValue: 6,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+      return;
+    }
+    if (stage === "uploading") {
+      const target = Math.max(6, Math.min(UPLOAD_CAP, percent));
+      Animated.timing(widthAnim, {
+        toValue: target,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }).start();
+      return;
+    }
+    if (stage === "finalizing") {
+      Animated.timing(widthAnim, {
+        toValue: FINALIZE_TARGET,
+        duration: 2400,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+      return;
+    }
+    if (stage === "done") {
+      Animated.timing(widthAnim, {
+        toValue: 100,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+      return;
+    }
   }, [stage, percent, widthAnim]);
 
   useEffect(() => {
@@ -223,7 +245,7 @@ export const ProofUploadModal = ({
               <View style={S.statusRow}>
                 <Text style={S.stageText}>{label}</Text>
                 {stage === "uploading" && !resuming ? (
-                  <Text style={[S.pctText, { color: accent }]}>{percent}%</Text>
+                  <Text style={[S.pctText, { color: accent }]}>{displayPct(percent)}%</Text>
                 ) : null}
               </View>
             </>

@@ -1,6 +1,15 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import React from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef } from "react";
+import {
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { COLORS } from "../constants";
 
 interface LogoutModalProps {
@@ -10,30 +19,47 @@ interface LogoutModalProps {
 }
 
 export const LogoutModal = ({ visible, onClose, onConfirm }: LogoutModalProps) => {
+  const scale = useRef(new Animated.Value(0.94)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(scale,   { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
+    } else {
+      scale.setValue(0.94);
+      opacity.setValue(0);
+    }
+  }, [visible, opacity, scale]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.card}>
-          <View style={styles.iconContainer}>
-            <FontAwesome5 name="sign-out-alt" size={24} color={COLORS.error} />
-          </View>
-          
-          <Text style={styles.title}>Log Out</Text>
-          <Text style={styles.message}>
-            Are you sure you want to log out of your account? Please confirm your action to proceed.
-          </Text>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable onPress={() => {}}>
+          <Animated.View style={[styles.card, { transform: [{ scale }], opacity }]}>
+            <View style={styles.iconContainer}>
+              <FontAwesome5 name="sign-out-alt" size={24} color={COLORS.error} />
+            </View>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={styles.cancelText}>Stay</Text>
-            </TouchableOpacity>
+            <Text style={styles.title}>Log Out</Text>
+            <Text style={styles.message}>
+              Are you sure you want to log out of your account? Please confirm your action to proceed.
+            </Text>
 
-            <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm} activeOpacity={0.7}>
-              <Text style={styles.confirmText}>Proceed to Log Out</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.85}>
+                <Text style={styles.cancelText}>Stay</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm} activeOpacity={0.85}>
+                <Text style={styles.confirmText}>Proceed to Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

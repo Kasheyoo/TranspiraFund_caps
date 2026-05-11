@@ -1,5 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 
@@ -31,12 +31,15 @@ export const BottomNavBar = ({
           const hasBadge  = tab.name === "Notifications" && notificationCount > 0;
 
           return (
-            <TouchableOpacity
+            <Pressable
               key={tab.name}
-              style={S.tab}
+              style={({ pressed }) => [
+                S.tab,
+                pressed && { transform: [{ scale: 0.94 }], opacity: 0.85 },
+              ]}
               onPress={() => onNavigate(tab.name)}
-              activeOpacity={0.75}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              android_ripple={null}
             >
 
               <View style={[S.indicator, active && S.indicatorActive]} />
@@ -60,7 +63,7 @@ export const BottomNavBar = ({
               <Text style={[S.label, active && S.labelActive]}>
                 {tab.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>

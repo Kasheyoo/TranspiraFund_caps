@@ -19,9 +19,15 @@ const DashboardStack = createNativeStackNavigator();
 const ProjectsStack = createNativeStackNavigator();
 const SettingsStack = createNativeStackNavigator();
 
+const STACK_SCREEN_OPTIONS = {
+  headerShown: false,
+  animation: "slide_from_right" as const,
+  animationDuration: 280,
+};
+
 function DashboardNavigator() {
   return (
-    <DashboardStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+    <DashboardStack.Navigator screenOptions={STACK_SCREEN_OPTIONS}>
       <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
       <DashboardStack.Screen name={ROUTES.AUDIT_TRAIL} component={AuditTrailScreen} />
     </DashboardStack.Navigator>
@@ -30,7 +36,7 @@ function DashboardNavigator() {
 
 function ProjectsNavigator() {
   return (
-    <ProjectsStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+    <ProjectsStack.Navigator screenOptions={STACK_SCREEN_OPTIONS}>
       <ProjectsStack.Screen name={ROUTES.PROJECT_LIST} component={ProjectListScreen} />
       <ProjectsStack.Screen name={ROUTES.PROJECT_DETAILS} component={ProjectDetailsScreen} />
     </ProjectsStack.Navigator>
@@ -39,7 +45,7 @@ function ProjectsNavigator() {
 
 function SettingsNavigator() {
   return (
-    <SettingsStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+    <SettingsStack.Navigator screenOptions={STACK_SCREEN_OPTIONS}>
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name={ROUTES.PROFILE} component={ProfileScreen} />
       <SettingsStack.Screen name={ROUTES.HELP_CENTER} component={HelpCenterScreen} />

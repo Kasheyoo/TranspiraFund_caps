@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -119,7 +120,13 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
   const totalMs = item.milestones?.length ?? 0;
 
   return (
-    <TouchableOpacity style={S.card} onPress={onPress} activeOpacity={0.85}>
+    <Pressable
+      style={({ pressed }) => [
+        S.card,
+        pressed && { transform: [{ scale: 0.985 }], opacity: 0.9 },
+      ]}
+      onPress={onPress}
+    >
 
       <View style={[S.accentBar, { backgroundColor: sc.accent }]} />
 
@@ -171,7 +178,7 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
