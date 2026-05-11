@@ -822,16 +822,37 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   const uid = request.auth.uid;
   const email = request.auth.token.email || "";
 
+  // Resolve the actor's tenantId. Audit entries are metadata about the actor
+  // (not an operation on a cross-tenant target), so we don't use
+  // assertSameTenant here — that check throws when the ID token claim hasn't
+  // propagated yet, and the mobile call site swallows the error, which is
+  // why entries silently stopped appearing after login. Prefer the verified
+  // claim; fall back to the user doc for the brief window where the token
+  // predates the claim assignment (e.g. first login after provisioning).
+  const tokenTenantId =
+    typeof request.auth.token.tenantId === "string"
+      ? request.auth.token.tenantId
+      : undefined;
   const userSnap = await admin.firestore().doc(`users/${uid}`).get();
-  const userTenantId = (userSnap.data() ?? {}).tenantId;
-  assertSameTenant(request.auth.token.tenantId, userTenantId);
+  const docTenantId = (userSnap.data() ?? {}).tenantId;
+  const tenantId =
+    tokenTenantId ?? (typeof docTenantId === "string" ? docTenantId : undefined);
+
+  if (!tenantId) {
+    // Without tenantId the entry is invisible to the client filter, so refuse
+    // to write it. Soft error — the mobile catch handler discards it.
+    throw new HttpsError(
+      "failed-precondition",
+      "Account missing tenantId — audit entry skipped.",
+    );
+  }
 
   await logAuditTrail(
     uid, email, action, message,
     syncToHCSD === true || syncToDEPW === true,
     typeof targetId === "string" ? targetId : undefined,
     typeof milestoneId === "string" ? milestoneId : undefined,
-    typeof userTenantId === "string" ? userTenantId : undefined,
+    tenantId,
   );
 
   return { success: true };
