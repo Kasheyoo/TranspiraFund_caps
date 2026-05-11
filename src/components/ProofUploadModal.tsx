@@ -40,9 +40,16 @@ const baseLabel = (stage: ProofUploadStage, percent: number): string => {
 
 const targetPct = (stage: ProofUploadStage, percent: number): number => {
   if (stage === "preparing") return 4;
-  if (stage === "uploading") return Math.max(4, percent);
-  if (stage === "finalizing" || stage === "done") return 100;
+  if (stage === "uploading") return Math.max(4, Math.min(99, percent));
+  if (stage === "finalizing") return 99;
+  if (stage === "done") return 100;
   return 0;
+};
+
+const barDuration = (stage: ProofUploadStage): number => {
+  if (stage === "uploading") return 120;
+  if (stage === "done") return 240;
+  return 200;
 };
 
 export const ProofUploadModal = ({
@@ -55,11 +62,16 @@ export const ProofUploadModal = ({
 }: Props) => {
   const shimmer = useRef(new Animated.Value(0)).current;
   const widthAnim = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
   const lastForegroundRef = useRef<AppStateStatus>(AppState.currentState);
   const [resuming, setResuming] = useState(false);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      widthAnim.setValue(0);
+      checkScale.setValue(0);
+      return;
+    }
     if (stage === "done" || stage === "error") {
       shimmer.setValue(1);
       return;
@@ -82,16 +94,29 @@ export const ProofUploadModal = ({
     );
     loop.start();
     return () => loop.stop();
-  }, [visible, stage, shimmer]);
+  }, [visible, stage, shimmer, widthAnim, checkScale]);
 
   useEffect(() => {
     Animated.timing(widthAnim, {
       toValue: targetPct(stage, percent),
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
+      duration: barDuration(stage),
+      easing: stage === "uploading" ? Easing.linear : Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   }, [stage, percent, widthAnim]);
+
+  useEffect(() => {
+    if (stage === "done") {
+      Animated.spring(checkScale, {
+        toValue: 1,
+        damping: 12,
+        stiffness: 220,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      checkScale.setValue(0);
+    }
+  }, [stage, checkScale]);
 
   useEffect(() => {
     if (!visible) return;
@@ -137,11 +162,17 @@ export const ProofUploadModal = ({
       <View style={S.backdrop}>
         <View style={S.sheet}>
           <View style={[S.iconBox, { backgroundColor: isError ? COLORS.errorSoft : COLORS.successSoft }]}>
-            <FontAwesome5
-              name={isError ? "exclamation-circle" : isDone ? "check-circle" : "cloud-upload-alt"}
-              size={22}
-              color={accent}
-            />
+            {isDone ? (
+              <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+                <FontAwesome5 name="check-circle" size={22} color={accent} />
+              </Animated.View>
+            ) : (
+              <FontAwesome5
+                name={isError ? "exclamation-circle" : "cloud-upload-alt"}
+                size={22}
+                color={accent}
+              />
+            )}
           </View>
 
           <Text style={S.title}>{isError ? "Upload Failed" : isDone ? "Saved" : "Saving Proof"}</Text>
