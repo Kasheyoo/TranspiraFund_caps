@@ -18,8 +18,14 @@ export class AuditTrailService {
     onUpdate: (logs: AuditTrail[]) => void,
     onError?: (err: Error) => void,
   ): () => void {
-    requireAuth();
-    const tid = requireTenantId();
+    let tid: string;
+    try {
+      requireAuth();
+      tid = requireTenantId();
+    } catch (err) {
+      onError?.(err as Error);
+      return () => {};
+    }
 
     const q = query(
       collection(db, "auditTrails", "mobile", "entries"),
@@ -41,8 +47,13 @@ export class AuditTrailService {
   }
 
   static async getAll(): Promise<AuditTrail[]> {
-    requireAuth();
-    const tid = requireTenantId();
+    let tid: string;
+    try {
+      requireAuth();
+      tid = requireTenantId();
+    } catch {
+      return [];
+    }
 
     try {
       const logsRef = collection(db, "auditTrails", "mobile", "entries");

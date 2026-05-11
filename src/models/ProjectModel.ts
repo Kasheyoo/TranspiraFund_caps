@@ -45,8 +45,16 @@ export class ProjectModel {
     onUpdate: (projects: Project[]) => void,
     onError?: (error: Error) => void,
   ): () => void {
-    const uid = requireAuth();
-    const tid = requireTenantId();
+    let uid: string;
+    let tid: string;
+    try {
+      uid = requireAuth();
+      tid = requireTenantId();
+    } catch (err) {
+      onError?.(err as Error);
+      onUpdate([]);
+      return () => {};
+    }
 
     let cancelled = false;
     const latestProjects = new Map<string, Project>();
@@ -151,8 +159,15 @@ export class ProjectModel {
     onUpdate: (project: Project | null) => void,
     onError?: (error: Error) => void,
   ): () => void {
-    requireAuth();
-    const tid = requireTenantId();
+    let tid: string;
+    try {
+      requireAuth();
+      tid = requireTenantId();
+    } catch (err) {
+      onError?.(err as Error);
+      onUpdate(null);
+      return () => {};
+    }
 
     let latestProject: Project | null = null;
     let latestMilestones: Milestone[] = [];

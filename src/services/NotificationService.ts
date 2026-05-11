@@ -24,7 +24,13 @@ export const NotificationService = {
       onError?.(new Error("Not signed in"));
       return () => {};
     }
-    const tid = requireTenantId();
+    let tid: string;
+    try {
+      tid = requireTenantId();
+    } catch (err) {
+      onError?.(err as Error);
+      return () => {};
+    }
     const q = query(
       collection(db, "notifications"),
       where("tenantId", "==", tid),
