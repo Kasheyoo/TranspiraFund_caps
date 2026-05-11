@@ -96,7 +96,7 @@ const OTPCell = ({
           onKeyPress={({ nativeEvent }) => onKeyPress(nativeEvent.key)}
           onFocus={onFocus}
           keyboardType="numeric"
-          maxLength={1}
+          maxLength={CELL_COUNT}
           contextMenuHidden
           selectTextOnFocus={false}
           autoFocus={index === 0}
@@ -187,7 +187,25 @@ export const OTPVerificationView = ({
   }, [errorMessage]);
 
   const handleChange = (text: string, index: number) => {
-    const digit = text.replace(/\D/g, "").slice(0, 1);
+    const digits = text.replace(/\D/g, "");
+
+    // Paste path — spread digits across cells starting at the current index.
+    if (digits.length > 1) {
+      const next = [...otp];
+      let cursor = index;
+      for (const ch of digits) {
+        if (cursor >= CELL_COUNT) break;
+        next[cursor] = ch;
+        cursor++;
+      }
+      setOtp(next);
+      const focusOn = Math.min(cursor, CELL_COUNT - 1);
+      inputRefs.current[focusOn]?.focus();
+      setFocusedIndex(focusOn);
+      return;
+    }
+
+    const digit = digits.slice(0, 1);
     const next = [...otp];
     next[index] = digit;
     setOtp(next);
