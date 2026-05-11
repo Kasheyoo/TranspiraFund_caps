@@ -42,7 +42,7 @@ interface OTPVerificationViewProps {
 
 const CELL_COUNT = 6;
 
-/** OTPCell — outer Animated.View handles entering, inner handles scale transform */
+
 const OTPCell = ({
   digit,
   index,
@@ -126,7 +126,7 @@ export const OTPVerificationView = ({
   const [focusedIndex, setFocusedIndex] = useState(0);
   const inputRefs = useRef<(TextInput | null)[]>(Array(CELL_COUNT).fill(null));
 
-  // Wipe the OTP buffer whenever the app leaves the foreground.
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") {
@@ -137,13 +137,13 @@ export const OTPVerificationView = ({
     return () => sub.remove();
   }, []);
 
-  // Error shake animation
+
   const shake = useSharedValue(0);
   const shakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shake.value }],
   }));
 
-  // Resend success toast animation
+
   const toastY = useSharedValue(-120);
   const toastOpacity = useSharedValue(0);
   const toastStyle = useAnimatedStyle(() => ({
@@ -164,7 +164,7 @@ export const OTPVerificationView = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showResendSuccess]);
 
-  // When error appears: shake, auto-clear cells, refocus, auto-dismiss after 4s
+
   useEffect(() => {
     if (!errorMessage) return;
     shake.value = withSequence(
@@ -189,7 +189,7 @@ export const OTPVerificationView = ({
   const handleChange = (text: string, index: number) => {
     const digits = text.replace(/\D/g, "");
 
-    // Paste path — spread digits across cells starting at the current index.
+
     if (digits.length > 1) {
       const next = [...otp];
       let cursor = index;
@@ -209,12 +209,12 @@ export const OTPVerificationView = ({
     const next = [...otp];
     next[index] = digit;
     setOtp(next);
-    // Advance to next cell only if a digit was typed and not already on last cell
+
     if (digit && index < CELL_COUNT - 1) {
       inputRefs.current[index + 1]?.focus();
       setFocusedIndex(index + 1);
     }
-    // Last cell (index 5): stay put — no cycling back to first box
+
   };
 
   const handleKeyPress = (key: string, index: number) => {
@@ -244,11 +244,11 @@ export const OTPVerificationView = ({
     >
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-      {/* Background accents */}
+
       <View style={styles.bgAccentTop} />
       <View style={styles.bgAccentBottom} />
 
-      {/* ── Resend success toast ── */}
+
       <Animated.View style={[styles.successToast, toastStyle, { top: insets.top + 12 }]}>
         <View style={styles.successToastIconBox}>
           <FontAwesome5 name="check" size={13} color={COLORS.primary} />
@@ -259,7 +259,7 @@ export const OTPVerificationView = ({
         </View>
       </Animated.View>
 
-      {/* Back button */}
+
       <Animated.View
         entering={FadeIn.duration(300)}
         style={[styles.navBar, { marginTop: insets.top }]}
@@ -285,7 +285,7 @@ export const OTPVerificationView = ({
       >
         <View style={styles.centerWrapper}>
 
-          {/* ── Header area (on teal) ── */}
+
           <Animated.View
             entering={FadeIn.delay(100).duration(400)}
             style={styles.headerArea}
@@ -309,12 +309,12 @@ export const OTPVerificationView = ({
             </View>
           </Animated.View>
 
-          {/* ── Card ── */}
+
           <Animated.View
             entering={FadeInDown.delay(200).duration(450)}
             style={styles.card}
           >
-            {/* Card header */}
+
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Enter your code</Text>
               <Text style={styles.cardSubtitle}>
@@ -322,7 +322,7 @@ export const OTPVerificationView = ({
               </Text>
             </View>
 
-            {/* OTP cells */}
+
             <Animated.View style={[styles.otpRow, shakeStyle]}>
               {otp.map((digit, index) => (
                 <OTPCell
@@ -340,7 +340,7 @@ export const OTPVerificationView = ({
               ))}
             </Animated.View>
 
-            {/* Error banner */}
+
             {errorMessage ? (
               <Animated.View entering={FadeInDown.duration(250)} style={styles.alertBanner}>
                 <FontAwesome5 name="exclamation-circle" size={14} color={COLORS.error} />
@@ -348,7 +348,7 @@ export const OTPVerificationView = ({
               </Animated.View>
             ) : null}
 
-            {/* Verify button */}
+
             <TouchableOpacity
               style={[
                 styles.verifyBtn,
@@ -368,14 +368,14 @@ export const OTPVerificationView = ({
               )}
             </TouchableOpacity>
 
-            {/* Divider */}
+
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Resend */}
+
             <View style={styles.resendRow}>
               {isSending ? (
                 <View style={styles.sendingRow}>
@@ -395,7 +395,7 @@ export const OTPVerificationView = ({
               )}
             </View>
 
-            {/* Hint */}
+
             <View style={styles.hintNote}>
               <FontAwesome5 name="clock" size={10} color={COLORS.textTertiary} />
               <Text style={styles.hintText}>
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     left: -180,
   },
 
-  // ── Resend success toast ──
+
   successToast: {
     position: "absolute",
     left: 20,
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  // ── Nav ──
+
   navBar: {
     height: 52,
     flexDirection: "row",
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Scroll ──
+
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Header (on teal) ──
+
   headerArea: {
     alignItems: "center",
     marginBottom: 28,
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Card ──
+
   card: {
     width: "100%",
     backgroundColor: COLORS.surface,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── OTP cells ──
+
   otpRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
 
-  // ── Alert ──
+
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -656,7 +656,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // ── Verify button ──
+
   verifyBtn: {
     backgroundColor: COLORS.primary,
     height: 54,
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Divider ──
+
   divider: {
     flexDirection: "row",
     alignItems: "center",
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ── Resend ──
+
   resendRow: {
     alignItems: "center",
     minHeight: 40,
@@ -745,7 +745,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  // ── Hint ──
+
   hintNote: {
     flexDirection: "row",
     alignItems: "center",

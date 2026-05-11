@@ -16,9 +16,7 @@ interface DeviceLockRequiredScreenProps {
 }
 
 export const DeviceLockRequiredScreen = ({ onRecheck }: DeviceLockRequiredScreenProps) => {
-  // Auto-recheck when the user returns from Android Security settings — most
-  // common path is "Open Settings → set PIN → swipe back" so we want the gate
-  // to dismiss without requiring a second tap on "Check Again".
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
       if (s === "active") onRecheck();
@@ -28,9 +26,7 @@ export const DeviceLockRequiredScreen = ({ onRecheck }: DeviceLockRequiredScreen
 
   const openSettings = () => {
     Linking.sendIntent("android.settings.SECURITY_SETTINGS").catch(() => {
-      // If the security panel deep-link is unavailable on this OEM build,
-      // fall back to the app's own settings page so the user can still get
-      // somewhere instead of seeing a silent no-op.
+
       Linking.openSettings().catch(() => {});
     });
   };

@@ -41,14 +41,12 @@ interface AuthContextValue {
   isOTPVerified: boolean;
   setIsOTPVerified: (verified: boolean) => void;
   refreshProfile: () => Promise<void>;
-  // Multi-tenant claim-derived fields. Populated after onIdTokenChanged
-  // fires with a valid PROJ_ENG account; cleared on logout or misconfig.
+
   tenantId: string | null;
   role: string | null;
   lguName: string | null;
   claimsLoaded: boolean;
-  // Real touch-driven activity ping. The session timer reads this — see
-  // ActivityTracker in App.tsx for the throttled wrapper that calls it.
+
   resetActivity: () => void;
 }
 
@@ -76,22 +74,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [claimsLoaded, setClaimsLoaded] = useState(false);
   const [notice, setNotice] = useState<SecurityNotice | null>(null);
 
-  // Distinguishes app-reopen (persisted session) vs fresh login
   const isInitialAuthCheckRef = useRef(true);
-  // Tracks last processed uid so token-refresh fires (same uid) don't
-  // refetch the profile or refire validation alerts.
+
   const lastProcessedUidRef = useRef<string | null>(null);
-  // Dedupe the misconfig alert across the forced-signout fire-back.
+
   const misconfigAlertShownRef = useRef(false);
 
   const lastActivityRef = useRef<number>(Date.now());
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const warningShownRef = useRef(false);
 
-  // Live listeners for the actor's user doc and tenant doc. The web app can
-  // edit either at any time (e.g. update the engineer's photo, change the
-  // LGU display name); these onSnapshot subscriptions keep the mobile UI in
-  // sync without forcing a restart.
   const profileUnsubRef = useRef<(() => void) | null>(null);
   const tenantUnsubRef = useRef<(() => void) | null>(null);
   const detachLiveDocs = useCallback(() => {
@@ -101,7 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tenantUnsubRef.current = null;
   }, []);
 
-  // Web app sets mustChangePassword: true on account creation
   const isFirstTimeUser = userProfile?.mustChangePassword === true;
 
   const resetActivity = useCallback(() => {
@@ -116,11 +107,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const snap = await getDoc(doc(db, "users", currentUser.uid));
       setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
     } catch {
-      // Keep existing profile on error
+
     }
   }, []);
 
-  // Session timeout monitoring
   useEffect(() => {
     if (!user) {
       if (sessionTimerRef.current) {
@@ -136,8 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const elapsed = Date.now() - lastActivityRef.current;
 
       if (elapsed >= SESSION_TIMEOUT_MS) {
-        // Log BEFORE signOut so the call still has an authenticated user
-        // attached. Best-effort — failures don't block the sign-out.
+
         callFn("logMobileAuditTrail", {
           action: "Session Expired (Idle)",
           success: false,
@@ -159,20 +148,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, resetActivity]);
 
   useEffect(() => {
-    // onIdTokenChanged fires on sign-in, sign-out, AND token refresh —
-    // so claims are re-read whenever the token rotates, not just on login.
+
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       if (isInitialAuthCheckRef.current) {
         isInitialAuthCheckRef.current = false;
-        // App just opened — always require fresh login.
-        // Sign out any persisted session so user starts at landing page.
+
         if (firebaseUser) {
           await signOut(auth);
-          return; // listener will fire again with null
+          return;
         }
       }
 
-      // Logout path — wipe every piece of derived state in one place
       if (!firebaseUser) {
         detachLiveDocs();
         setIsOTPVerified(false);
@@ -188,8 +174,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Read custom claims. force=false uses the in-memory token, which is
-      // already fresh because onIdTokenChanged just fired.
       let claimRole: string | undefined;
       let claimTenantId: string | undefined;
       try {
@@ -197,18 +181,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         claimRole = tokenResult.claims.role as string | undefined;
         claimTenantId = tokenResult.claims.tenantId as string | undefined;
       } catch {
-        // Treat as misconfig — fall through to the validation gate below.
+
       }
 
-      // Hard gate: mobile app is PROJ_ENG only, and tenantId is required.
-      // Anything else means the account is misprovisioned and the user
-      // needs MIS to fix it before they can use the app.
       const isValid = claimRole === "PROJ_ENG" && !!claimTenantId;
       if (!isValid) {
         if (!misconfigAlertShownRef.current) {
           misconfigAlertShownRef.current = true;
           setNotice({ kind: "misconfigured" });
-          // Log before signOut — auth.currentUser is still set here.
+
           callFn("logMobileAuditTrail", {
             action: "Login Blocked - Misconfigured",
             success: false,
@@ -219,19 +200,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }).catch(() => {});
         }
         await signOut(auth);
-        return; // listener will fire again with null and reset state
+        return;
       }
 
       const uid = firebaseUser.uid;
       const isNewSession = uid !== lastProcessedUidRef.current;
       lastProcessedUidRef.current = uid;
 
-      // Push session into the module-level cache so models/services can
-      // call requireTenantId() without threading it through every signature.
       setTenantSession({
         tenantId: claimTenantId!,
         role: claimRole!,
-        lguName: null, // filled in below
+        lguName: null,
       });
 
       setUser(firebaseUser);
@@ -239,9 +218,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRole(claimRole!);
       setClaimsLoaded(true);
 
-      // On a fresh session (new uid), attach live listeners on the actor's
-      // user doc and the tenant doc. Token refreshes for the same uid reuse
-      // the existing listeners — no re-attach needed.
       if (isNewSession) {
         detachLiveDocs();
 
@@ -251,8 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
           },
           () => {
-            // Permission/network error — keep last known profile rather than
-            // clobbering with null mid-session.
+
           },
         );
 
@@ -270,7 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           },
           () => {
-            // lguName stays at last value; UI hides the row when null.
+
           },
         );
       }

@@ -14,10 +14,6 @@ export function AppNavigator() {
   const { user, isOTPVerified, isFirstTimeUser, userProfile, claimsLoaded } =
     useAuth();
 
-  // Drives the privacy overlay — true while the app is in the foreground.
-  // We mask the UI on inactive/background so the recent-apps thumbnail and
-  // the brief inactive flicker (e.g. notification shade pull) never expose
-  // project content.
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
@@ -26,9 +22,6 @@ export function AppNavigator() {
     return () => sub.remove();
   }, []);
 
-  // Device-lock gate (Placement B): block the main app when the device has
-  // no PIN/pattern/password/biometric. null = still resolving the first
-  // check, so render a spinner rather than briefly flashing the unlocked UI.
   const [deviceSecure, setDeviceSecure] = useState<boolean | null>(null);
   const recheckDeviceSecurity = useCallback(() => {
     isDeviceSecure().then(setDeviceSecure);
@@ -48,12 +41,10 @@ export function AppNavigator() {
 
   let gate: React.ReactNode;
   if (!user) {
-    // Not logged in or still resolving → show Landing / Login screens
+
     gate = <AuthNavigator />;
   } else if (!claimsLoaded) {
-    // Logged in but custom claims (tenantId, role) not yet read from the ID
-    // token. Hold here so downstream screens never fire unfiltered queries
-    // before the tenant session is initialized.
+
     gate = (
       <View
         style={{
@@ -67,14 +58,13 @@ export function AppNavigator() {
       </View>
     );
   } else if (!isOTPVerified) {
-    // Logged in but OTP not yet verified → require 6-digit email code
+
     gate = <OTPVerificationScreen />;
   } else if (isFirstTimeUser) {
-    // First-time login → force password change before entering the app
+
     gate = <ForcePasswordChangeScreen />;
   } else if (deviceSecure === null) {
-    // First device-security probe still pending — match the claims-loading
-    // teal spinner so we don't briefly flash the main app UI.
+
     gate = (
       <View
         style={{
@@ -90,7 +80,7 @@ export function AppNavigator() {
   } else if (deviceSecure === false) {
     gate = <DeviceLockRequiredScreen onRecheck={recheckDeviceSecurity} />;
   } else {
-    // Fully authenticated and verified → main app with welcome animation
+
     gate = (
       <>
         <MainNavigator />

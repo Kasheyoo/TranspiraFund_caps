@@ -12,9 +12,6 @@ class DeviceSecurityModule(reactContext: ReactApplicationContext)
 
   override fun getName() = "DeviceSecurity"
 
-  // KeyguardManager.isDeviceSecure returns true iff the user has set up a
-  // PIN, pattern, password, or biometric. Fail-open on unexpected platform
-  // errors so a broken native dependency never permanently blocks the app.
   @ReactMethod
   fun isDeviceSecure(promise: Promise) {
     try {

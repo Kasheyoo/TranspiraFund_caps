@@ -98,7 +98,6 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ══ HERO ══════════════════════════════════════════════ */}
         <View style={[S.hero, { paddingTop: insets.top + 24 }]}>
           <View style={S.orb1} /><View style={S.orb2} />
 
@@ -122,7 +121,6 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
           <Text style={S.divisionText}>Construction Services Division</Text>
         </View>
 
-        {/* ══ MENU SECTIONS ══════════════════════════════════════ */}
         {sections.map((section) => (
           <View key={section.title} style={S.section}>
             <Text style={S.sectionLabel}>{section.title}</Text>
@@ -158,7 +156,6 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
           </View>
         ))}
 
-        {/* ══ VERSION ════════════════════════════════════════════ */}
         <View style={S.versionRow}>
           <FontAwesome5 name="shield-alt" size={11} color={COLORS.textTertiary} />
           <Text style={S.versionText}>TranspiraFund · Version 1</Text>
@@ -175,12 +172,10 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   );
 };
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
   root:  { flex: 1, backgroundColor: COLORS.background },
   scroll: { flexGrow: 1 },
 
-  // ── Hero ────────────────────────────────────────────────────
   hero: {
     backgroundColor: COLORS.primary,
     alignItems: "center",
@@ -222,7 +217,6 @@ const S = StyleSheet.create({
   roleText:     { fontSize: 12, fontWeight: "700", color: "#fff" },
   divisionText: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.65)" },
 
-  // ── Menu sections ────────────────────────────────────────────
   section: { marginHorizontal: 20, marginTop: 24 },
   sectionLabel: {
     fontSize: 10, fontWeight: "900", color: COLORS.textTertiary,
@@ -250,7 +244,6 @@ const S = StyleSheet.create({
   menuSub:     { fontSize: 11, color: COLORS.textTertiary, marginTop: 2, fontWeight: "500" },
   menuDivider: { height: 1, backgroundColor: COLORS.border, marginLeft: 72 },
 
-  // ── Version ──────────────────────────────────────────────────
   versionRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 6, marginTop: 32, marginBottom: 8,

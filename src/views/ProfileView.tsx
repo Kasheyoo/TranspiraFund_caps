@@ -50,7 +50,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   const insets = useSafeAreaInsets();
   const { userProfile, isLoading, lguName } = data || {};
 
-  // ── Password modal state ────────────────────────────────────
   const [modalVisible, setModalVisible] = useState(false);
   const [passwords, setPasswords] = useState<PasswordState>({ current: "", new: "", confirm: "" });
   const [updating, setUpdating] = useState(false);
@@ -61,20 +60,17 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // ── Photo state ─────────────────────────────────────────────
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
   const [pendingPhotoBase64, setPendingPhotoBase64] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
-  // ── Toast ───────────────────────────────────────────────────
   const [toast, setToast] = useState<{ visible: boolean; type: "success" | "error" | "info"; message: string }>({
     visible: false, type: "success", message: "",
   });
   const showToast = (type: "success" | "error" | "info", message: string) =>
     setToast({ visible: true, type, message });
 
-  // ── Derived ─────────────────────────────────────────────────
   const requirements = useMemo(() => validatePassword(passwords.new), [passwords.new]);
   const passwordsMatch = passwords.new.length > 0 && passwords.new === passwords.confirm;
 
@@ -87,15 +83,12 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
 
   const photoToShow = pendingPhotoUri || (userProfile?.photoURL || "");
 
-  // Cancel any pending password-verify timer if the screen unmounts mid-debounce,
-  // so the async verify doesn't fire setState after unmount.
   useEffect(() => {
     return () => {
       if (verifyTimerRef.current) clearTimeout(verifyTimerRef.current);
     };
   }, []);
 
-  // ── Password handlers ────────────────────────────────────────
   const handleCurrentPasswordChange = (text: string) => {
     setPasswords((prev) => ({ ...prev, current: text }));
     setIsCurrentCorrect(null);
@@ -136,7 +129,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
     setShowConfirm(false);
   };
 
-  // ── Photo handlers ───────────────────────────────────────────
   const handlePickPhoto = async () => {
     setShowPhotoSheet(false);
     const result = await launchImageLibrary({
@@ -184,7 +176,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   return (
     <View style={styles.container}>
 
-      {/* ── Toast (above everything) ─────────────────────────── */}
       <ToastMessage
         visible={toast.visible}
         type={toast.type}
@@ -192,7 +183,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
         onHide={() => setToast((t) => ({ ...t, visible: false }))}
       />
 
-      {/* ── Header ───────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={actions.goBack} activeOpacity={0.7}>
           <FontAwesome5 name="arrow-left" size={18} color={COLORS.textPrimary} />
@@ -203,13 +193,11 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* ── Teal Hero Card ─────────────────────────────────── */}
         <View style={styles.profileCard}>
           <View style={styles.profileBanner}>
             <View style={styles.orbA} />
             <View style={styles.orbB} />
 
-            {/* Avatar + camera button */}
             <View style={styles.avatarWrapper}>
               <View style={styles.avatarRing}>
                 {photoToShow ? (
@@ -233,7 +221,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               </TouchableOpacity>
             </View>
 
-            {/* Pending photo actions */}
             {pendingPhotoUri && (
               <View style={styles.pendingActions}>
                 <TouchableOpacity style={styles.cancelPhotoBtn} onPress={cancelPendingPhoto} activeOpacity={0.8}>
@@ -254,7 +241,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
           </View>
         </View>
 
-        {/* ── Official Information ──────────────────────────── */}
         <Text style={styles.sectionHeading}>OFFICIAL INFORMATION</Text>
         <View style={styles.infoCard}>
           <InfoRow icon="envelope" label="Email Address" value={userProfile?.email || "—"} />
@@ -266,7 +252,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
           <InfoRow icon="landmark" label="Organization" value={lguName ?? "—"} />
         </View>
 
-        {/* ── Security ─────────────────────────────────────── */}
         <Text style={styles.sectionHeading}>SECURITY</Text>
         <View style={styles.actionsCard}>
           <TouchableOpacity style={styles.actionItem} onPress={() => setModalVisible(true)} activeOpacity={0.7}>
@@ -280,7 +265,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
 
       </ScrollView>
 
-      {/* ── Photo Action Sheet ────────────────────────────────── */}
       <Modal visible={showPhotoSheet} transparent animationType="slide" onRequestClose={() => setShowPhotoSheet(false)}>
         <TouchableWithoutFeedback onPress={() => setShowPhotoSheet(false)}>
           <View style={styles.sheetOverlay}>
@@ -314,14 +298,13 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* ── Change Password Modal ─────────────────────────────── */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <View style={styles.modalSheet}>
-            {/* Modal Header */}
+
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Change Password</Text>
@@ -332,7 +315,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               </TouchableOpacity>
             </View>
 
-            {/* Current Password */}
             <View style={[
               styles.inputWrapper,
               isCurrentCorrect === true && styles.validBorder,
@@ -354,7 +336,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
                 value={passwords.current}
                 onChangeText={handleCurrentPasswordChange}
               />
-              {/* Clear button */}
+
               {passwords.current.length > 0 && !verifying && (
                 <TouchableOpacity onPress={() => { setPasswords((p) => ({ ...p, current: "" })); setIsCurrentCorrect(null); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <FontAwesome5 name="times-circle" size={14} color={COLORS.textTertiary} />
@@ -367,13 +349,12 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               {!verifying && isCurrentCorrect === false && (
                 <FontAwesome5 name="times-circle" size={14} color={COLORS.error} />
               )}
-              {/* Eye toggle */}
+
               <TouchableOpacity onPress={() => setShowCurrent((v) => !v)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <FontAwesome5 name={showCurrent ? "eye-slash" : "eye"} size={14} color={COLORS.textTertiary} />
               </TouchableOpacity>
             </View>
 
-            {/* New Password */}
             <View style={styles.inputWrapper}>
               <FontAwesome5 name="key" size={14} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
@@ -396,7 +377,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               </TouchableOpacity>
             </View>
 
-            {/* Confirm Password */}
             <View style={[
               styles.inputWrapper,
               passwords.confirm.length > 0 && (passwordsMatch ? styles.validBorder : styles.invalidBorder),
@@ -422,7 +402,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               </TouchableOpacity>
             </View>
 
-            {/* Requirements checklist */}
             <View style={styles.checklist}>
               {[
                 { met: requirements.minLength, label: "At least 8 characters" },
@@ -447,7 +426,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
               ))}
             </View>
 
-            {/* Submit */}
             <TouchableOpacity
               style={[
                 styles.saveBtn,
@@ -470,7 +448,6 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   );
 };
 
-// ── Reusable info row ─────────────────────────────────────────
 const InfoRow = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
   <View style={styles.infoRow}>
     <View style={styles.infoIconBox}>
@@ -486,7 +463,6 @@ const InfoRow = ({ icon, label, value }: { icon: string; label: string; value: s
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
-  // ── Header ────────────────────────────────────────────────
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -502,7 +478,6 @@ const styles = StyleSheet.create({
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 60 },
 
-  // ── Profile Hero ──────────────────────────────────────────
   profileCard: {
     borderRadius: 20,
     overflow: "hidden",
@@ -531,7 +506,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.06)", bottom: -60, left: -30,
   },
 
-  // Avatar
   avatarWrapper: { position: "relative", marginBottom: 16 },
   avatarRing: {
     width: 96, height: 96, borderRadius: 48,
@@ -556,7 +530,6 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
   },
 
-  // Pending photo actions
   pendingActions: {
     flexDirection: "row", gap: 10, marginBottom: 12, marginTop: -4,
   },
@@ -582,13 +555,11 @@ const styles = StyleSheet.create({
   },
   roleText: { fontSize: 12, fontWeight: "700", color: "#FFFFFF", letterSpacing: 0.3 },
 
-  // ── Section headings ──────────────────────────────────────
   sectionHeading: {
     fontSize: 11, fontWeight: "800", color: COLORS.textSecondary,
     letterSpacing: 1.2, marginBottom: 10, paddingHorizontal: 4,
   },
 
-  // ── Info Card ─────────────────────────────────────────────
   infoCard: {
     backgroundColor: COLORS.surface, borderRadius: 16,
     borderWidth: 1, borderColor: COLORS.border,
@@ -610,7 +581,6 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary },
   infoDivider: { height: 1, backgroundColor: COLORS.border, marginLeft: 50 },
 
-  // ── Actions Card ──────────────────────────────────────────
   actionsCard: {
     backgroundColor: COLORS.surface, borderRadius: 16,
     borderWidth: 1, borderColor: COLORS.border,
@@ -622,7 +592,6 @@ const styles = StyleSheet.create({
   actionIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   actionLabel: { flex: 1, fontSize: 15, fontWeight: "600", color: COLORS.textPrimary },
 
-  // ── Photo Action Sheet ────────────────────────────────────
   sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   sheetContainer: {
     backgroundColor: COLORS.surface,
@@ -645,7 +614,6 @@ const styles = StyleSheet.create({
   },
   sheetCancelText: { fontSize: 15, fontWeight: "700", color: COLORS.textSecondary },
 
-  // ── Modal ─────────────────────────────────────────────────
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end",
   },

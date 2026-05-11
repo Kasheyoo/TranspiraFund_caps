@@ -36,7 +36,7 @@ interface ForgotPasswordOTPViewProps {
 
 const CELL_COUNT = 6;
 
-/** OTPCell — outer Animated.View handles entering, inner handles scale transform */
+
 const OTPCell = ({
   digit,
   index,
@@ -117,7 +117,7 @@ export const ForgotPasswordOTPView = ({
   const [focusedIndex, setFocusedIndex] = useState(0);
   const inputRefs = useRef<(TextInput | null)[]>(Array(CELL_COUNT).fill(null));
 
-  // Wipe the OTP buffer whenever the app leaves the foreground.
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") {
@@ -182,11 +182,11 @@ export const ForgotPasswordOTPView = ({
     >
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-      {/* Background accents */}
+
       <View style={styles.bgAccentTop} />
       <View style={styles.bgAccentBottom} />
 
-      {/* Back button */}
+
       <Animated.View
         entering={FadeIn.duration(300)}
         style={[styles.navBar, { marginTop: insets.top }]}
@@ -212,7 +212,7 @@ export const ForgotPasswordOTPView = ({
       >
         <View style={styles.centerWrapper}>
 
-          {/* ── Header area (on teal) ── */}
+
           <Animated.View
             entering={FadeIn.delay(100).duration(400)}
             style={styles.headerArea}
@@ -230,12 +230,12 @@ export const ForgotPasswordOTPView = ({
             </View>
           </Animated.View>
 
-          {/* ── Card ── */}
+
           <Animated.View
             entering={FadeInDown.delay(200).duration(450)}
             style={styles.card}
           >
-            {/* Card header */}
+
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Enter your code</Text>
               <Text style={styles.cardSubtitle}>
@@ -243,7 +243,7 @@ export const ForgotPasswordOTPView = ({
               </Text>
             </View>
 
-            {/* OTP cells */}
+
             <View style={styles.otpRow}>
               {otp.map((digit, index) => (
                 <OTPCell
@@ -261,7 +261,7 @@ export const ForgotPasswordOTPView = ({
               ))}
             </View>
 
-            {/* Error banner */}
+
             {errorMessage ? (
               <Animated.View entering={FadeInDown.duration(300)}>
                 <TouchableOpacity style={styles.alertBanner} onPress={resetOtp} activeOpacity={0.8}>
@@ -271,7 +271,7 @@ export const ForgotPasswordOTPView = ({
               </Animated.View>
             ) : null}
 
-            {/* Verify button */}
+
             <TouchableOpacity
               style={[
                 styles.verifyBtn,
@@ -291,14 +291,14 @@ export const ForgotPasswordOTPView = ({
               )}
             </TouchableOpacity>
 
-            {/* Divider */}
+
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Resend */}
+
             <View style={styles.resendRow}>
               {isSending ? (
                 <View style={styles.sendingRow}>
@@ -318,7 +318,7 @@ export const ForgotPasswordOTPView = ({
               )}
             </View>
 
-            {/* Hint */}
+
             <View style={styles.hintNote}>
               <FontAwesome5 name="clock" size={10} color={COLORS.textTertiary} />
               <Text style={styles.hintText}>
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     left: -180,
   },
 
-  // ── Nav ──
+
   navBar: {
     height: 52,
     flexDirection: "row",
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Scroll ──
+
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Header (on teal) ──
+
   headerArea: {
     alignItems: "center",
     marginBottom: 28,
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Card ──
+
   card: {
     width: "100%",
     backgroundColor: COLORS.surface,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── OTP cells ──
+
   otpRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
 
-  // ── Alert ──
+
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // ── Verify button ──
+
   verifyBtn: {
     backgroundColor: COLORS.primary,
     height: 54,
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Divider ──
+
   divider: {
     flexDirection: "row",
     alignItems: "center",
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ── Resend ──
+
   resendRow: {
     alignItems: "center",
     minHeight: 40,
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  // ── Hint ──
+
   hintNote: {
     flexDirection: "row",
     alignItems: "center",

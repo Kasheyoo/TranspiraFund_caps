@@ -108,7 +108,6 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
   return (
     <View style={S.root}>
 
-      {/* ══ HERO ══════════════════════════════════════════════════ */}
       <View style={[S.hero, { paddingTop: insets.top + 20 }]}>
         <View style={S.orb1} /><View style={S.orb2} />
 
@@ -132,7 +131,6 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
         )}
       </View>
 
-      {/* ══ FILTER CHIPS ══════════════════════════════════════════ */}
       <View style={S.filterWrap}>
         <ScrollView
           horizontal
@@ -155,7 +153,6 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
         </ScrollView>
       </View>
 
-      {/* ══ LIST ══════════════════════════════════════════════════ */}
       {isLoading && notifications.length === 0 ? (
         <View style={S.loadingBox}>
           <ActivityIndicator size="large" color={COLORS.primary} />

@@ -1,15 +1,11 @@
 import { auth } from "../firebaseConfig";
 
-/**
- * Shared Cloud Function caller.
- * Single source of truth for the base URL and fetch logic —
- * no more copy-pasting callFn in every file.
- */
+
 
 const BASE_URL =
   "https://asia-southeast1-transpirafund-webapp.cloudfunctions.net";
 
-/** Authenticated call — requires a logged-in Firebase user */
+
 export async function callFn(
   name: string,
   data: Record<string, unknown> = {},
@@ -42,7 +38,7 @@ export async function callFn(
   return (json.result ?? json) as Record<string, unknown>;
 }
 
-/** Unauthenticated call — no Bearer token (e.g. password reset before login) */
+
 export async function callFnPublic(
   name: string,
   data: Record<string, unknown> = {},

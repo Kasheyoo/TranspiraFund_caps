@@ -26,14 +26,13 @@ export function ForcePasswordChangeScreen() {
         return;
       }
 
-      // User just logged in + passed OTP — session is fresh
+
       await updatePassword(user, newPassword);
 
-      // Clears mustChangePassword on the user record and writes the
-      // corresponding audit entry server-side.
+
       await callFn("completePasswordChange");
 
-      // Show branded success overlay
+
       setShowSuccess(true);
     } catch (error) {
       const fbErr = error as { code?: string; message?: string };

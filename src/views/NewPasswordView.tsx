@@ -36,7 +36,7 @@ interface NewPasswordViewProps {
   errorMessage?: string;
 }
 
-// ─── Animated focus border wrapper ───────────────────────────────────────────
+
 const FocusInput = ({
   children,
   isFocused,
@@ -69,7 +69,7 @@ const FocusInput = ({
   );
 };
 
-// ─── Animated strength bar ───────────────────────────────────────────────────
+
 const StrengthBar = ({ metCount }: { metCount: number }) => {
   const progress = useDerivedValue(() =>
     withTiming(metCount / 5, { duration: 350 }),
@@ -101,7 +101,7 @@ const StrengthBar = ({ metCount }: { metCount: number }) => {
   );
 };
 
-// ─── Main component ──────────────────────────────────────────────────────────
+
 export const NewPasswordView = ({
   actions,
   isLoading,
@@ -117,9 +117,7 @@ export const NewPasswordView = ({
   const [showCurrent, setShowCurrent] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
 
-  // Wipe every password field when the app leaves the foreground so a
-  // half-typed password never persists in memory while the app is
-  // backgrounded.
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") {
@@ -170,7 +168,7 @@ export const NewPasswordView = ({
     >
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-      {/* Subtle background orbs */}
+
       <View style={styles.bgOrbTop} />
       <View style={styles.bgOrbBottom} />
 
@@ -185,7 +183,7 @@ export const NewPasswordView = ({
       >
         <View style={styles.wrapper}>
 
-          {/* ── Header (on teal) ── */}
+
           <Animated.View entering={FadeIn.delay(80).duration(400)} style={styles.header}>
             <View style={styles.iconCircle}>
               <FontAwesome5 name="lock" size={26} color="#FFFFFF" />
@@ -194,10 +192,10 @@ export const NewPasswordView = ({
             <Text style={styles.headerSub}>{subtitle}</Text>
           </Animated.View>
 
-          {/* ── Card ── */}
+
           <Animated.View entering={FadeInDown.delay(180).duration(440)} style={styles.card}>
 
-            {/* Error banner */}
+
             {errorMessage ? (
               <Animated.View entering={FadeInDown.duration(280)} style={styles.errorBanner}>
                 <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.error} />
@@ -205,7 +203,7 @@ export const NewPasswordView = ({
               </Animated.View>
             ) : null}
 
-            {/* Current password (change-password mode only) */}
+
             {showCurrentPassword && (
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Current Password</Text>
@@ -250,7 +248,7 @@ export const NewPasswordView = ({
               </View>
             )}
 
-            {/* Divider if current password shown */}
+
             {showCurrentPassword && (
               <View style={styles.sectionDivider}>
                 <View style={styles.dividerLine} />
@@ -259,7 +257,7 @@ export const NewPasswordView = ({
               </View>
             )}
 
-            {/* New password */}
+
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>New Password</Text>
               <FocusInput
@@ -308,11 +306,11 @@ export const NewPasswordView = ({
                 </View>
               </FocusInput>
 
-              {/* Strength bar */}
+
               {newPassword.length > 0 && <StrengthBar metCount={metCount} />}
             </View>
 
-            {/* Confirm password */}
+
             <View style={styles.fieldGroup}>
               <View style={styles.confirmLabelRow}>
                 <Text style={styles.fieldLabel}>Confirm Password</Text>
@@ -370,7 +368,7 @@ export const NewPasswordView = ({
               </FocusInput>
             </View>
 
-            {/* Requirements grid */}
+
             <View style={styles.reqContainer}>
               <Text style={styles.reqTitle}>Password requirements</Text>
               <View style={styles.reqGrid}>
@@ -389,7 +387,7 @@ export const NewPasswordView = ({
               </View>
             </View>
 
-            {/* Submit */}
+
             <TouchableOpacity
               style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
               onPress={handleUpdate}
@@ -408,7 +406,7 @@ export const NewPasswordView = ({
               )}
             </TouchableOpacity>
 
-            {/* Security note */}
+
             <View style={styles.securityNote}>
               <FontAwesome5 name="lock" size={9} color={COLORS.textTertiary} />
               <Text style={styles.securityNoteText}>
@@ -424,7 +422,7 @@ export const NewPasswordView = ({
 };
 
 const styles = StyleSheet.create({
-  // ── Background ──
+
   bgOrbTop: {
     position: "absolute",
     width: 480,
@@ -444,7 +442,7 @@ const styles = StyleSheet.create({
     left: -180,
   },
 
-  // ── Layout ──
+
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -457,7 +455,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Header ──
+
   header: {
     alignItems: "center",
     marginBottom: 28,
@@ -490,7 +488,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
-  // ── Card ──
+
   card: {
     width: "100%",
     backgroundColor: COLORS.surface,
@@ -503,7 +501,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
 
-  // ── Error banner ──
+
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -523,7 +521,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // ── Section divider ──
+
   sectionDivider: {
     flexDirection: "row",
     alignItems: "center",
@@ -542,7 +540,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
 
-  // ── Fields ──
+
   fieldGroup: {
     marginBottom: 16,
   },
@@ -574,7 +572,7 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
 
-  // ── Input ──
+
   inputBase: {
     backgroundColor: "#F8FAFC",
     borderRadius: 14,
@@ -602,7 +600,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-  // ── Strength bar ──
+
   strengthRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -627,7 +625,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  // ── Requirements ──
+
   reqContainer: {
     backgroundColor: "#F8FAFC",
     borderRadius: 14,
@@ -676,7 +674,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ── Submit button ──
+
   submitBtn: {
     backgroundColor: COLORS.primary,
     height: 54,
@@ -704,7 +702,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Security note ──
+
   securityNote: {
     flexDirection: "row",
     alignItems: "center",

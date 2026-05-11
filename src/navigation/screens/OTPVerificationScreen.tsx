@@ -57,8 +57,7 @@ export function OTPVerificationScreen() {
     try {
       const success = await OTPService.verifyCode(code);
       if (success) {
-        // Pick up role/otpVerified claims updated by verifyOtp so subsequent
-        // callFn requests in this session carry the post-verify token.
+
         await auth.currentUser?.getIdToken(true);
 
         const firstName = userProfile?.firstName || userProfile?.name?.split(" ")[0] || "Engineer";
@@ -84,7 +83,7 @@ export function OTPVerificationScreen() {
     try {
       await OTPService.sendCode();
       startResendTimer();
-      setResendSuccess(true); // Show in-app toast instead of system Alert
+      setResendSuccess(true);
     } catch (e: unknown) {
       setErrorMessage(sanitizeOTPError(e, "send"));
     } finally {

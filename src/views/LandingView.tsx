@@ -31,17 +31,16 @@ const SPLASH_LOGO_SIZE = isSmall ? 140 : 160;
 export const LandingView = ({ onGetStarted }: LandingViewProps) => {
   const insets = useSafeAreaInsets();
 
-  // Splash overlay fades OUT, landing content fades IN — crossfade
   const splashOpacity = useSharedValue(1);
   const contentOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Hold so user sees the splash logo, then fade out
+
     splashOpacity.value = withDelay(
       1000,
       withTiming(0, { duration: 500, easing: Easing.in(Easing.quad) }),
     );
-    // Landing content fades in slightly after splash starts fading
+
     contentOpacity.value = withDelay(
       1150,
       withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) }),
@@ -50,7 +49,7 @@ export const LandingView = ({ onGetStarted }: LandingViewProps) => {
 
   const splashStyle = useAnimatedStyle(() => ({
     opacity: splashOpacity.value,
-    // Hide from touch once faded
+
     pointerEvents: splashOpacity.value > 0.05 ? "auto" : "none",
   }));
 
@@ -66,7 +65,6 @@ export const LandingView = ({ onGetStarted }: LandingViewProps) => {
       <View style={styles.bgAccentMid} />
       <View style={styles.bgAccentBottom} />
 
-      {/* ── Landing page (always rendered, fades in) ── */}
       <Animated.View style={[styles.content, contentStyle, {
         paddingTop: insets.top + 24,
         paddingBottom: insets.bottom + 24,
@@ -134,7 +132,6 @@ export const LandingView = ({ onGetStarted }: LandingViewProps) => {
         </View>
       </Animated.View>
 
-      {/* ── Splash overlay (absolutely positioned, fades out) ── */}
       <Animated.View style={[styles.splashOverlay, splashStyle]}>
         <View style={styles.splashLogoContainer}>
           <Image
@@ -183,7 +180,6 @@ const styles = StyleSheet.create({
     left: -150,
   },
 
-  // ── Landing layout ──
   content: {
     flex: 1,
     paddingHorizontal: 24,
@@ -334,7 +330,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ── Splash overlay ──
   splashOverlay: {
     position: "absolute",
     top: 0,

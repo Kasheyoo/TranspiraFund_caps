@@ -53,7 +53,6 @@ const formatTimestamp = (seconds: number): string => {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ` · ${timeStr}`;
 };
 
-// ── Actor avatar (photo or initials) ─────────────────────────
 const ActorAvatar = ({ profile, email }: { profile?: UserProfile; email?: string }) => {
   const photoURL = profile?.photoURL;
   const name = profile?.firstName
@@ -78,7 +77,6 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
   return (
     <View style={S.root}>
 
-      {/* ══ HERO ══════════════════════════════════════════════════ */}
       <View style={[S.hero, { paddingTop: insets.top + 16 }]}>
         <View style={S.orb1} /><View style={S.orb2} />
 
@@ -102,7 +100,6 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
         </View>
       </View>
 
-      {/* ══ CONTENT ═══════════════════════════════════════════════ */}
       <ScrollView
         contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
@@ -135,12 +132,11 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
                 return (
                   <View key={log.id || i.toString()}>
                     <View style={[S.logRow, isLast && S.logRowLast]}>
-                      {/* Action icon */}
+
                       <View style={[S.logIcon, { backgroundColor: icon.bg }]}>
                         <FontAwesome5 name={icon.name} size={13} color={icon.color} />
                       </View>
 
-                      {/* Text block */}
                       <View style={S.logBody}>
                         <Text style={S.logAction}>{log.action}</Text>
                         {(() => {
@@ -151,7 +147,6 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
                           ) : null;
                         })()}
 
-                        {/* Actor + timestamp row — hydrated from users/{uid} */}
                         <View style={S.logMeta}>
                           <ActorAvatar profile={actor} email={log.email} />
                           <Text style={S.logMetaText} numberOfLines={1}>
@@ -187,11 +182,9 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
   );
 };
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
 
-  // ── Hero ──────────────────────────────────────────────────────
   hero: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
@@ -226,7 +219,6 @@ const S = StyleSheet.create({
   },
   countText: { fontSize: 13, fontWeight: "900", color: "#fff" },
 
-  // ── Content ───────────────────────────────────────────────────
   scroll:       { paddingHorizontal: 18, paddingTop: 20 },
   sectionLabel: {
     fontSize: 10, fontWeight: "900", color: COLORS.textTertiary,
@@ -256,7 +248,6 @@ const S = StyleSheet.create({
   logAction: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary, lineHeight: 19 },
   logDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2, fontWeight: "500", lineHeight: 16 },
 
-  // Actor + timestamp row
   logMeta: {
     flexDirection: "row", alignItems: "center", marginTop: 7, gap: 5, flexWrap: "wrap",
   },
@@ -279,10 +270,8 @@ const S = StyleSheet.create({
   },
   logTime: { fontSize: 11, color: COLORS.textTertiary, fontWeight: "600" },
 
-  // ── Loading ───────────────────────────────────────────────────
   loadingBox: { paddingTop: 60, alignItems: "center" },
 
-  // ── Empty state ───────────────────────────────────────────────
   emptyBox:     { alignItems: "center", paddingTop: 60, gap: 8 },
   emptyIconBox: {
     width: 60, height: 60, borderRadius: 18,

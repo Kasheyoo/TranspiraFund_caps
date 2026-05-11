@@ -4,7 +4,7 @@ import { isValidEmail, sanitizeInput } from "../utils/security";
 
 type ForgotStep = "email" | "otp" | "password" | "success";
 
-const RESEND_COOLDOWN = 60; // seconds
+const RESEND_COOLDOWN = 60;
 
 export const useForgotPasswordPresenter = () => {
   const [step, setStep] = useState<ForgotStep>("email");
@@ -35,7 +35,7 @@ export const useForgotPasswordPresenter = () => {
     }, 1000);
   };
 
-  /** Step 1 — User submits their email */
+
   const onSendCode = async (inputEmail: string) => {
     setError("");
     const cleaned = sanitizeInput(inputEmail, 254);
@@ -48,7 +48,7 @@ export const useForgotPasswordPresenter = () => {
     try {
       await OTPService.sendPasswordResetOtp(cleaned);
     } catch {
-      // Intentionally silent — never reveal if email exists (security)
+
     } finally {
       setEmail(cleaned);
       setStep("otp");
@@ -57,7 +57,7 @@ export const useForgotPasswordPresenter = () => {
     }
   };
 
-  /** Step 2 — User submits the 6-digit code */
+
   const onVerifyCode = async (code: string) => {
     setError("");
     setIsLoading(true);
@@ -72,7 +72,7 @@ export const useForgotPasswordPresenter = () => {
     }
   };
 
-  /** Step 3 — User sets their new password */
+
   const onResetPassword = async (_currentPassword: string, newPassword: string) => {
     setError("");
     setIsLoading(true);
@@ -87,21 +87,21 @@ export const useForgotPasswordPresenter = () => {
     }
   };
 
-  /** Resend code from step 2 */
+
   const onResendCode = async () => {
     setError("");
     setIsSending(true);
     try {
       await OTPService.sendPasswordResetOtp(email);
     } catch {
-      // Silent — always appears to succeed to prevent enumeration
+
     } finally {
       startResendTimer();
       setIsSending(false);
     }
   };
 
-  /** Go back to email entry step from OTP step */
+
   const onBackToEmail = () => {
     setStep("email");
     setError("");

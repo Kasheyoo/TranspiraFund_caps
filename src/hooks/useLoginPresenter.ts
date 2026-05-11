@@ -11,9 +11,7 @@ import {
 } from "../utils/security";
 import { logger } from "../utils/logger";
 
-// Best-effort audit logger. Login Failed / Account Locked happen *before*
-// the user is signed in, so callFn will throw "Not authenticated" and the
-// catch swallows it — server-side rate-limit logging covers those cases.
+
 const logSecurityEvent = (payload: {
   action: string;
   success: boolean;
@@ -45,7 +43,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
     load();
   }, []);
 
-  // Lockout countdown timer
+
   useEffect(() => {
     if (lockoutSeconds <= 0) return;
     const timer = setInterval(() => {
@@ -79,7 +77,7 @@ export const useLoginPresenter = (navigationCallback?: () => void) => {
       return;
     }
 
-    // Rate limiting
+
     const rateLimitCheck = await loginRateLimiter.check(cleanEmail);
     if (!rateLimitCheck.allowed) {
       setLockoutSeconds(rateLimitCheck.lockoutSeconds);

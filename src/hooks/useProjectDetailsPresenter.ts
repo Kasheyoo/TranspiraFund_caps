@@ -137,8 +137,7 @@ export const useProjectDetailsPresenter = (
   const [proofUpload, setProofUpload] = useState<ProofUploadState | null>(null);
   const lastUploadArgsRef = useRef<ProofUploadArgs | null>(null);
   const uploadHandleRef = useRef<ProofUploadHandle | null>(null);
-  // Tracks the auto-dismiss timer fired after a successful proof upload — cleared
-  // on unmount and on retry so it can't setState on an unmounted presenter.
+
   const proofDoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -346,10 +345,7 @@ export const useProjectDetailsPresenter = (
           return;
         }
 
-        // Some Android devices don't populate `fileSize` on captured assets,
-        // so fall back to the decoded base64 length (each 4 base64 chars
-        // encode 3 bytes). Without this fallback the 10 MB guard was a no-op
-        // and oversize uploads only failed server-side.
+
         const reportedSize = (asset as any).fileSize;
         const effectiveSize = typeof reportedSize === "number" && reportedSize > 0
           ? reportedSize
@@ -380,10 +376,7 @@ export const useProjectDetailsPresenter = (
 
         const { latitude, longitude, accuracy } = userLocation;
 
-        // Server rejects accuracy > 50m (Cloud Function `uploadProofPhoto`).
-        // Catch it client-side too so the user gets an immediate, actionable
-        // message instead of an opaque "invalid argument" after the upload
-        // round-trip.
+
         if (accuracy > 50) {
           showToast(
             "error",

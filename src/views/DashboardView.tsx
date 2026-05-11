@@ -30,7 +30,6 @@ interface DashboardViewProps {
   actions: DashboardActions;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const getGreeting = (): string => {
   const h = new Date().getHours();
   if (h < 12) return "Good Morning";
@@ -61,7 +60,6 @@ const getActivityIcon = (action = ""): { name: string; color: string; bg: string
   return { name: "history", color: COLORS.primary, bg: COLORS.primarySoft };
 };
 
-// ── Main view ─────────────────────────────────────────────────────────────────
 export const DashboardView = ({ data, actions }: DashboardViewProps) => {
   const insets = useSafeAreaInsets();
   const { stats, recentLogs, engineerName, engineerPhotoURL, isLoading } = data;
@@ -85,12 +83,11 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
         }
       >
 
-        {/* ══ HERO ══════════════════════════════════════════════════ */}
         <View style={S.hero}>
           <View style={S.orb1} /><View style={S.orb2} />
 
           <View style={S.heroInner}>
-            {/* Left: greeting + name + division */}
+
             <View style={S.heroLeft}>
               <Text style={S.greeting}>{getGreeting()}</Text>
               <Text style={S.name}>{firstName} 👷</Text>
@@ -100,7 +97,6 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
               </View>
             </View>
 
-            {/* Right: circular avatar */}
             <View style={S.avatar}>
               {engineerPhotoURL ? (
                 <Image source={{ uri: engineerPhotoURL }} style={S.avatarImg} />
@@ -111,9 +107,8 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
           </View>
         </View>
 
-        {/* ══ FLOATING STATS CARD ════════════════════════════════════ */}
         <View style={S.statsCard}>
-          {/* Header row */}
+
           <View style={S.statsCardHeader}>
             <Text style={S.statsCardLabel}>PROJECT OVERVIEW</Text>
             {total > 0 && (
@@ -124,9 +119,8 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
             )}
           </View>
 
-          {/* 3 stat columns */}
           <View style={S.statsCols}>
-            {/* In Progress */}
+
             <View style={S.statCol}>
               <View style={[S.statIconBox, { backgroundColor: COLORS.primarySoft }]}>
                 <FontAwesome5 name="spinner" size={14} color={COLORS.primary} />
@@ -137,7 +131,6 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
 
             <View style={S.statDivider} />
 
-            {/* Completed */}
             <View style={S.statCol}>
               <View style={[S.statIconBox, { backgroundColor: COLORS.successSoft }]}>
                 <FontAwesome5 name="check-circle" size={14} color={COLORS.success} />
@@ -148,7 +141,6 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
 
             <View style={S.statDivider} />
 
-            {/* Delayed */}
             <View style={S.statCol}>
               <View style={[S.statIconBox, { backgroundColor: COLORS.errorSoft }]}>
                 <FontAwesome5 name="exclamation-circle" size={14} color={COLORS.error} />
@@ -159,9 +151,8 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
           </View>
         </View>
 
-        {/* ══ RECENT ACTIVITY ════════════════════════════════════════ */}
         <View style={S.activityCard}>
-          {/* Header */}
+
           <View style={S.activityHeader}>
             <View>
               <Text style={S.activityTitle}>Recent Activity</Text>
@@ -177,7 +168,6 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
             </TouchableOpacity>
           </View>
 
-          {/* Log entries */}
           {recentLogs && recentLogs.length > 0 ? (
             recentLogs.map((log, i) => {
               const icon   = getActivityIcon(log.action);
@@ -225,12 +215,10 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
   root:   { flex: 1, backgroundColor: COLORS.background },
   scroll: { paddingBottom: 140 },
 
-  // ── Hero ──────────────────────────────────────────────────────
   hero: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -253,7 +241,6 @@ const S = StyleSheet.create({
   divisionRow:  { flexDirection: "row", alignItems: "center", gap: 6 },
   divisionText: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)" },
 
-  // Avatar — proper circle
   avatar: {
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.22)",
@@ -265,7 +252,6 @@ const S = StyleSheet.create({
   avatarImg:  { width: 56, height: 56, borderRadius: 28 },
   avatarText: { fontSize: 18, fontWeight: "900", color: "#fff" },
 
-  // ── Floating stats card ────────────────────────────────────────
   statsCard: {
     marginHorizontal: 18,
     marginTop: -20,
@@ -298,7 +284,6 @@ const S = StyleSheet.create({
   statNum:    { fontSize: 26, fontWeight: "900" },
   statLabel:  { fontSize: 10, fontWeight: "700", color: COLORS.textSecondary, textAlign: "center" },
 
-  // ── Recent Activity ────────────────────────────────────────────
   activityCard: {
     marginHorizontal: 18,
     backgroundColor: COLORS.surface,
@@ -331,7 +316,6 @@ const S = StyleSheet.create({
   logDetail: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2, fontWeight: "500" },
   logTime:   { fontSize: 10, color: COLORS.textTertiary, fontWeight: "600", flexShrink: 0 },
 
-  // Empty state
   emptyBox: { alignItems: "center", paddingVertical: 24, gap: 8 },
   emptyIconBox: {
     width: 52, height: 52, borderRadius: 16,

@@ -34,13 +34,13 @@ interface MilestoneGenerationModalProps {
   visible: boolean;
   onClose: () => void;
   onGenerate: () => Promise<GenerateResult>;
-  // Drafts that have not been confirmed yet — drives the review step.
+
   draftMilestones: Milestone[];
-  // Persists local edits + flips confirmed: true on every draft, in one batch.
+
   onSaveAndConfirmAll: (
     edits: Record<string, Partial<Milestone>>,
   ) => Promise<boolean>;
-  // Removes a single draft milestone via Cloud Function (rules block client delete).
+
   onDeleteMilestone: (m: Milestone) => Promise<boolean>;
 }
 
@@ -69,15 +69,8 @@ export const MilestoneGenerationModal = ({
   const [pendingDelete, setPendingDelete] = useState<Milestone | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
-  // Per-milestone local edits — only the keys the engineer actually changed
-  // are persisted on Confirm All. Stored by milestone id so deleted drafts
-  // automatically drop out.
   const [edits, setEdits] = useState<Record<string, Partial<Milestone>>>({});
 
-  // When the modal opens, decide where to land:
-  //   • drafts already exist  → jump straight to review (resume flow)
-  //   • drafts don't exist    → idle (show the call-to-action)
-  // When it closes, reset phase + clear local edits so the next open is fresh.
   useEffect(() => {
     if (visible) {
       setEdits({});
@@ -96,8 +89,6 @@ export const MilestoneGenerationModal = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  // After a successful generate, the parent's listener feeds the new drafts
-  // into `draftMilestones`. As soon as they arrive, transition into review.
   useEffect(() => {
     if (phase === "loading" && draftMilestones.length > 0) {
       setPhase("review");
@@ -109,7 +100,7 @@ export const MilestoneGenerationModal = ({
     const r = await onGenerate();
     setGenResult(r);
     if (!r.ok) setPhase("error");
-    // success: the listener-driven effect above moves us into "review"
+
   };
 
   const handleRetry = () => {
@@ -122,8 +113,6 @@ export const MilestoneGenerationModal = ({
     [draftMilestones],
   );
 
-  // Apply a partial edit to a milestone. Stored only — nothing hits Firestore
-  // until Confirm All.
   const updateEdit = (id: string, patch: Partial<Milestone>) => {
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
   };
@@ -166,8 +155,7 @@ export const MilestoneGenerationModal = ({
     const ok = await onSaveAndConfirmAll(edits);
     if (ok) {
       setPhase("confirmed");
-      // Auto-dismiss so the user lands back in project details with the
-      // freshly-confirmed phases visible (Generate UI is gone by then).
+
       setTimeout(onClose, 1400);
     } else {
       setPhase("review");
@@ -204,7 +192,6 @@ export const MilestoneGenerationModal = ({
         >
           <View style={S.orb1} /><View style={S.orb2} />
 
-          {/* ── Idle ── */}
           {phase === "idle" && (
             <View style={S.padded}>
               <View style={S.iconRing}>
@@ -250,7 +237,6 @@ export const MilestoneGenerationModal = ({
             </View>
           )}
 
-          {/* ── Loading ── */}
           {phase === "loading" && (
             <View style={S.padded}>
               <View style={S.iconRing}>

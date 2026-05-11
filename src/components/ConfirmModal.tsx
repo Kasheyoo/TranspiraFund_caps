@@ -70,7 +70,7 @@ export const ConfirmModal = ({
       statusBarTranslucent
     >
       <Pressable style={S.backdrop} onPress={isBusy ? undefined : onCancel}>
-        {/* Stop the inner card from forwarding the press to the backdrop */}
+
         <Pressable onPress={() => {}}>
           <Animated.View style={[S.card, { transform: [{ scale }], opacity }]}>
             <View style={[S.iconRing, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>

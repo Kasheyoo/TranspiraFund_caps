@@ -19,11 +19,6 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
     : userProfile?.name || "Project Engineer";
   const engineerPhotoURL = userProfile?.photoURL;
 
-  // Live project stream so the "Completed" count ticks the moment the last
-  // milestone of a project is marked Completed — no need to pull-to-refresh.
-  // Status classification goes through ProjectModel.deriveStatus so a project
-  // with all milestones done reads as "Completed" even if the server-side
-  // status field hasn't flipped yet.
   useEffect(() => {
     const unsub = ProjectModel.subscribeToAll(
       (projects) => {
@@ -53,9 +48,6 @@ export const useDashboardPresenter = (_navigationCallback?: () => void) => {
     return unsub;
   }, []);
 
-  // Audit logs are one-shot — refreshed on mount and via onRefresh. Projects
-  // update live via the subscription above, so pull-to-refresh only re-fetches
-  // logs.
   const loadLogs = useCallback(async () => {
     try {
       const logs = await AuditTrailService.getAll();

@@ -36,7 +36,7 @@ interface ProjectListViewProps {
   actions: ProjectListActions;
 }
 
-// ── Status config ─────────────────────────────────────────────────────────────
+
 const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; icon: string }> = {
   "In Progress": { accent: COLORS.primary,  bg: COLORS.primarySoft, text: COLORS.primary,  icon: "spinner"            },
   "Completed":   { accent: COLORS.success,  bg: COLORS.successSoft, text: COLORS.success,  icon: "check-circle"       },
@@ -47,13 +47,13 @@ const STATUS_MAP: Record<string, { accent: string; bg: string; text: string; ico
 };
 const DEFAULT_SC = { accent: COLORS.textTertiary, bg: COLORS.track, text: COLORS.textTertiary, icon: "circle" };
 
-// Statuses that all map to "In Progress" on mobile
+
 const ACTIVE_ALIASES: Record<string, true> = { "Draft": true, "For Mayor": true, "Ongoing": true, "ongoing": true };
 const displayStatus = (raw: string) => ACTIVE_ALIASES[raw] ? "In Progress" : raw;
 
 const FILTERS = ["All", "In Progress", "Completed", "Delayed"];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+
 const formatBudget = (v?: number) => {
   if (!v) return null;
   if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(2)}M`;
@@ -61,7 +61,7 @@ const formatBudget = (v?: number) => {
   return `₱${v.toLocaleString()}`;
 };
 
-// ── Summary stats bar ─────────────────────────────────────────────────────────
+
 const StatsBar = ({ projects }: { projects: Project[] }) => {
   const counts = useMemo(() => {
     const c: Record<string, number> = { "In Progress": 0, "Completed": 0, "Delayed": 0 };
@@ -105,7 +105,7 @@ const statsStyles = StyleSheet.create({
   label: { fontSize: 10, fontWeight: "700", color: COLORS.textTertiary, marginTop: 2 },
 });
 
-// ── Project card ──────────────────────────────────────────────────────────────
+
 const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) => {
   const status = displayStatus(ProjectModel.deriveStatus(item));
   const sc     = STATUS_MAP[status] || DEFAULT_SC;
@@ -119,11 +119,11 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
 
   return (
     <TouchableOpacity style={S.card} onPress={onPress} activeOpacity={0.85}>
-      {/* Status accent bar */}
+
       <View style={[S.accentBar, { backgroundColor: sc.accent }]} />
 
       <View style={S.cardBody}>
-        {/* ── Top row: icon + title + badge ── */}
+
         <View style={S.topRow}>
           <View style={[S.iconBox, { backgroundColor: sc.bg }]}>
             <FontAwesome5 name="hard-hat" size={17} color={sc.accent} />
@@ -140,7 +140,7 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
           </View>
         </View>
 
-        {/* ── Meta chips ── */}
+
         <View style={S.chipsRow}>
           {item.location ? (
             <Chip icon="map-marker-alt" label={item.location} maxWidth={130} />
@@ -156,7 +156,7 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
           ) : null}
         </View>
 
-        {/* ── Progress ── */}
+
         <View style={S.progressSection}>
           <View style={S.progressLabelRow}>
             <View style={S.msRow}>
@@ -174,7 +174,7 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
   );
 };
 
-// ── Inline chip component ─────────────────────────────────────────────────────
+
 const Chip = ({
   icon, label, color, soft, maxWidth,
 }: { icon: string; label: string; color?: string; soft?: boolean; maxWidth?: number }) => (
@@ -188,7 +188,7 @@ const Chip = ({
   </View>
 );
 
-// ── Main view ─────────────────────────────────────────────────────────────────
+
 export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
@@ -210,7 +210,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   return (
     <View style={S.root}>
 
-      {/* ══ TEAL HERO HEADER ══════════════════════════════════════ */}
+
       <View style={[S.hero, { paddingTop: insets.top + 16 }]}>
         <View style={S.heroOrb1} /><View style={S.heroOrb2} />
         <View style={S.heroContent}>
@@ -224,7 +224,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
               <Text style={S.liveText}>LIVE</Text>
             </View>
           </View>
-          {/* Inline search inside hero */}
+
           <View style={S.searchBar}>
             <FontAwesome5 name="search" size={13} color={COLORS.textTertiary} />
             <TextInput
@@ -244,10 +244,10 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
         </View>
       </View>
 
-      {/* ══ STATS BAR ═══════════════════════════════════════════ */}
+
       <StatsBar projects={data.allProjects} />
 
-      {/* ══ FILTER TABS ═════════════════════════════════════════ */}
+
       <View style={S.filterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterScroll}>
           {FILTERS.map((f) => {
@@ -270,7 +270,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
         </ScrollView>
       </View>
 
-      {/* ══ LIST ════════════════════════════════════════════════ */}
+
       {data.isLoading && data.projects.length === 0 ? (
         <View style={S.loadingBox}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -310,11 +310,11 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
 
-  // Hero header
+
   hero: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 22, paddingBottom: 22, overflow: "hidden",
@@ -335,7 +335,7 @@ const S = StyleSheet.create({
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#6EE7B7" },
   liveText: { fontSize: 10, fontWeight: "900", color: "#fff", letterSpacing: 0.5 },
 
-  // Search (inside hero)
+
   searchBar: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: "#fff", borderRadius: 14,
@@ -345,7 +345,7 @@ const S = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: COLORS.textPrimary, paddingVertical: 0 },
 
-  // Filter tabs
+
   filterWrap:   { marginBottom: 6 },
   filterScroll: { paddingHorizontal: 24, gap: 7 },
   tab: {
@@ -356,10 +356,10 @@ const S = StyleSheet.create({
   tabDot:  { width: 6, height: 6, borderRadius: 3 },
   tabText: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
 
-  // List
+
   listContent: { paddingHorizontal: 20, paddingTop: 16 },
 
-  // Card
+
   card: {
     flexDirection: "row", backgroundColor: COLORS.surface,
     borderRadius: 18, marginBottom: 12, overflow: "hidden",
@@ -382,7 +382,7 @@ const S = StyleSheet.create({
   },
   badgeText: { fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
 
-  // Chips
+
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 },
   chip: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -392,7 +392,7 @@ const S = StyleSheet.create({
   },
   chipText: { fontSize: 10, color: COLORS.textSecondary, fontWeight: "600", flexShrink: 1 },
 
-  // Progress
+
   progressSection: {},
   progressLabelRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6,
@@ -403,7 +403,7 @@ const S = StyleSheet.create({
   track:    { height: 5, backgroundColor: COLORS.track, borderRadius: 3, overflow: "hidden" },
   fill:     { height: "100%", borderRadius: 3 },
 
-  // Loading / empty
+
   loadingBox:  { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: "600" },
   emptyBox:    { alignItems: "center", paddingTop: 64, paddingHorizontal: 32 },

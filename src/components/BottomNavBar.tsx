@@ -38,10 +38,9 @@ export const BottomNavBar = ({
               activeOpacity={0.75}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              {/* Active indicator pill at top */}
+
               <View style={[S.indicator, active && S.indicatorActive]} />
 
-              {/* Icon container */}
               <View style={[S.iconWrap, active && S.iconWrapActive]}>
                 <FontAwesome5
                   name={tab.icon}
@@ -49,7 +48,6 @@ export const BottomNavBar = ({
                   color={active ? COLORS.primary : COLORS.textTertiary}
                 />
 
-                {/* Notification badge */}
                 {hasBadge && (
                   <View style={S.badge}>
                     <Text style={S.badgeText}>
@@ -59,7 +57,6 @@ export const BottomNavBar = ({
                 )}
               </View>
 
-              {/* Label */}
               <Text style={[S.label, active && S.labelActive]}>
                 {tab.label}
               </Text>
@@ -92,7 +89,6 @@ const S = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "flex-start",
 
-    // Shadow — feels like it's floating
     shadowColor: "#0F766E",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -111,7 +107,6 @@ const S = StyleSheet.create({
     gap: 4,
   },
 
-  // Top indicator line
   indicator: {
     height: 3,
     width: 20,
@@ -124,7 +119,6 @@ const S = StyleSheet.create({
     width: 28,
   },
 
-  // Icon pill
   iconWrap: {
     width: 44,
     height: 44,
@@ -137,7 +131,6 @@ const S = StyleSheet.create({
     backgroundColor: COLORS.primarySoft,
   },
 
-  // Label
   label: {
     fontSize: 10,
     fontWeight: "600",
@@ -149,7 +142,6 @@ const S = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  // Notification badge
   badge: {
     position: "absolute",
     top: 4,

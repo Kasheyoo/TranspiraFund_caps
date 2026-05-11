@@ -3,8 +3,7 @@ import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-// sharp and piexifjs are imported via `require` to avoid needing
-// `esModuleInterop` in tsconfig just for these two deps.
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp: typeof import("sharp") = require("sharp");
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -12,16 +11,16 @@ const piexif = require("piexifjs");
 
 admin.initializeApp();
 
-// ─── Secrets ──────────────────────────────────────────────────────────────────
+
 const gmailUser = defineSecret("GMAIL_USER");
 const gmailPass = defineSecret("GMAIL_PASS");
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
-const SEND_COOLDOWN_MS = 60 * 1000;    // 60 seconds between send requests
+
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const SEND_COOLDOWN_MS = 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 function generateOTP(): string {
   return crypto.randomInt(100000, 999999).toString();
@@ -35,18 +34,7 @@ function createTransporter(user: string, pass: string) {
   return nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
 }
 
-/**
- * Reverse-geocode lat/lng → human-readable Philippine address via OpenStreetMap
- * Nominatim. Free, no API key, but their usage policy requires a real
- * User-Agent identifying the app. Returns null on any failure (timeout, rate
- * limit, no result) so callers can fall back to coordinates string.
- *
- * Builds a barangay-first label since that's what HCSD uses internally:
- *   "Brgy. San Roque, Mati City, Davao Oriental"
- *
- * Hard 3s timeout — geocoding is best-effort metadata, not allowed to block
- * a proof upload.
- */
+
 async function reverseGeocode(
   latitude: number,
   longitude: number,
@@ -75,9 +63,7 @@ async function reverseGeocode(
     };
     const a = data.address ?? {};
 
-    // Nominatim's PH responses typically populate: village/suburb/neighbourhood
-    // (≈ barangay), city/town/municipality, state (province). Pick the most
-    // specific available, prefix barangays with "Brgy." for HCSD readability.
+
     const barangay =
       a.village || a.suburb || a.neighbourhood || a.hamlet || a.quarter;
     const city = a.city || a.town || a.municipality || a.county;
@@ -89,23 +75,14 @@ async function reverseGeocode(
     if (province) parts.push(province);
 
     if (parts.length > 0) return parts.join(", ");
-    // Last-ditch fallback to whatever Nominatim summarized.
+
     return data.display_name?.split(",").slice(0, 3).join(",").trim() || null;
   } catch {
     return null;
   }
 }
 
-/**
- * Injects GPS + capture-time tags into a JPEG buffer so the photo itself is
- * self-proving. We write our authoritative server-side coords (from the
- * client's geolocation service, not the device camera's EXIF — which many
- * Android camera apps don't populate) directly into the EXIF IFDs before
- * the file lands in Storage.
- *
- * Returns the original buffer unchanged if injection fails (non-JPEG,
- * malformed EXIF, etc.) so a bad EXIF library call never blocks an upload.
- */
+
 function embedExifGps(
   buffer: Buffer,
   latitude: number,
@@ -114,10 +91,10 @@ function embedExifGps(
   accuracyMeters?: number,
 ): Buffer {
   try {
-    // piexifjs operates on base64-prefixed data URLs.
+
     const dataUrl = `data:image/jpeg;base64,${buffer.toString("base64")}`;
 
-    // Load any existing EXIF — keep 0th / Exif IFD fields the camera wrote.
+
     let exifObj: Record<string, Record<number, unknown>>;
     try {
       exifObj = piexif.load(dataUrl);
@@ -126,7 +103,7 @@ function embedExifGps(
     }
 
     const capturedAt = new Date(capturedAtMs);
-    // EXIF date format: "YYYY:MM:DD HH:MM:SS" (space-separated, colon-delimited).
+
     const pad = (n: number) => n.toString().padStart(2, "0");
     const dateTimeStr =
       `${capturedAt.getUTCFullYear()}:${pad(capturedAt.getUTCMonth() + 1)}:${pad(capturedAt.getUTCDate())}` +
@@ -134,15 +111,15 @@ function embedExifGps(
     const gpsDateStr =
       `${capturedAt.getUTCFullYear()}:${pad(capturedAt.getUTCMonth() + 1)}:${pad(capturedAt.getUTCDate())}`;
 
-    // 0th IFD — general image metadata
+
     exifObj["0th"][piexif.ImageIFD.DateTime] = dateTimeStr;
     exifObj["0th"][piexif.ImageIFD.Software] = "TranspiraFund Mobile";
 
-    // Exif IFD — capture-time metadata
+
     exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = dateTimeStr;
     exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = dateTimeStr;
 
-    // GPS IFD — coordinates + timestamp
+
     const gps: Record<number, unknown> = {};
     gps[piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
     gps[piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDmsRational(Math.abs(latitude));
@@ -155,28 +132,26 @@ function embedExifGps(
       [capturedAt.getUTCMinutes(), 1],
       [capturedAt.getUTCSeconds(), 1],
     ];
-    // GPS accuracy is stored as horizontal positioning error in meters.
+
     if (typeof accuracyMeters === "number" && accuracyMeters > 0) {
-      // GPSHPositioningError is a RATIONAL — [numerator, denominator].
-      // Round to 2 decimals to keep the numerator sane.
+
       gps[piexif.GPSIFD.GPSHPositioningError] = [Math.round(accuracyMeters * 100), 100];
     }
     exifObj.GPS = gps;
 
     const exifBytes = piexif.dump(exifObj);
     const newDataUrl: string = piexif.insert(exifBytes, dataUrl);
-    // piexif.insert returns "data:image/jpeg;base64,<...>" — strip prefix.
+
     const commaIdx = newDataUrl.indexOf(",");
     const newBase64 = commaIdx === -1 ? newDataUrl : newDataUrl.slice(commaIdx + 1);
     return Buffer.from(newBase64, "base64");
   } catch {
-    // Never fail the upload over EXIF. Firestore `gps` / `capturedAt` still
-    // carry the data; the photo just won't self-prove in this one case.
+
     return buffer;
   }
 }
 
-// XML-escape text for safe inclusion inside an SVG <text> node.
+
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -186,8 +161,7 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-// Format a ms-epoch into local Philippine time (Asia/Manila).
-// Example: "Apr 21, 2026, 5:53 PM". Matches the format the web team asked for.
+
 function formatManilaTime(ms: number): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Manila",
@@ -211,16 +185,13 @@ function buildEngineerLabel(profile: {
   const fullFromParts = [first, last].filter(Boolean).join(" ");
   const display =
     fullFromParts || (profile.name ?? "").trim() || profile.email || "Engineer";
-  // "Engr." courtesy prefix only when we have a real human name — if we fell
-  // back to an email, don't prepend it.
+
   return fullFromParts || (profile.name ?? "").trim()
     ? `Engr. ${display}`
     : display;
 }
 
-// Maps the raw role code stored on `users/{uid}` to the human-readable label
-// shown beneath the engineer name on the burnt-in banner. Falls back to the
-// raw code so unknown future roles still render something meaningful.
+
 const ROLE_LABELS: Record<string, string> = {
   PROJ_ENG: "Project Engineer",
   HCSD: "HCSD Officer",
@@ -251,8 +222,7 @@ function buildBannerSvg(
     })
     .join("");
 
-  // Full-image SVG so `composite({ gravity: "south" })` aligns the banner to
-  // the bottom edge without us computing absolute y-offsets.
+
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${imgWidth}" height="${bannerHeight}">` +
       `<defs>` +
@@ -275,9 +245,7 @@ function buildBannerSvg(
 async function burnInBanner(buffer: Buffer, lines: string[]): Promise<Buffer> {
   if (lines.length === 0) return buffer;
   try {
-    // Apply EXIF orientation to pixels so the banner lands on the visual
-    // bottom regardless of how the camera encoded the file. sharp's rotate()
-    // with no args reads the orientation tag and bakes the rotation in.
+
     const base = sharp(buffer).rotate();
     const meta = await base.metadata();
     const width = meta.width ?? 0;
@@ -290,41 +258,24 @@ async function burnInBanner(buffer: Buffer, lines: string[]): Promise<Buffer> {
       .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer();
   } catch {
-    // Never fail the upload over a cosmetic post-process. Same philosophy as
-    // embedExifGps — Firestore + EXIF still carry the evidence.
+
     return buffer;
   }
 }
 
-/**
- * Logs an audit event.
- * Always writes to `auditTrails/mobile/entries` (PROJ_ENG scope).
- * Only writes to `auditTrails/hcsd/entries` when syncToHCSD is true
- * (security events + field activity that HCSD needs to see).
- */
+
 async function logAuditTrail(
   uid: string,
   email: string,
   action: string,
-  // Human-readable message. Surfaced in mobile's Audit Trail screen and as
-  // details.message on the audit doc so the web notification body can render
-  // it inline.
+
   message: string,
   syncToHCSD = false,
-  // Project id for project-scoped events. Required by the web app's HCSD
-  // fan-out trigger on the four canonical mobile actions (Proof Uploaded,
-  // Milestones Drafted, Milestones Confirmed, Milestone Completed). Events
-  // without it are dropped with "Skipping — no projectId on <action>".
+
   targetId?: string,
-  // Milestone id. Required by the fan-out trigger on milestone-scoped actions
-  // (Proof Uploaded, Milestone Completed). Omitted for batch actions like
-  // Milestones Drafted / Confirmed.
+
   milestoneId?: string,
-  // Tenant id for the actor. The mobile audit trail screen filters entries by
-  // `where("tenantId", "==", tid)`, so entries written without it never show
-  // up in the user's UI. Resolved per-call from the verified ID-token claim
-  // (or the actor's user doc for the first-time password-change path where
-  // the token may predate the claim assignment).
+
   tenantId?: string,
 ) {
   const detailsObj: Record<string, string> = { message };
@@ -341,14 +292,14 @@ async function logAuditTrail(
   if (targetId) entry.targetId = targetId;
   if (tenantId) entry.tenantId = tenantId;
 
-  // Always write to mobile audit trail (PROJ_ENG scope)
+
   const writes: Promise<unknown>[] = [
     admin.firestore()
       .collection("auditTrails").doc("mobile").collection("entries")
       .add(entry),
   ];
 
-  // Sync to HCSD audit trail for security-relevant events (password change, proof uploads)
+
   if (syncToHCSD) {
     writes.push(
       admin.firestore()
@@ -360,20 +311,7 @@ async function logAuditTrail(
   await Promise.all(writes);
 }
 
-// ─── enforceRateLimit ────────────────────────────────────────────────────────
-//
-//  Server-side counterpart to RateLimiter in src/utils/security.ts. Per
-//  (key, action) pair we keep a Firestore doc with attempts, windowStart,
-//  and lockedUntil. When the caller exceeds `max` within `windowMs`, we
-//  set lockedUntil = now + lockoutMs and throw resource-exhausted. Every
-//  subsequent call within the lockout window short-circuits with the same
-//  error until the lockout expires.
-//
-//  Identifier (`key`) is action-dependent — use the user's uid for callers
-//  with `request.auth`, and a hash of their email for unauthenticated
-//  callers (OTP send / verify / reset). Hashing avoids storing raw email
-//  in the rateLimits collection.
-//
+
 async function enforceRateLimit(
   key: string,
   action: string,
@@ -397,7 +335,7 @@ async function enforceRateLimit(
       );
     }
 
-    // Window expired (or first call) — start a fresh window with attempt #1.
+
     if (!entry || !entry.windowStart || now - entry.windowStart > opts.windowMs) {
       tx.set(ref, { attempts: 1, windowStart: now, lockedUntil: null });
       return;
@@ -421,15 +359,7 @@ async function enforceRateLimit(
   });
 }
 
-// ─── assertSameTenant ────────────────────────────────────────────────────────
-//
-//  Defence-in-depth on top of Firestore rules. The caller's tenantId comes
-//  from the verified ID-token claim (set by the web admin when the user is
-//  provisioned). The target's tenantId comes from whatever doc the call is
-//  about to touch. Mismatch — including missing values on either side —
-//  rejects the call. Strict by design: a project without tenantId is legacy
-//  data that mobile shouldn't be writing to anyway.
-//
+
 function assertSameTenant(
   callerTenantId: unknown,
   targetTenantId: unknown,
@@ -444,19 +374,7 @@ function assertSameTenant(
   }
 }
 
-// ─── generateMilestones ───────────────────────────────────────────────────────
-//
-//  Called by PROJ_ENG from the mobile app when a project has no milestones.
-//  Creates draft milestones as a subcollection under projects/{projectId}/milestones
-//  — uses Admin SDK to bypass client rules. Drafts are written with
-//  `confirmed: false` so the mobile review flow gates them: the engineer must
-//  review, optionally edit/delete each one, then batch-confirm before they
-//  appear in the project details proper.
-//
-//  Templates are keyed by the project's `projectType` field (set by the web
-//  app on project creation). Unknown or missing types fall back to "Other"
-//  and the audit trail records the fallback for traceability.
-//
+
 const MILESTONE_TEMPLATES: Record<string, string[]> = {
   "Building Construction": [
     "Site Preparation & Mobilization",
@@ -548,7 +466,7 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("invalid-argument", "projectId is required.");
   }
 
-  // Verify project exists + caller is the assigned engineer
+
   const projectRef = admin.firestore().doc(`projects/${projectId}`);
   const projectSnap = await projectRef.get();
   if (!projectSnap.exists) {
@@ -560,17 +478,14 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("permission-denied", "Only the assigned engineer can generate milestones.");
   }
 
-  // Resolve the project type. Unknown or missing values fall back to "Other"
-  // so legacy projects still generate something usable. The audit note below
-  // records the fallback for traceability.
+
   const KNOWN_TYPES = new Set(Object.keys(MILESTONE_TEMPLATES));
   const rawType = typeof projectData.projectType === "string" ? projectData.projectType : "";
   const resolvedType = KNOWN_TYPES.has(rawType) ? rawType : "Other";
   const template = MILESTONE_TEMPLATES[resolvedType];
   const fellBack = rawType !== resolvedType;
 
-  // Idempotency — prevent duplicates. Includes drafts (confirmed: false)
-  // so the engineer can't accidentally re-generate over an in-progress review.
+
   const existingSnap = await admin.firestore()
     .collection(`projects/${projectId}/milestones`)
     .limit(1)
@@ -590,8 +505,8 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
       sequence: i + 1,
       status: "Pending",
       proofs: [],
-      confirmed: false,        // drafts — engineer must review to commit
-      generatedBy: "template", // provenance marker, not an LLM author
+      confirmed: false,
+      generatedBy: "template",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
@@ -618,16 +533,7 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
   };
 });
 
-// ─── deleteMilestone ──────────────────────────────────────────────────────────
-//
-//  Called by PROJ_ENG during the milestone review flow to discard a draft
-//  that doesn't apply to this project. Firestore rules block client-side
-//  delete on milestones, so this function performs the delete via Admin SDK.
-//
-//  Safety: only DRAFT milestones (confirmed === false) may be deleted —
-//  once the engineer has confirmed the milestone set, the workflow is
-//  immutable from the mobile side.
-//
+
 export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
@@ -683,13 +589,7 @@ export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (requ
   return { success: true };
 });
 
-// ─── markProjectOngoing ──────────────────────────────────────────────────────
-//
-//  Called automatically by the mobile app when a project assigned to this
-//  PROJ_ENG still carries a pre-active status ("Draft" or "For Mayor").
-//  Updates the project status to "In Progress" via Admin SDK, bypassing
-//  the Firestore rule that blocks PROJ_ENG from writing to project docs.
-//
+
 export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
@@ -711,10 +611,10 @@ export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (r
   assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
   const currentStatus = (projectData?.status ?? "").toLowerCase();
 
-  // Only update if still in a pre-active workflow state
+
   const preActive = ["draft", "for mayor"];
   if (!preActive.includes(currentStatus)) {
-    return { success: true, skipped: true }; // Already ongoing — nothing to do
+    return { success: true, skipped: true };
   }
 
   await projectRef.update({
@@ -728,7 +628,7 @@ export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (r
     uid, email,
     "Project Status Updated",
     `Project ${projectId}: "${projectData.status}" → "In Progress" (engineer assigned)`,
-    true, // sync to HCSD audit trail
+    true,
     undefined,
     undefined,
     typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
@@ -737,12 +637,7 @@ export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (r
   return { success: true };
 });
 
-// ─── completePasswordChange ──────────────────────────────────────────────────
-//
-//  Called by mobile app after user successfully changes their password
-//  via Firebase Auth (updatePassword). Sets mustChangePassword = false
-//  using Admin SDK (bypasses Firestore security rules).
-//
+
 export const completePasswordChange = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
@@ -758,10 +653,7 @@ export const completePasswordChange = onCall({ region: "asia-southeast1" }, asyn
 
   await userRef.update({ mustChangePassword: false });
 
-  // PASSWORD_CHANGE → syncs to DEPW (security event). Force-password-change
-  // runs on first login, where the ID token may predate the tenantId claim
-  // assignment — fall back to the user doc field so the audit entry is still
-  // tenant-scoped and shows up in the engineer's Audit Trail screen.
+
   const email = request.auth.token.email || "";
   const tokenTenantId =
     typeof request.auth.token.tenantId === "string" ? request.auth.token.tenantId : undefined;
@@ -776,12 +668,7 @@ export const completePasswordChange = onCall({ region: "asia-southeast1" }, asyn
   return { success: true };
 });
 
-// ─── logMobileAuditTrail ──────────────────────────────────────────────────────────
-//
-//  General-purpose audit logger for the mobile app.
-//  Caller specifies syncToDEPW to control whether the event
-//  also appears in depwAuditTrails (visible to DEPW HEAD on web app).
-//
+
 export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
@@ -789,25 +676,19 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
 
   const { action, details, syncToDEPW, syncToHCSD, targetId, milestoneId } = request.data as {
     action?: string;
-    // Mobile call sites historically pass `details` as a string OR object
-    // (e.g. `{ reason: "invalid-credential" }`). The audit trail UI renders
-    // entry.details.message as plain text, so we coerce both shapes to a
-    // readable string below rather than rejecting the call.
+
     details?: string | Record<string, unknown>;
-    syncToDEPW?: boolean;  // accepted for backward compat from older app versions
+    syncToDEPW?: boolean;
     syncToHCSD?: boolean;
-    targetId?: string;     // project id for project-scoped events (HCSD fan-out trigger)
-    milestoneId?: string;  // milestone id for milestone-scoped events
+    targetId?: string;
+    milestoneId?: string;
   };
 
   if (!action) {
     throw new HttpsError("invalid-argument", "action is required.");
   }
 
-  // Normalize details to a single string the UI can render.
-  // - string → use as-is
-  // - object → flatten to "k=v" pairs (compact, human-skimmable)
-  // - missing → fall back to the action label so the entry isn't blank
+
   let message: string;
   if (typeof details === "string") {
     message = details;
@@ -822,13 +703,7 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   const uid = request.auth.uid;
   const email = request.auth.token.email || "";
 
-  // Resolve the actor's tenantId. Audit entries are metadata about the actor
-  // (not an operation on a cross-tenant target), so we don't use
-  // assertSameTenant here — that check throws when the ID token claim hasn't
-  // propagated yet, and the mobile call site swallows the error, which is
-  // why entries silently stopped appearing after login. Prefer the verified
-  // claim; fall back to the user doc for the brief window where the token
-  // predates the claim assignment (e.g. first login after provisioning).
+
   const tokenTenantId =
     typeof request.auth.token.tenantId === "string"
       ? request.auth.token.tenantId
@@ -839,8 +714,7 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
     tokenTenantId ?? (typeof docTenantId === "string" ? docTenantId : undefined);
 
   if (!tenantId) {
-    // Without tenantId the entry is invisible to the client filter, so refuse
-    // to write it. Soft error — the mobile catch handler discards it.
+
     throw new HttpsError(
       "failed-precondition",
       "Account missing tenantId — audit entry skipped.",
@@ -858,22 +732,7 @@ export const logMobileAuditTrail = onCall({ region: "asia-southeast1" }, async (
   return { success: true };
 });
 
-// ─── uploadProfilePhoto ──────────────────────────────────────────────────────
-//
-//  Mobile-only. React Native's `fetch(file://...)` fails on Android so the
-//  client cannot produce a Blob to hand to Firebase Storage's JS SDK. This
-//  function accepts base64, uploads to Storage via Admin SDK, and writes the
-//  same users/{uid}.photoURL field the web's updateProfilePhoto callable writes
-//  — so the web's realtime UI picks up the change identically to a web upload.
-//
-//  Payload:
-//    { base64: string, contentType?: string } — uploads a new photo
-//    { base64: "" }                           — removes the existing photo
-//
-//  Storage path matches the web contract: profile-photos/{uid} exactly. The
-//  download URL uses the same ?alt=media&token=... format getDownloadURL()
-//  produces, so <Image source={{ uri: photoURL }}> works identically.
-//
+
 export const uploadProfilePhoto = onCall(
   { region: "asia-southeast1", memory: "512MiB" },
   async (request) => {
@@ -902,15 +761,15 @@ export const uploadProfilePhoto = onCall(
     const bucket = admin.storage().bucket();
     const file = bucket.file(`profile-photos/${uid}`);
 
-    // Removal path
+
     if (!base64) {
-      try { await file.delete(); } catch { /* may not exist */ }
+      try { await file.delete(); } catch { }
 
       await admin.firestore().doc(`users/${uid}`).update({
         photoURL: admin.firestore.FieldValue.delete(),
         photoChangedAt: Date.now(),
       });
-      try { await admin.auth().updateUser(uid, { photoURL: null as never }); } catch { /* ok */ }
+      try { await admin.auth().updateUser(uid, { photoURL: null as never }); } catch { }
       await logAuditTrail(
         uid, email, "Profile Photo Removed", "Profile photo removed", false,
         undefined, undefined,
@@ -920,7 +779,7 @@ export const uploadProfilePhoto = onCall(
       return { success: true, photoURL: "" };
     }
 
-    // Upload path
+
     const mime = contentType || "image/jpeg";
     const buffer = Buffer.from(base64, "base64");
 
@@ -946,7 +805,7 @@ export const uploadProfilePhoto = onCall(
       photoURL,
       photoChangedAt: Date.now(),
     });
-    try { await admin.auth().updateUser(uid, { photoURL }); } catch { /* ok */ }
+    try { await admin.auth().updateUser(uid, { photoURL }); } catch { }
     await logAuditTrail(
       uid, email, "Profile Photo Updated", "Profile photo updated", false,
       undefined, undefined,
@@ -957,34 +816,9 @@ export const uploadProfilePhoto = onCall(
   },
 );
 
-// ─── uploadProofPhoto ────────────────────────────────────────────────────────
-//
-//  Mobile-only. Same constraint as uploadProfilePhoto — the Firebase JS SDK's
-//  Storage uploadBytes / uploadString both end up trying to construct a Blob
-//  from a Uint8Array, which RN's Blob polyfill rejects:
-//    "Creating blobs from 'ArrayBuilder' and 'ArrayBufferView' are not supported"
-//  So the client posts base64 here, we upload via Admin SDK, and we
-//  atomically append the proof object to the milestone subcollection doc.
-//
-//  Atomicity matters: doing storage-then-firestore on the client risks
-//  orphaned uploads if the client crashes between calls. Server-side, an
-//  exception in the firestore step still leaves a stranded file in Storage,
-//  but that's recoverable by the storagePath we save and is far less common
-//  than a client-side network drop mid-flow.
-//
-//  Authorization mirrors the Storage rule deployed by the web team:
-//  `request.auth.uid == projects/{projectId}.projectEngineer`.
-//
+
 export const uploadProofPhoto = onCall(
-  // invoker:"public" forces Firebase to (re-)attach the allUsers→roles/run.invoker
-  // IAM binding on deploy. The first deploy of this function landed without it
-  // (intermittent Firebase/Cloud Run quirk for new 2nd-gen functions), which
-  // surfaced as 401 "request was not authorized to invoke this service."
-  // 1GiB + 120s: sharp decodes a 10MB JPEG into a ~50MB raw pixel buffer, then
-  // composites the SVG banner and re-encodes via mozjpeg. Peak heap easily
-  // exceeds 512MiB on cold starts and surfaces as a 500 to the client. Cold
-  // start + sharp init + encode on large images can also push past the 60s
-  // onCall default.
+
   { region: "asia-southeast1", memory: "1GiB", timeoutSeconds: 120, invoker: "public" },
   async (request) => {
     if (!request.auth) {
@@ -1017,14 +851,11 @@ export const uploadProofPhoto = onCall(
       throw new HttpsError("invalid-argument", "Geotag coordinates are required.");
     }
 
-    // Reject low-quality GPS fixes — anything coarser than 50m may have been
-    // captured indoors or with a stale fix and isn't trustworthy as proof.
+
     if (typeof accuracy === "number" && accuracy > 50) {
       throw new HttpsError("invalid-argument", "GPS accuracy too low — move to a clearer area.");
     }
-    // Tamper guard: reject obviously-wrong client clocks. 60s tolerance covers
-    // benign clock skew; 15-min window forces near-realtime upload so engineers
-    // can't queue old captures.
+
     if (typeof capturedAt === "number") {
       const now = Date.now();
       if (capturedAt > now + 60_000) {
@@ -1038,7 +869,7 @@ export const uploadProofPhoto = onCall(
     const uid   = request.auth.uid;
     const email = request.auth.token.email || "";
 
-    // Engineer authorization — same field everyone else checks.
+
     const projectRef  = admin.firestore().doc(`projects/${projectId}`);
     const projectSnap = await projectRef.get();
     if (!projectSnap.exists) {
@@ -1050,7 +881,7 @@ export const uploadProofPhoto = onCall(
       throw new HttpsError("permission-denied", "Only the assigned engineer can upload proofs for this project.");
     }
 
-    // Milestone must exist and be confirmed (drafts can't accept proofs).
+
     const milestoneRef  = admin.firestore().doc(`projects/${projectId}/milestones/${milestoneId}`);
     const milestoneSnap = await milestoneRef.get();
     if (!milestoneSnap.exists) {
@@ -1065,22 +896,18 @@ export const uploadProofPhoto = onCall(
     const ts = typeof capturedAt === "number" ? capturedAt : Date.now();
     const proofId = `${ts}_${uid}`;
 
-    // Idempotency: if a previous call with this same (capturedAt, uid) already
-    // landed, return the stored proof and skip Storage upload + array union.
-    // Lets a client safely retry a flaky network without doubling up storage.
+
     const existingProof = existingProofs.find((p: { id?: string }) => p?.id === proofId);
     if (existingProof) {
       return { success: true, proof: existingProof, idempotent: true };
     }
 
-    // Hard cap: max 5 proofs per milestone. Marking the phase Completed is
-    // allowed at any count >= 1 — the cap only blocks the 6th upload to keep
-    // Storage bounded and HCSD review tractable.
+
     if (existingProofs.length >= 5) {
       throw new HttpsError("failed-precondition", "This phase already has the maximum of 5 proofs.");
     }
 
-    // Decode + size cap (matches the deployed Storage rule and client copy).
+
     const buffer = Buffer.from(base64, "base64");
     if (buffer.length === 0) {
       throw new HttpsError("invalid-argument", "Empty image data.");
@@ -1089,8 +916,7 @@ export const uploadProofPhoto = onCall(
       throw new HttpsError("invalid-argument", "Photo exceeds 10MB limit.");
     }
 
-    // Sanitize path segments — paranoia, projectIds are auto-generated but
-    // milestoneIds in older docs sometimes carry user-typed values.
+
     const safeProjectId   = projectId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
     const safeMilestoneId = milestoneId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 
@@ -1099,14 +925,10 @@ export const uploadProofPhoto = onCall(
     const file   = bucket.file(storagePath);
     const token  = crypto.randomUUID();
 
-    // Best-effort reverse geocode for HCSD oversight + the burn-in banner.
-    // If Nominatim is slow or down we still ship the proof — `location`
-    // falls back to a coord string (which is what older proofs already
-    // store) and the banner drops its place-name line.
+
     const placeName = await reverseGeocode(latitude, longitude);
 
-    // Pull the engineer's display name + role for the banner's identity line.
-    // Missing profile is fine — buildEngineerLabel falls back to email.
+
     const userSnap = await admin.firestore().doc(`users/${uid}`).get();
     const profile = (userSnap.data() ?? {}) as {
       firstName?: string;
@@ -1116,9 +938,7 @@ export const uploadProofPhoto = onCall(
       email?: string;
     };
 
-    // Build the tamper-evident banner. Lines are drawn as pixels on the image
-    // itself so the JPEG self-proves even if EXIF is stripped downstream.
-    // Layout: Location / GPS+accuracy / Capture time / Engineer name / Role.
+
     const accuracyM = Math.round(accuracy ?? 0);
     const bannerLines: string[] = [];
     if (placeName) bannerLines.push(placeName);
@@ -1129,8 +949,7 @@ export const uploadProofPhoto = onCall(
 
     const stampedBuffer = await burnInBanner(buffer, bannerLines);
 
-    // sharp's .jpeg() strips EXIF on re-encode, so we re-inject GPS +
-    // DateTimeOriginal onto the stamped bytes as the last step before upload.
+
     const finalBuffer = embedExifGps(stampedBuffer, latitude, longitude, ts, accuracy);
 
     await file.save(finalBuffer, {
@@ -1144,9 +963,7 @@ export const uploadProofPhoto = onCall(
     const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
 
     const fileName  = `${ts}.jpg`;
-    // FieldValue.serverTimestamp() is not permitted inside arrayUnion, so we
-    // use admin Timestamp objects for both capture time (from the client's
-    // camera clock) and upload time (server clock at write).
+
     const capturedAtTs = admin.firestore.Timestamp.fromMillis(ts);
     const uploadedAtTs = admin.firestore.Timestamp.now();
     const proof = {
@@ -1164,8 +981,7 @@ export const uploadProofPhoto = onCall(
 
     await milestoneRef.update({
       proofs: admin.firestore.FieldValue.arrayUnion(proof),
-      // Don't downgrade Completed back to Pending if the engineer somehow
-      // added more proof after closing the phase.
+
       status: m.status === "Completed" ? "Completed" : "Pending",
     });
 
@@ -1183,12 +999,7 @@ export const uploadProofPhoto = onCall(
   },
 );
 
-// ─── sendPasswordResetOtp ────────────────────────────────────────────────────
-//
-//  Unauthenticated. Generates a 6-digit OTP for password reset and emails it.
-//  Always returns { success: true } to prevent email enumeration (attacker
-//  cannot tell whether an email address is registered).
-//
+
 export const sendPasswordResetOtp = onCall(
   { region: "asia-southeast1", secrets: [gmailUser, gmailPass] },
   async (request) => {
@@ -1208,27 +1019,27 @@ export const sendPasswordResetOtp = onCall(
     });
 
     try {
-      // 1. Look up user by email — silent if not found
+
       let uid: string;
       try {
         const userRecord = await admin.auth().getUserByEmail(normalizedEmail);
         uid = userRecord.uid;
       } catch {
-        return { success: true }; // User not found — return success silently
+        return { success: true };
       }
 
-      // 2. Check send cooldown
+
       const cooldownRef = admin.firestore().doc(`passwordResetCooldowns/${emailHash}`);
       const cooldownSnap = await cooldownRef.get();
       if (cooldownSnap.exists) {
         const data = cooldownSnap.data() as { sentAt?: admin.firestore.Timestamp };
         const sentMs = data.sentAt?.toMillis() ?? 0;
         if (Date.now() - sentMs < SEND_COOLDOWN_MS) {
-          return { success: true }; // Within cooldown — return success silently
+          return { success: true };
         }
       }
 
-      // 3. Generate OTP and store hashed version
+
       const otp = generateOTP();
       const expiresAt = Date.now() + OTP_EXPIRY_MS;
 
@@ -1243,7 +1054,7 @@ export const sendPasswordResetOtp = onCall(
 
       await cooldownRef.set({ sentAt: admin.firestore.FieldValue.serverTimestamp() });
 
-      // 4. Send branded email with the code
+
       const transporter = createTransporter(gmailUser.value(), gmailPass.value());
       await transporter.sendMail({
         from: `"TranspiraFund" <${gmailUser.value()}>`,
@@ -1271,19 +1082,14 @@ export const sendPasswordResetOtp = onCall(
         `,
       });
     } catch {
-      // Internal error — never expose system state to client
+
     }
 
     return { success: true };
   },
 );
 
-// ─── verifyPasswordResetOtp ──────────────────────────────────────────────────
-//
-//  Unauthenticated. Validates the 6-digit OTP code.
-//  On success: marks the OTP record as verified (does NOT delete it yet).
-//  On failure: increments attempt counter, throws descriptive error.
-//
+
 export const verifyPasswordResetOtp = onCall(
   { region: "asia-southeast1" },
   async (request) => {
@@ -1317,19 +1123,19 @@ export const verifyPasswordResetOtp = onCall(
       verified: boolean;
     };
 
-    // Check expiry
+
     if (Date.now() > otpData.expiresAt) {
       await otpRef.delete();
       throw new HttpsError("deadline-exceeded", "This code has expired. Please request a new one.");
     }
 
-    // Check attempt limit
+
     if (otpData.attempts >= MAX_VERIFY_ATTEMPTS) {
       await otpRef.delete();
       throw new HttpsError("resource-exhausted", "Too many attempts. Please request a new code.");
     }
 
-    // Verify code
+
     if (hashValue(code.trim()) !== otpData.hashedCode) {
       const remaining = MAX_VERIFY_ATTEMPTS - otpData.attempts - 1;
       await otpRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
@@ -1343,18 +1149,14 @@ export const verifyPasswordResetOtp = onCall(
       );
     }
 
-    // Code is valid — mark as verified (not yet consumed)
+
     await otpRef.update({ verified: true });
 
     return { success: true };
   },
 );
 
-// ─── resetPasswordWithOtp ────────────────────────────────────────────────────
-//
-//  Unauthenticated. Uses a pre-verified OTP record to reset the user's password.
-//  Uses Firebase Admin SDK to bypass "requires recent login" restriction.
-//
+
 export const resetPasswordWithOtp = onCall(
   { region: "asia-southeast1" },
   async (request) => {
@@ -1398,7 +1200,7 @@ export const resetPasswordWithOtp = onCall(
       throw new HttpsError("deadline-exceeded", "Reset session expired. Please start over.");
     }
 
-    // Reset password via Admin SDK
+
     try {
       await admin.auth().updateUser(otpData.uid, { password: newPassword });
     } catch (e) {
@@ -1409,15 +1211,14 @@ export const resetPasswordWithOtp = onCall(
       throw new HttpsError("internal", "Failed to update password. Please try again.");
     }
 
-    // Delete OTP record (one-time use — consumed)
+
     await otpRef.delete();
 
-    // Resolve the actor's tenant from their user doc — this is the
-    // unauthenticated reset path so there's no token to read claims from.
+
     const actorSnap = await admin.firestore().doc(`users/${otpData.uid}`).get();
     const actorTenantId = (actorSnap.data() ?? {}).tenantId;
 
-    // Log audit trail (no DEPW sync — user-initiated reset)
+
     await logAuditTrail(
       otpData.uid,
       normalizedEmail,

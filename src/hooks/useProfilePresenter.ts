@@ -80,20 +80,14 @@ export const useProfilePresenter = (
   const uploadProfilePhoto = async (base64: string): Promise<boolean> => {
     if (!auth.currentUser) return false;
     try {
-      // RN's fetch() can't read local file:// / content:// URIs on Android,
-      // so client-side Firebase Storage uploads aren't viable here. The
-      // uploadProfilePhoto callable (mobile-only, asia-southeast1) takes
-      // base64, uploads server-side via Admin SDK, and writes the same
-      // users/{uid}.photoURL field the web's updateProfilePhoto writes —
-      // so web realtime listeners pick it up with no contract drift.
+
       const result = await callFn("uploadProfilePhoto", { base64 }) as {
         success: boolean;
         photoURL: string;
       };
       if (!result.success) return false;
       setUserProfile((prev) => (prev ? { ...prev, photoURL: result.photoURL } : prev));
-      // Refresh AuthContext so every other screen (dashboard, audit trail, etc.)
-      // that reads userProfile from context picks up the new photo immediately.
+
       await refreshContextProfile();
       return true;
     } catch (error) {

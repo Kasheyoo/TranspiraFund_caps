@@ -71,7 +71,7 @@ export const ProofImageViewer = ({
     >
       <Pressable style={S.backdrop} onPress={onClose}>
         <Animated.View style={[S.container, { opacity }]}>
-          {/* Top bar */}
+
           <View style={[S.topBar, { paddingTop: insets.top + 8 }]}>
             {indexLabel ? (
               <View style={S.indexChip}>
@@ -84,10 +84,6 @@ export const ProofImageViewer = ({
             </TouchableOpacity>
           </View>
 
-          {/* Image zone — swallow taps so they don't dismiss the modal.
-              contain keeps aspect so the burnt-in banner at the image bottom
-              stays visible. All other metadata (time, coords, engineer) lives
-              inside that banner — we don't duplicate it as text rows. */}
           <Pressable style={S.imageZone} onPress={() => {}}>
             <Animated.View style={{ flex: 1, width: "100%", transform: [{ scale }] }}>
               {loadFailed ? (
@@ -106,10 +102,6 @@ export const ProofImageViewer = ({
             </Animated.View>
           </Pressable>
 
-          {/* Location chip only — opens Google Maps. Capture time, coords,
-              engineer are already burnt into the image itself, so we don't
-              duplicate them outside. Lifted into the thumb-zone (~64px above
-              the safe-area edge) so the user doesn't have to over-reach. */}
           {placeName ? (
             <Pressable
               style={[S.chipStrip, { paddingBottom: insets.bottom + 64 }]}

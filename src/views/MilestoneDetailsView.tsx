@@ -39,13 +39,9 @@ interface MilestoneDetailsViewProps {
   actions: MilestoneDetailsActions;
 }
 
-// Detects the legacy "lat, lng" string stored in older proofs (before
-// server-side reverse geocoding shipped). When `location` is just numbers,
-// the COORDINATES row already covers it — don't render it twice as a place.
 const COORD_STRING_RE = /^\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+\s*$/;
 const isCoordString = (s?: string) => !!s && COORD_STRING_RE.test(s);
 
-// ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { accent: string; bg: string; text: string }> = {
   "completed": { accent: COLORS.success, bg: COLORS.successSoft, text: COLORS.success },
   "pending":   { accent: COLORS.warning, bg: COLORS.warningSoft, text: COLORS.warning },
@@ -73,14 +69,9 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
     await actions.onConfirmMilestone(m);
   };
 
-  // In-app confirm for Mark Completed — replaces the native Alert so the
-  // dialog matches the rest of the app's design system instead of the OS.
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [confirmingComplete, setConfirmingComplete] = useState(false);
 
-  // Fullscreen proof viewer. Engineer/time/coords are already burnt into the
-  // JPEG banner by the server — we only surface the Location chip (opens Maps)
-  // and capture-time chip, matching the web lightbox.
   const [viewerProof, setViewerProof] = useState<Proof | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number>(0);
 
@@ -108,7 +99,6 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
   return (
     <View style={S.root}>
 
-      {/* ══ TOAST OVERLAY ════════════════════════════════════════ */}
       {toast ? (
         <ToastMessage
           visible={toast.visible}
@@ -118,7 +108,6 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
         />
       ) : null}
 
-      {/* ══ MARK-COMPLETED CONFIRM (in-app, not OS Alert) ═══════ */}
       <ConfirmModal
         visible={confirmCompleteOpen}
         tone="success"
@@ -132,23 +121,19 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
         onCancel={() => setConfirmCompleteOpen(false)}
       />
 
-      {/* ══ PROOF FULLSCREEN VIEWER ══════════════════════════════ */}
       <ProofImageViewer
         proof={viewerProof}
         indexLabel={viewerProof ? `#${viewerIndex} of ${proofCount}` : undefined}
         onClose={() => setViewerProof(null)}
       />
 
-      {/* ══ HERO ══════════════════════════════════════════════════ */}
       <View style={[S.hero, { paddingTop: insets.top + 10 }]}>
         <View style={S.orb1} /><View style={S.orb2} />
 
-        {/* Back */}
         <TouchableOpacity onPress={() => actions.onSelectMilestone(null)} style={S.backBtn} activeOpacity={0.8}>
           <FontAwesome5 name="arrow-left" size={14} color="#fff" />
         </TouchableOpacity>
 
-        {/* Project breadcrumb */}
         {project ? (
           <View style={S.breadcrumb}>
             <FontAwesome5 name="hard-hat" size={9} color="rgba(255,255,255,0.6)" />
@@ -158,10 +143,8 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
           </View>
         ) : null}
 
-        {/* Milestone title */}
         <Text style={S.heroTitle} numberOfLines={3}>{m.title}</Text>
 
-        {/* Sequence + status */}
         <View style={S.heroBadgeRow}>
           {m.sequence !== undefined ? (
             <View style={S.seqChip}>
@@ -183,7 +166,6 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ══ SPEC CARD (AI metadata) ════════════════════════════ */}
         {(m.description || m.weightPercentage || m.suggestedDurationDays || isAiGenerated) ? (
           <View style={S.specCard}>
             {isAiGenerated ? (
@@ -223,7 +205,6 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
           </View>
         ) : null}
 
-        {/* ══ REVIEW & CONFIRM (blocks proofs until confirmed) ═══ */}
         {needsReview ? (
           <View style={S.confirmCard}>
             <View style={S.confirmIconRing}>

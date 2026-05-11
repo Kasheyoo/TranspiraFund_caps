@@ -28,7 +28,7 @@ export const SuccessOverlay = ({
           entering={FadeIn.delay(100).duration(350)}
           style={styles.card}
         >
-          {/* Success icon */}
+
           <Animated.View
             entering={FadeIn.delay(300).duration(400)}
             style={styles.iconCircle}
@@ -36,7 +36,7 @@ export const SuccessOverlay = ({
             <FontAwesome5 name="check" size={32} color="#FFFFFF" />
           </Animated.View>
 
-          {/* Title */}
+
           <Animated.Text
             entering={FadeInUp.delay(450).duration(400)}
             style={styles.title}
@@ -44,7 +44,7 @@ export const SuccessOverlay = ({
             {title}
           </Animated.Text>
 
-          {/* Message */}
+
           <Animated.Text
             entering={FadeInUp.delay(550).duration(400)}
             style={styles.message}
@@ -52,13 +52,13 @@ export const SuccessOverlay = ({
             {message}
           </Animated.Text>
 
-          {/* Divider */}
+
           <Animated.View
             entering={FadeIn.delay(600).duration(300)}
             style={styles.divider}
           />
 
-          {/* Button */}
+
           <Animated.View
             entering={FadeInUp.delay(650).duration(400)}
             style={styles.buttonWrap}

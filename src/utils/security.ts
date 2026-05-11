@@ -70,7 +70,7 @@ const writeEntry = async (key: string, entry: RateLimitEntry): Promise<void> => 
   try {
     await AsyncStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(entry));
   } catch {
-    // Non-fatal: a failed persist falls back to "allowed" on next check.
+
   }
 };
 
@@ -78,7 +78,7 @@ const removeEntry = async (key: string): Promise<void> => {
   try {
     await AsyncStorage.removeItem(STORAGE_PREFIX + key);
   } catch {
-    // Best-effort.
+
   }
 };
 

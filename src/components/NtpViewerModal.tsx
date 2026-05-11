@@ -14,12 +14,7 @@ import {
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { COLORS } from "../constants";
 
-// react-native-pdf is loaded lazily — only when the user actually opens an
-// NTP modal with a PDF source. The library transitively pulls in
-// react-native-blob-util and runs codegen-side initialization on import; if
-// either piece misbehaves on a given device, eager-importing it crashed the
-// whole Project Details screen on tap. Loading on demand keeps that blast
-// radius contained to the PDF modal itself.
+
 type PdfComponent = React.ComponentType<{
   source: { uri: string; cache?: boolean };
   style?: object;
@@ -51,9 +46,7 @@ export const NtpViewerModal = ({ visible, onClose, fileUrl, fileName }: Props) =
   const contentW = sheetW - 24;
   const contentH = Math.max(220, height - 220);
 
-  // Resolve the Pdf component on-demand. require() throws synchronously if
-  // resolution fails — wrap so the rest of the modal keeps rendering and the
-  // user can still tap "Open externally" instead of seeing the app close.
+
   const Pdf: PdfComponent | null = useMemo(() => {
     if (!visible || kind !== "pdf") return null;
     try {

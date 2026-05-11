@@ -12,7 +12,6 @@ export function ForgotPasswordScreen() {
   const { step, email, isLoading, isSending, error, resendSeconds, actions } =
     useForgotPasswordPresenter();
 
-  // Step 2 — OTP code entry
   if (step === "otp") {
     return (
       <ForgotPasswordOTPView
@@ -28,7 +27,6 @@ export function ForgotPasswordScreen() {
     );
   }
 
-  // Step 3 — Set new password
   if (step === "password") {
     return (
       <NewPasswordView
@@ -40,7 +38,6 @@ export function ForgotPasswordScreen() {
     );
   }
 
-  // Step 1 (email entry) + Step 4 (success) — handled by ForgotPasswordView
   return (
     <ForgotPasswordView
       onBack={goBack}

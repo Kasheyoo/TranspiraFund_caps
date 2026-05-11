@@ -12,11 +12,6 @@ interface State {
   componentStack: string | null;
 }
 
-// Catches any render or lifecycle error in the subtree so a single broken
-// screen can't kill the whole APK in release. In dev the redbox still shows;
-// in release this is the only thing the user gets to see when something
-// inside the navigator throws, so we surface the error message + stack
-// directly — easier to triage than "the app just closed".
 export class ScreenErrorBoundary extends Component<Props, State> {
   state: State = { error: null, componentStack: null };
 

@@ -101,9 +101,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
     if (!isLoading && !isLocked) onLogin?.();
   }, [isLoading, isLocked, onLogin]);
 
-  // Wipe the password the moment the app leaves the foreground so it
-  // never sits in memory while the user is in another app or the recents
-  // screen. Email is left alone so "Remember me" still works on return.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") setPassword?.("");
@@ -118,7 +115,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
     >
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-      {/* Background accents */}
       <View style={styles.bgAccentTop} />
       <View style={styles.bgAccentBottom} />
 
@@ -133,7 +129,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
       >
         <View style={styles.centerWrapper}>
 
-          {/* ── Masthead ── */}
           <Animated.View entering={FadeIn.duration(500)} style={styles.masthead}>
             <View style={styles.logoContainer}>
               <Image
@@ -146,18 +141,16 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
             <Text style={styles.mastheadSubtitle}>Project Engineer Portal</Text>
           </Animated.View>
 
-          {/* ── Form card ── */}
           <Animated.View
             entering={FadeInDown.delay(150).duration(500)}
             style={styles.card}
           >
-            {/* Card header */}
+
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Welcome back</Text>
               <Text style={styles.cardSubtitle}>Sign in to access your dashboard</Text>
             </View>
 
-            {/* Error / lockout banner */}
             {errorMessage ? (
               <View style={[styles.alertBanner, isLocked && styles.lockoutBanner]}>
                 <FontAwesome5
@@ -171,7 +164,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               </View>
             ) : null}
 
-            {/* Email */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email address</Text>
               <FocusInput
@@ -202,7 +194,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               </FocusInput>
             </View>
 
-            {/* Password */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Password</Text>
               <FocusInput
@@ -244,7 +235,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               </FocusInput>
             </View>
 
-            {/* Remember me + Forgot password */}
             <View style={styles.utilityRow}>
               <TouchableOpacity
                 onPress={() => setRememberMe?.(!rememberMe)}
@@ -267,7 +257,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               </TouchableOpacity>
             </View>
 
-            {/* Sign In button */}
             <TouchableOpacity
               style={[styles.signInBtn, (isLoading || isLocked) && styles.signInBtnDisabled]}
               onPress={handleLogin}
@@ -293,7 +282,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
               )}
             </TouchableOpacity>
 
-            {/* Security note */}
             <View style={styles.securityNote}>
               <FontAwesome5 name="shield-alt" size={10} color={COLORS.textTertiary} />
               <Text style={styles.securityText}>
@@ -302,7 +290,6 @@ export const LoginView = ({ data, actions }: LoginViewProps) => {
             </View>
           </Animated.View>
 
-          {/* Footer */}
           <Animated.Text
             entering={FadeIn.delay(350).duration(400)}
             style={styles.footer}
@@ -347,7 +334,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Masthead ──
   masthead: {
     alignItems: "center",
     marginBottom: 28,
@@ -380,7 +366,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
-  // ── Card ──
   card: {
     width: "100%",
     backgroundColor: COLORS.surface,
@@ -412,7 +397,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── Alert banner ──
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -436,7 +420,6 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
   },
 
-  // ── Inputs ──
   inputGroup: {
     marginBottom: 16,
   },
@@ -474,7 +457,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  // ── Utility row ──
   utilityRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -512,7 +494,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // ── Sign In button ──
   signInBtn: {
     flexDirection: "row",
     backgroundColor: COLORS.primary,
@@ -541,7 +522,6 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // ── Security note ──
   securityNote: {
     flexDirection: "row",
     alignItems: "center",
@@ -555,7 +535,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Footer ──
   footer: {
     fontSize: 11,
     color: "rgba(255,255,255,0.5)",

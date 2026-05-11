@@ -1,6 +1,3 @@
-# ───────────────────────────────────────────────────────────────────
-# General attributes — needed for stacktrace + reflection-driven libs
-# ───────────────────────────────────────────────────────────────────
 -keepattributes Signature
 -keepattributes *Annotation*
 -keepattributes SourceFile,LineNumberTable
@@ -8,16 +5,12 @@
 -keepattributes InnerClasses
 -keepattributes Exceptions
 
-# Drop verbose log calls in release.
 -assumenosideeffects class android.util.Log {
     public static int v(...);
     public static int d(...);
     public static int i(...);
 }
 
-# ───────────────────────────────────────────────────────────────────
-# React Native core / Hermes / JNI
-# ───────────────────────────────────────────────────────────────────
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
 -keep class com.facebook.jni.** { *; }
@@ -39,17 +32,11 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 -dontwarn com.facebook.react.**
 
-# ───────────────────────────────────────────────────────────────────
-# Firebase (Auth / Firestore / Storage / Functions)
-# ───────────────────────────────────────────────────────────────────
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 
-# Firestore's RPC channel — Firestore re-marshals every doc payload through
-# gRPC + protobuf reflection. Without these keep rules, R8 renames internal
-# message classes and Firestore RPCs throw at runtime in release builds.
 -keep class io.grpc.** { *; }
 -keep interface io.grpc.** { *; }
 -keep class com.google.protobuf.** { *; }
@@ -57,18 +44,12 @@
 -dontwarn io.grpc.**
 -dontwarn com.google.protobuf.**
 
-# ───────────────────────────────────────────────────────────────────
-# Reanimated v4 + Worklets
-# ───────────────────────────────────────────────────────────────────
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.swmansion.worklets.** { *; }
 -keep class com.facebook.react.turbomodule.core.** { *; }
 -dontwarn com.swmansion.reanimated.**
 -dontwarn com.swmansion.worklets.**
 
-# ───────────────────────────────────────────────────────────────────
-# Gesture handler / Screens / Safe Area Context
-# ───────────────────────────────────────────────────────────────────
 -keep class com.swmansion.gesturehandler.** { *; }
 -keep class com.swmansion.rnscreens.** { *; }
 -keepclassmembers class com.swmansion.rnscreens.** { *; }
@@ -77,22 +58,12 @@
 -dontwarn com.swmansion.rnscreens.**
 -dontwarn com.th3rdwave.safeareacontext.**
 
-# react-native-screens uses androidx Fragments under the hood on Android. R8
-# can rename Fragment subclasses that are only referenced reflectively, which
-# causes a release-only crash on the first native-stack push (e.g. tapping a
-# project to open ProjectDetails).
 -keep class * extends androidx.fragment.app.Fragment { *; }
 -keep class androidx.fragment.app.** { *; }
 -keep class androidx.lifecycle.** { *; }
 -dontwarn androidx.fragment.app.**
 -dontwarn androidx.lifecycle.**
 
-# ───────────────────────────────────────────────────────────────────
-# Fresco image pipeline (RN <Image> backend on Android)
-# Without explicit keeps, R8 sometimes strips internal Fresco classes that
-# are loaded by reflection from native code, crashing on the first <Image>
-# render in release builds.
-# ───────────────────────────────────────────────────────────────────
 -keep class com.facebook.imagepipeline.** { *; }
 -keep class com.facebook.imageutils.** { *; }
 -keep class com.facebook.drawee.** { *; }
@@ -100,34 +71,15 @@
 -dontwarn com.facebook.imagepipeline.**
 -dontwarn com.facebook.drawee.**
 
-# ───────────────────────────────────────────────────────────────────
-# Vector icons
-# ───────────────────────────────────────────────────────────────────
 -keep class com.oblador.vectoricons.** { *; }
 
-# ───────────────────────────────────────────────────────────────────
-# Image picker (camera capture)
-# ───────────────────────────────────────────────────────────────────
 -keep class com.imagepicker.** { *; }
 
-# ───────────────────────────────────────────────────────────────────
-# Geolocation service
-# ───────────────────────────────────────────────────────────────────
 -keep class com.agontuk.RNFusedLocation.** { *; }
 -dontwarn com.agontuk.RNFusedLocation.**
 
-# ───────────────────────────────────────────────────────────────────
-# Async Storage
-# ───────────────────────────────────────────────────────────────────
 -keep class com.reactnativecommunity.asyncstorage.** { *; }
 
-# ───────────────────────────────────────────────────────────────────
-# react-native-pdf (uses AndroidPdfViewer + react-native-blob-util)
-# ───────────────────────────────────────────────────────────────────
-# The JS side calls requireNativeComponent('RCTPdf') and subscribes to
-# events emitted by org.wonday.pdf.events.*; without explicit keeps R8
-# renames PdfView/RNPDFPackage/TopChangeEvent and screens that import
-# react-native-pdf crash on module load in release builds.
 -keep class org.wonday.pdf.** { *; }
 -keep class org.wonday.pdf.events.** { *; }
 -dontwarn org.wonday.pdf.**
@@ -142,22 +94,11 @@
 -keep class com.ReactNativeBlobUtil.** { *; }
 -keepclassmembers class com.ReactNativeBlobUtil.** { *; }
 
-# ───────────────────────────────────────────────────────────────────
-# react-native-get-random-values — Firebase Auth + crypto.getRandomValues
-# polyfill. Native classes live under org.linusu.** (NOT under com.facebook
-# or any other namespace covered above), so they need their own keep rule.
-# ───────────────────────────────────────────────────────────────────
 -keep class org.linusu.** { *; }
 -dontwarn org.linusu.**
 
-# ───────────────────────────────────────────────────────────────────
-# Native modules in this app (DeviceSecurity ships in Phase 3)
-# ───────────────────────────────────────────────────────────────────
 -keep class com.transpirafund.** { *; }
 
-# ───────────────────────────────────────────────────────────────────
-# OkHttp / Okio (RN networking)
-# ───────────────────────────────────────────────────────────────────
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -keep class okhttp3.** { *; }
@@ -165,9 +106,6 @@
 -keep class okio.** { *; }
 -keep interface okio.** { *; }
 
-# ───────────────────────────────────────────────────────────────────
-# Kotlin metadata + coroutines
-# ───────────────────────────────────────────────────────────────────
 -keep class kotlin.Metadata { *; }
 -dontwarn kotlin.**
 -dontwarn kotlinx.coroutines.**
@@ -175,18 +113,7 @@
     volatile <fields>;
 }
 
-# ───────────────────────────────────────────────────────────────────
-# JS-bound enums (read by reflection from the bridge)
-# ───────────────────────────────────────────────────────────────────
 -keepclassmembers enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
-
-# ───────────────────────────────────────────────────────────────────
-# R8 compatibility
-# ───────────────────────────────────────────────────────────────────
-# Note: -allowaccessmodification and -repackageclasses '' were intentionally
-# left out. Both repackage classes that aren't explicitly -kept, which breaks
-# Firebase Firestore's gRPC channel and any other library that resolves
-# classes by canonical name at runtime.

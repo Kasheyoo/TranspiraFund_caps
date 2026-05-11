@@ -31,7 +31,7 @@ interface ForgotPasswordViewProps {
   isSent?: boolean;
 }
 
-/** Animated focus border — same pattern as LoginView */
+
 const FocusInput = ({
   children,
   isFocused,
@@ -71,9 +71,7 @@ export const ForgotPasswordView = ({
   const [error, setError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
 
-  // Wipe the email field on background — the form is short-lived and the
-  // user will retype on return; matches the same hygiene applied to the
-  // password / OTP screens.
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") setResetEmail("");
@@ -95,7 +93,7 @@ export const ForgotPasswordView = ({
     onSend(cleaned);
   };
 
-  // ── Success state ──
+
   if (isSent) {
     return (
       <View style={{ flex: 1, backgroundColor: COLORS.primary }}>
@@ -106,7 +104,7 @@ export const ForgotPasswordView = ({
         <View style={[styles.scrollContent, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32, justifyContent: "center" }]}>
           <View style={styles.centerWrapper}>
 
-            {/* Success header on teal */}
+
             <Animated.View entering={FadeIn.duration(400)} style={styles.headerArea}>
               <View style={[styles.iconCircle, { backgroundColor: "rgba(16,185,129,0.2)", borderColor: "rgba(16,185,129,0.4)" }]}>
                 <FontAwesome5 name="check-circle" size={32} color="#10B981" />
@@ -117,7 +115,7 @@ export const ForgotPasswordView = ({
               </Text>
             </Animated.View>
 
-            {/* Info card */}
+
             <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>You're all set</Text>
@@ -193,12 +191,12 @@ export const ForgotPasswordView = ({
             </Text>
           </Animated.View>
 
-          {/* ── Card ── */}
+
           <Animated.View
             entering={FadeInDown.delay(200).duration(450)}
             style={styles.card}
           >
-            {/* Card header */}
+
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Enter your email</Text>
               <Text style={styles.cardSubtitle}>
@@ -206,7 +204,7 @@ export const ForgotPasswordView = ({
               </Text>
             </View>
 
-            {/* Error banner */}
+
             {error ? (
               <View style={styles.alertBanner}>
                 <FontAwesome5
@@ -218,7 +216,7 @@ export const ForgotPasswordView = ({
               </View>
             ) : null}
 
-            {/* Email input */}
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email address</Text>
               <FocusInput isFocused={isFocused} hasError={!!error}>
@@ -249,7 +247,7 @@ export const ForgotPasswordView = ({
               </FocusInput>
             </View>
 
-            {/* Send button */}
+
             <TouchableOpacity
               style={[styles.sendBtn, isLoading && styles.sendBtnDisabled]}
               onPress={handleSend}
@@ -271,7 +269,7 @@ export const ForgotPasswordView = ({
               )}
             </TouchableOpacity>
 
-            {/* Info note */}
+
             <View style={styles.infoNote}>
               <FontAwesome5 name="clock" size={10} color={COLORS.textTertiary} />
               <Text style={styles.infoText}>
@@ -280,7 +278,7 @@ export const ForgotPasswordView = ({
             </View>
           </Animated.View>
 
-          {/* Back to login */}
+
           <Animated.View
             entering={FadeIn.delay(400).duration(400)}
             style={styles.backToLogin}
@@ -317,7 +315,7 @@ const styles = StyleSheet.create({
     left: -180,
   },
 
-  // ── Nav ──
+
   navBar: {
     height: 52,
     flexDirection: "row",
@@ -333,7 +331,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Scroll ──
+
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -346,7 +344,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Header area (on teal) ──
+
   headerArea: {
     alignItems: "center",
     marginBottom: 28,
@@ -379,7 +377,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
-  // ── Card ──
+
   card: {
     width: "100%",
     backgroundColor: COLORS.surface,
@@ -411,7 +409,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── Alert ──
+
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -429,7 +427,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // ── Input ──
+
   inputGroup: {
     marginBottom: 20,
   },
@@ -463,7 +461,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Send button ──
+
   sendBtn: {
     flexDirection: "row",
     backgroundColor: COLORS.primary,
@@ -492,7 +490,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // ── Info note ──
+
   infoNote: {
     flexDirection: "row",
     alignItems: "center",
@@ -507,7 +505,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  // ── Back to login ──
+
   backToLogin: {
     flexDirection: "row",
     alignItems: "center",

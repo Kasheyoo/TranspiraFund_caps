@@ -32,7 +32,7 @@ export function WelcomeOverlay({ firstName }: WelcomeOverlayProps) {
   }));
 
   useEffect(() => {
-    // Fade in (400ms) → hold (2000ms) → fade out (600ms) = ~3s total
+
     opacity.value = withSequence(
       withTiming(1, { duration: 400, easing: Easing.out(Easing.quad) }),
       withDelay(2000, withTiming(0, { duration: 600, easing: Easing.in(Easing.quad) })),
@@ -48,26 +48,26 @@ export function WelcomeOverlay({ firstName }: WelcomeOverlayProps) {
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]} pointerEvents="none">
-      {/* Background orbs */}
+
       <View style={styles.orbTop} />
       <View style={styles.orbMid} />
       <View style={styles.orbBottom} />
 
       <Animated.View style={[styles.content, contentStyle]}>
-        {/* Auth badge */}
+
         <View style={styles.badge}>
           <FontAwesome5 name="check-circle" size={12} color="#4ADE80" />
           <Text style={styles.badgeText}>AUTHENTICATED</Text>
         </View>
 
-        {/* Welcome text */}
+
         <Text style={styles.welcomeSmall}>Welcome,</Text>
         <Text style={styles.oneLiner} numberOfLines={1} adjustsFontSizeToFit>
           <Text style={styles.engineerPart}>Engineer </Text>
           <Text style={styles.namePart}>{firstName}</Text>
         </Text>
 
-        {/* App identity */}
+
         <Text style={styles.appSub}>TranspiraFund</Text>
       </Animated.View>
     </Animated.View>
