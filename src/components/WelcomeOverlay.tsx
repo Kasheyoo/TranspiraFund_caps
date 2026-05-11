@@ -34,12 +34,12 @@ export function WelcomeOverlay({ firstName }: WelcomeOverlayProps) {
   useEffect(() => {
 
     opacity.value = withSequence(
-      withTiming(1, { duration: 400, easing: Easing.out(Easing.quad) }),
-      withDelay(2000, withTiming(0, { duration: 600, easing: Easing.in(Easing.quad) })),
+      withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) }),
+      withDelay(1200, withTiming(0, { duration: 480, easing: Easing.in(Easing.quad) })),
     );
-    scale.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.back(1.05)) });
+    scale.value = withTiming(1, { duration: 480, easing: Easing.out(Easing.back(1.05)) });
 
-    const timer = setTimeout(() => setVisible(false), 3100);
+    const timer = setTimeout(() => setVisible(false), 2100);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -1,6 +1,6 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { Modal, StyleSheet, View } from "react-native";
-import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
+import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
 import { COLORS } from "../constants";
 import { PrimaryButton } from "./SharedComponents";
 
@@ -24,52 +24,27 @@ export const SuccessOverlay = ({
   return (
     <Modal transparent animationType="fade" visible={visible}>
       <View style={styles.backdrop}>
-        <Animated.View
-          entering={FadeIn.delay(100).duration(350)}
-          style={styles.card}
-        >
-
+        <Animated.View entering={FadeIn.duration(200)} style={styles.card}>
           <Animated.View
-            entering={FadeIn.delay(300).duration(400)}
+            entering={ZoomIn.duration(260).springify().damping(14)}
             style={styles.iconCircle}
           >
             <FontAwesome5 name="check" size={32} color="#FFFFFF" />
           </Animated.View>
 
+          <Animated.Text style={styles.title}>{title}</Animated.Text>
+          <Animated.Text style={styles.message}>{message}</Animated.Text>
 
-          <Animated.Text
-            entering={FadeInUp.delay(450).duration(400)}
-            style={styles.title}
-          >
-            {title}
-          </Animated.Text>
+          <View style={styles.divider} />
 
-
-          <Animated.Text
-            entering={FadeInUp.delay(550).duration(400)}
-            style={styles.message}
-          >
-            {message}
-          </Animated.Text>
-
-
-          <Animated.View
-            entering={FadeIn.delay(600).duration(300)}
-            style={styles.divider}
-          />
-
-
-          <Animated.View
-            entering={FadeInUp.delay(650).duration(400)}
-            style={styles.buttonWrap}
-          >
+          <View style={styles.buttonWrap}>
             <PrimaryButton
               title={buttonText}
               onPress={onDismiss}
               icon="arrow-right"
               style={{ width: "100%" }}
             />
-          </Animated.View>
+          </View>
         </Animated.View>
       </View>
     </Modal>

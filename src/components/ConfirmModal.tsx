@@ -2,6 +2,7 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { useEffect, useRef } from "react";
 import {
   Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -52,14 +53,14 @@ export const ConfirmModal = ({
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.spring(scale,   { toValue: 1, useNativeDriver: true, damping: 18, stiffness: 240 }),
+        Animated.timing(scale,   { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]).start();
     } else {
       scale.setValue(0.94);
       opacity.setValue(0);
     }
-  }, [visible]);
+  }, [visible, opacity, scale]);
 
   return (
     <Modal
