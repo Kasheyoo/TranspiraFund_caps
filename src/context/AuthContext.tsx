@@ -1,5 +1,5 @@
 import { onIdTokenChanged, signOut, type User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import {
   createContext,
   useCallback,
@@ -88,6 +88,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const warningShownRef = useRef(false);
 
+  // Live listeners for the actor's user doc and tenant doc. The web app can
+  // edit either at any time (e.g. update the engineer's photo, change the
+  // LGU display name); these onSnapshot subscriptions keep the mobile UI in
+  // sync without forcing a restart.
+  const profileUnsubRef = useRef<(() => void) | null>(null);
+  const tenantUnsubRef = useRef<(() => void) | null>(null);
+  const detachLiveDocs = useCallback(() => {
+    profileUnsubRef.current?.();
+    profileUnsubRef.current = null;
+    tenantUnsubRef.current?.();
+    tenantUnsubRef.current = null;
+  }, []);
+
   // Web app sets mustChangePassword: true on account creation
   const isFirstTimeUser = userProfile?.mustChangePassword === true;
 
@@ -161,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Logout path — wipe every piece of derived state in one place
       if (!firebaseUser) {
+        detachLiveDocs();
         setIsOTPVerified(false);
         setUser(null);
         setUserProfile(null);
@@ -225,19 +239,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRole(claimRole!);
       setClaimsLoaded(true);
 
-      // Profile and tenant doc only need to be fetched once per session;
-      // token refreshes for the same uid skip the round trips.
+      // On a fresh session (new uid), attach live listeners on the actor's
+      // user doc and the tenant doc. Token refreshes for the same uid reuse
+      // the existing listeners — no re-attach needed.
       if (isNewSession) {
-        try {
-          const snap = await getDoc(doc(db, "users", uid));
-          setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
-        } catch {
-          setUserProfile(null);
-        }
+        detachLiveDocs();
 
-        try {
-          const tenantSnap = await getDoc(doc(db, "tenants", claimTenantId!));
-          if (tenantSnap.exists()) {
+        profileUnsubRef.current = onSnapshot(
+          doc(db, "users", uid),
+          (snap) => {
+            setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
+          },
+          () => {
+            // Permission/network error — keep last known profile rather than
+            // clobbering with null mid-session.
+          },
+        );
+
+        tenantUnsubRef.current = onSnapshot(
+          doc(db, "tenants", claimTenantId!),
+          (tenantSnap) => {
+            if (!tenantSnap.exists()) return;
             const tenantData = tenantSnap.data() as Tenant;
             const name = tenantData.lguName ?? null;
             setLguName(name);
@@ -246,14 +268,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: claimRole!,
               lguName: name,
             });
-          }
-        } catch {
-          // lguName stays null; UI hides the row when null.
-        }
+          },
+          () => {
+            // lguName stays at last value; UI hides the row when null.
+          },
+        );
       }
     });
-    return unsubscribe;
-  }, []);
+    return () => {
+      detachLiveDocs();
+      unsubscribe();
+    };
+  }, [detachLiveDocs]);
 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
