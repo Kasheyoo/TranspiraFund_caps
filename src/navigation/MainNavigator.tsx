@@ -62,7 +62,12 @@ export function MainNavigator() {
 
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false }}
+      // `shift` adds a subtle slide-cross-fade when the user moves between
+      // bottom tabs. Without it, tab switches are instantaneous and feel
+      // jarring on Android — the user's reported "transition animation"
+      // issue. Native-stack screens (project list → details, settings
+      // sub-screens) already animate via `slide_from_right` further down.
+      screenOptions={{ headerShown: false, animation: "shift" }}
       tabBar={(props) => (
         <BottomNavBar
           currentScreen={props.state.routes[props.state.index].name}
