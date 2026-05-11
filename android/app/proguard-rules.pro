@@ -71,10 +71,34 @@
 # ───────────────────────────────────────────────────────────────────
 -keep class com.swmansion.gesturehandler.** { *; }
 -keep class com.swmansion.rnscreens.** { *; }
+-keepclassmembers class com.swmansion.rnscreens.** { *; }
 -keep class com.th3rdwave.safeareacontext.** { *; }
 -dontwarn com.swmansion.gesturehandler.**
 -dontwarn com.swmansion.rnscreens.**
 -dontwarn com.th3rdwave.safeareacontext.**
+
+# react-native-screens uses androidx Fragments under the hood on Android. R8
+# can rename Fragment subclasses that are only referenced reflectively, which
+# causes a release-only crash on the first native-stack push (e.g. tapping a
+# project to open ProjectDetails).
+-keep class * extends androidx.fragment.app.Fragment { *; }
+-keep class androidx.fragment.app.** { *; }
+-keep class androidx.lifecycle.** { *; }
+-dontwarn androidx.fragment.app.**
+-dontwarn androidx.lifecycle.**
+
+# ───────────────────────────────────────────────────────────────────
+# Fresco image pipeline (RN <Image> backend on Android)
+# Without explicit keeps, R8 sometimes strips internal Fresco classes that
+# are loaded by reflection from native code, crashing on the first <Image>
+# render in release builds.
+# ───────────────────────────────────────────────────────────────────
+-keep class com.facebook.imagepipeline.** { *; }
+-keep class com.facebook.imageutils.** { *; }
+-keep class com.facebook.drawee.** { *; }
+-keep class com.facebook.common.** { *; }
+-dontwarn com.facebook.imagepipeline.**
+-dontwarn com.facebook.drawee.**
 
 # ───────────────────────────────────────────────────────────────────
 # Vector icons
