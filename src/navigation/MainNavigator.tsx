@@ -62,7 +62,7 @@ export function MainNavigator() {
 
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false, animation: "fade" }}
+      screenOptions={{ headerShown: false, animation: "shift" }}
       tabBar={(props) => (
         <BottomNavBar
           currentScreen={props.state.routes[props.state.index].name}

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import type { AuditTrail, DashboardStats } from "../types";
@@ -69,7 +70,7 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
   const initials  = engineerName?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "PE";
 
   return (
-    <View style={[S.root, { paddingTop: insets.top }]}>
+    <Animated.View entering={FadeIn.duration(180)} style={[S.root, { paddingTop: insets.top }]}>
       <ScrollView
         contentContainerStyle={S.scroll}
         showsVerticalScrollIndicator={false}
@@ -211,7 +212,7 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
         </View>
 
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 };
 

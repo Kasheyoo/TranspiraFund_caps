@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants";
@@ -92,7 +93,7 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
   ];
 
   return (
-    <View style={S.root}>
+    <Animated.View entering={FadeIn.duration(180)} style={S.root}>
       <ScrollView
         contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
@@ -168,7 +169,7 @@ export const SettingsView = ({ onLogout, onNavigate }: SettingsViewProps) => {
         onClose={() => setIsLogoutVisible(false)}
         onConfirm={() => { setIsLogoutVisible(false); onLogout(); }}
       />
-    </View>
+    </Animated.View>
   );
 };
 

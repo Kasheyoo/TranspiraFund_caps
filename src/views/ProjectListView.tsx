@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import { ProjectModel } from "../models/ProjectModel";
@@ -208,7 +209,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
   }, [data.projects, data.activeFilter, search]);
 
   return (
-    <View style={S.root}>
+    <Animated.View entering={FadeIn.duration(180)} style={S.root}>
 
 
       <View style={[S.hero, { paddingTop: insets.top + 16 }]}>
@@ -306,7 +307,7 @@ export const ProjectListView = ({ data, actions }: ProjectListViewProps) => {
           }
         />
       )}
-    </View>
+    </Animated.View>
   );
 };
 

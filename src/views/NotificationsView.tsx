@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import type { AppNotification, FirestoreTimestamp } from "../types";
@@ -106,7 +107,7 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
   };
 
   return (
-    <View style={S.root}>
+    <Animated.View entering={FadeIn.duration(180)} style={S.root}>
 
       <View style={[S.hero, { paddingTop: insets.top + 20 }]}>
         <View style={S.orb1} /><View style={S.orb2} />
@@ -177,7 +178,7 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
           }
         />
       )}
-    </View>
+    </Animated.View>
   );
 };
 

@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import type { AuditTrail, UserProfile } from "../types";
@@ -75,7 +76,7 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={S.root}>
+    <Animated.View entering={FadeIn.duration(180)} style={S.root}>
 
       <View style={[S.hero, { paddingTop: insets.top + 16 }]}>
         <View style={S.orb1} /><View style={S.orb2} />
@@ -178,7 +179,7 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
           </View>
         )}
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 };
 

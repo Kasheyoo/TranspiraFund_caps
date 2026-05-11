@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { launchImageLibrary } from "react-native-image-picker";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ToastMessage } from "../components/ToastMessage";
 import { COLORS } from "../constants";
@@ -174,7 +175,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View entering={FadeIn.duration(180)} style={styles.container}>
 
       <ToastMessage
         visible={toast.visible}
@@ -444,7 +445,7 @@ export const ProfileView = ({ data, actions }: ProfileViewProps) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </Animated.View>
   );
 };
 
