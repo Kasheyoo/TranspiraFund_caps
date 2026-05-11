@@ -4,6 +4,7 @@ import { StatusBar, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { AppNavigator } from "./src/navigation/AppNavigator";
+import { ScreenErrorBoundary } from "./src/components/ScreenErrorBoundary";
 
 const AppTheme = {
   ...DefaultTheme,
@@ -42,7 +43,9 @@ export default function App() {
         <NavigationContainer theme={AppTheme}>
           <StatusBar barStyle="light-content" backgroundColor="#0F766E" />
           <ActivityTracker>
-            <AppNavigator />
+            <ScreenErrorBoundary>
+              <AppNavigator />
+            </ScreenErrorBoundary>
           </ActivityTracker>
         </NavigationContainer>
       </AuthProvider>
