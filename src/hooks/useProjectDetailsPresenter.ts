@@ -340,15 +340,22 @@ export const useProjectDetailsPresenter = (
           return;
         }
 
-        const fileSize = (asset as any).fileSize || 0;
-        if (fileSize > MAX_IMAGE_SIZE_BYTES) {
-          showToast("error", "Image must be under 10MB.");
-          return;
-        }
-
         if (!asset.base64) {
           logger.error("[AddProof] missing base64 on captured asset", { uri: asset.uri });
           showToast("error", "The photo couldn't be read from the camera. Please try again.");
+          return;
+        }
+
+        // Some Android devices don't populate `fileSize` on captured assets,
+        // so fall back to the decoded base64 length (each 4 base64 chars
+        // encode 3 bytes). Without this fallback the 10 MB guard was a no-op
+        // and oversize uploads only failed server-side.
+        const reportedSize = (asset as any).fileSize;
+        const effectiveSize = typeof reportedSize === "number" && reportedSize > 0
+          ? reportedSize
+          : Math.floor((asset.base64.length * 3) / 4);
+        if (effectiveSize > MAX_IMAGE_SIZE_BYTES) {
+          showToast("error", "Image must be under 10MB.");
           return;
         }
 
@@ -372,6 +379,18 @@ export const useProjectDetailsPresenter = (
         });
 
         const { latitude, longitude, accuracy } = userLocation;
+
+        // Server rejects accuracy > 50m (Cloud Function `uploadProofPhoto`).
+        // Catch it client-side too so the user gets an immediate, actionable
+        // message instead of an opaque "invalid argument" after the upload
+        // round-trip.
+        if (accuracy > 50) {
+          showToast(
+            "error",
+            "GPS signal is too weak. Move to a clearer area and try again.",
+          );
+          return;
+        }
 
         logger.log("[AddProof] dispatching upload, base64 len:", asset.base64.length);
         startProofUpload({
