@@ -104,35 +104,24 @@ export const MilestoneGenerationModal = ({
     }
   }, [visible, cardScale, cardOpacity]);
 
+  const resetAddState = () => {
+    setIsAdding(false);
+    setAddBusy(false);
+    setAddTitle("");
+    setAddDescription("");
+    setAddWeight("");
+    setAddDuration("");
+    setAddError(null);
+  };
+
   useEffect(() => {
-    if (visible) {
-      setEdits({});
-      setGenResult(null);
-      setPendingDelete(null);
-      setDeleteBusy(false);
-      setIsAdding(false);
-      setAddBusy(false);
-      setAddTitle("");
-      setAddDescription("");
-      setAddWeight("");
-      setAddDuration("");
-      setAddError(null);
-      if (draftMilestones.length > 0) setPhase("review");
-      else setPhase("idle");
-    } else {
-      setPhase("idle");
-      setGenResult(null);
-      setEdits({});
-      setPendingDelete(null);
-      setDeleteBusy(false);
-      setIsAdding(false);
-      setAddBusy(false);
-      setAddTitle("");
-      setAddDescription("");
-      setAddWeight("");
-      setAddDuration("");
-      setAddError(null);
-    }
+    setEdits({});
+    setGenResult(null);
+    setPendingDelete(null);
+    setDeleteBusy(false);
+    resetAddState();
+    if (visible && draftMilestones.length > 0) setPhase("review");
+    else setPhase("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
@@ -197,11 +186,7 @@ export const MilestoneGenerationModal = ({
   };
 
   const startAdding = () => {
-    setAddTitle("");
-    setAddDescription("");
-    setAddWeight("");
-    setAddDuration("");
-    setAddError(null);
+    resetAddState();
     setIsAdding(true);
   };
 
@@ -242,11 +227,7 @@ export const MilestoneGenerationModal = ({
     setAddBusy(false);
 
     if (result.ok) {
-      setIsAdding(false);
-      setAddTitle("");
-      setAddDescription("");
-      setAddWeight("");
-      setAddDuration("");
+      resetAddState();
     } else {
       setAddError(result.errorMessage || "Failed to add the milestone. Please try again.");
     }
