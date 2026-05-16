@@ -170,9 +170,9 @@ export const DashboardView = ({ data, actions }: DashboardViewProps) => {
           </View>
 
           {recentLogs && recentLogs.length > 0 ? (
-            recentLogs.map((log, i) => {
+            recentLogs.slice(0, 5).map((log, i, arr) => {
               const icon   = getActivityIcon(log.action);
-              const isLast = i === recentLogs.length - 1;
+              const isLast = i === arr.length - 1;
               return (
                 <View
                   key={log.id}

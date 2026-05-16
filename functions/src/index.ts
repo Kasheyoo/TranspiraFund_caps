@@ -590,6 +590,110 @@ export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (requ
 });
 
 
+export const addManualMilestone = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const { projectId, title, description, weightPercentage, suggestedDurationDays } =
+    (request.data ?? {}) as {
+      projectId?: string;
+      title?: string;
+      description?: string;
+      weightPercentage?: number;
+      suggestedDurationDays?: number;
+    };
+
+  if (!projectId || typeof projectId !== "string") {
+    throw new HttpsError("invalid-argument", "projectId is required.");
+  }
+  if (!title || typeof title !== "string" || title.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "title is required.");
+  }
+  if (title.length > 120) {
+    throw new HttpsError("invalid-argument", "title must be 120 characters or fewer.");
+  }
+  if (description !== undefined && typeof description !== "string") {
+    throw new HttpsError("invalid-argument", "description must be a string.");
+  }
+  if (typeof description === "string" && description.length > 600) {
+    throw new HttpsError("invalid-argument", "description must be 600 characters or fewer.");
+  }
+  if (typeof weightPercentage !== "number" || !Number.isFinite(weightPercentage) ||
+      weightPercentage < 0 || weightPercentage > 100) {
+    throw new HttpsError("invalid-argument", "weightPercentage must be a number between 0 and 100.");
+  }
+  if (typeof suggestedDurationDays !== "number" || !Number.isFinite(suggestedDurationDays) ||
+      suggestedDurationDays < 1 || suggestedDurationDays > 365) {
+    throw new HttpsError("invalid-argument", "suggestedDurationDays must be a number between 1 and 365.");
+  }
+
+  const projectRef = admin.firestore().doc(`projects/${projectId}`);
+  const projectSnap = await projectRef.get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found.");
+  }
+  const projectData = projectSnap.data() ?? {};
+  assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
+  if (projectData.projectEngineer && projectData.projectEngineer !== request.auth.uid) {
+    throw new HttpsError("permission-denied", "Only the assigned engineer can add milestones.");
+  }
+
+  // Review-phase guard: only allow manual add when AI drafts exist to review.
+  const milestonesCol = admin.firestore().collection(`projects/${projectId}/milestones`);
+  const allSnap = await milestonesCol.get();
+  if (allSnap.empty) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Generate milestones first; manual add is only available during the AI review phase.",
+    );
+  }
+  const hasDrafts = allSnap.docs.some((d) => d.data().confirmed === false);
+  if (!hasDrafts) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Manual add is only available while reviewing draft milestones.",
+    );
+  }
+
+  let maxSeq = 0;
+  allSnap.docs.forEach((d) => {
+    const s = d.data().sequence;
+    if (typeof s === "number" && s > maxSeq) maxSeq = s;
+  });
+
+  const tenantId = typeof projectData.tenantId === "string" ? projectData.tenantId : undefined;
+  const newDoc = milestonesCol.doc();
+  await newDoc.set({
+    title: title.trim(),
+    description: typeof description === "string" ? description.trim() : "",
+    weightPercentage,
+    suggestedDurationDays,
+    sequence: maxSeq + 1,
+    status: "Pending",
+    proofs: [],
+    confirmed: false,
+    generatedBy: "manual",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    ...(tenantId ? { tenantId } : {}),
+  });
+
+  const uid   = request.auth.uid;
+  const email = request.auth.token.email || "";
+  await logAuditTrail(
+    uid, email,
+    "Milestone Manually Added",
+    `Project ${projectId} · phase: ${title.trim()}`,
+    true,
+    projectId,
+    newDoc.id,
+    tenantId,
+  );
+
+  return { success: true, milestoneId: newDoc.id, sequence: maxSeq + 1 };
+});
+
+
 export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");

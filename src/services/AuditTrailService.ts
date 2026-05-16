@@ -19,8 +19,9 @@ export class AuditTrailService {
     onError?: (err: Error) => void,
   ): () => void {
     let tid: string;
+    let uid: string;
     try {
-      requireAuth();
+      uid = requireAuth();
       tid = requireTenantId();
     } catch (err) {
       onError?.(err as Error);
@@ -30,6 +31,7 @@ export class AuditTrailService {
     const q = query(
       collection(db, "auditTrails", "mobile", "entries"),
       where("tenantId", "==", tid),
+      where("actorUid", "==", uid),
       orderBy("createdAt", "desc"),
       limit(10),
     );
@@ -48,8 +50,9 @@ export class AuditTrailService {
 
   static async getAll(): Promise<AuditTrail[]> {
     let tid: string;
+    let uid: string;
     try {
-      requireAuth();
+      uid = requireAuth();
       tid = requireTenantId();
     } catch {
       return [];
@@ -60,6 +63,7 @@ export class AuditTrailService {
       const q = query(
         logsRef,
         where("tenantId", "==", tid),
+        where("actorUid", "==", uid),
         orderBy("createdAt", "desc"),
         limit(10),
       );

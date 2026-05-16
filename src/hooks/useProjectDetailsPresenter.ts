@@ -510,6 +510,33 @@ export const useProjectDetailsPresenter = (
     }
   };
 
+  const handleAddManualMilestone = async (input: {
+    title: string;
+    description: string;
+    weightPercentage: number;
+    suggestedDurationDays: number;
+  }): Promise<{ ok: boolean; errorCode?: string; errorMessage?: string }> => {
+    if (!project) {
+      return { ok: false, errorCode: "not-found", errorMessage: "Project not loaded." };
+    }
+    try {
+      requireAuth();
+      await callFn("addManualMilestone", { projectId: project.id, ...input });
+      return { ok: true };
+    } catch (error: any) {
+      logger.error("Add manual milestone error:", error);
+      const raw = (error?.code || error?.message || "").toLowerCase();
+      const code =
+        raw.includes("unauthenticated")      ? "unauthenticated" :
+        raw.includes("invalid-argument")     ? "invalid-argument" :
+        raw.includes("not-found")            ? "not-found" :
+        raw.includes("permission-denied")    ? "permission-denied" :
+        raw.includes("failed-precondition")  ? "failed-precondition" :
+        raw.includes("internal")             ? "internal" : "unknown";
+      return { ok: false, errorCode: code, errorMessage: error?.message };
+    }
+  };
+
   const handleDeleteMilestone = async (m: Milestone): Promise<boolean> => {
     if (!project) return false;
     try {
@@ -538,6 +565,7 @@ export const useProjectDetailsPresenter = (
       onConfirmMilestone: handleConfirmMilestone,
       onSaveAndConfirmAll: handleSaveAndConfirmAll,
       onDeleteMilestone: handleDeleteMilestone,
+      onAddManualMilestone: handleAddManualMilestone,
       onMarkCompleted: handleMarkCompleted,
       onDismissToast: dismissToast,
       onDismissConfirmModal: dismissConfirmModal,

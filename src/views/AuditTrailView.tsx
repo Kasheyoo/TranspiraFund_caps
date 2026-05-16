@@ -102,7 +102,7 @@ export const AuditTrailView = ({ logs, isLoading, actorCache, onRefresh, onBack 
       </View>
 
       <ScrollView
-        contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[S.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

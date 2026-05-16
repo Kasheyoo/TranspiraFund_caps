@@ -57,6 +57,12 @@ interface ProjectDetailsActions {
     edits: Record<string, Partial<Milestone>>,
   ) => Promise<boolean>;
   onDeleteMilestone: (m: Milestone) => Promise<boolean>;
+  onAddManualMilestone: (input: {
+    title: string;
+    description: string;
+    weightPercentage: number;
+    suggestedDurationDays: number;
+  }) => Promise<{ ok: boolean; errorCode?: string; errorMessage?: string }>;
   onDismissToast?: () => void;
   onDismissConfirmModal?: () => void;
 }
@@ -767,6 +773,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         draftMilestones={draftMilestones}
         onSaveAndConfirmAll={actions.onSaveAndConfirmAll}
         onDeleteMilestone={actions.onDeleteMilestone}
+        onAddManualMilestone={actions.onAddManualMilestone}
       />
 
       <NtpViewerModal
