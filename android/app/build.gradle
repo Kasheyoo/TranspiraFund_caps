@@ -19,8 +19,8 @@ android {
         applicationId "com.transpirafund"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.1"
+        versionCode 3
+        versionName "1.1.1"
     }
     signingConfigs {
         debug {
