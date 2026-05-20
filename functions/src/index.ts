@@ -244,22 +244,40 @@ function buildBannerSvg(
 
 async function burnInBanner(buffer: Buffer, lines: string[]): Promise<Buffer> {
   if (lines.length === 0) return buffer;
-  try {
 
-    const base = sharp(buffer).rotate();
+
+  let workingBuffer = buffer;
+  try {
+    const inMeta = await sharp(buffer, { failOn: "none" }).metadata();
+    if (inMeta.format !== "jpeg" && inMeta.format !== "png") {
+      workingBuffer = await sharp(buffer, { failOn: "none" })
+        .rotate()
+        .jpeg({ quality: 95 })
+        .toBuffer();
+    }
+  } catch (err) {
+    console.warn("[burnInBanner] input probe/normalize failed", err);
+  }
+
+
+  try {
+    const base = sharp(workingBuffer).rotate();
     const meta = await base.metadata();
     const width = meta.width ?? 0;
     const height = meta.height ?? 0;
-    if (!width || !height) return buffer;
+    if (!width || !height) {
+      console.warn("[burnInBanner] missing dimensions; returning unstamped buffer");
+      return workingBuffer;
+    }
 
     const svg = buildBannerSvg(width, height, lines);
     return await base
       .composite([{ input: svg, gravity: "south" }])
       .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer();
-  } catch {
-
-    return buffer;
+  } catch (err) {
+    console.warn("[burnInBanner] composite failed; returning unstamped buffer", err);
+    return workingBuffer;
   }
 }
 

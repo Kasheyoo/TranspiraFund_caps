@@ -18,7 +18,14 @@ import { useAuth } from "../context/AuthContext";
 import type { Milestone, Project } from "../types";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg"];
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/jpg",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+];
 
 const requestLocationPermission = async (): Promise<boolean> => {
   if (Platform.OS !== "android") return true;
@@ -333,9 +340,9 @@ export const useProjectDetailsPresenter = (
       {
         const asset = result.assets[0];
 
-        const fileType = asset.type || "";
-        if (!ALLOWED_IMAGE_TYPES.includes(fileType.toLowerCase())) {
-          showToast("error", "Only JPEG and PNG images are allowed.");
+        const fileType = (asset.type || "").toLowerCase();
+        if (fileType && !ALLOWED_IMAGE_TYPES.includes(fileType)) {
+          showToast("error", "This image format isn't supported. Please retake the photo.");
           return;
         }
 
