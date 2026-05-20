@@ -521,19 +521,44 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
   const fellBack = rawType !== resolvedType;
 
 
-  const existingSnap = await admin.firestore()
-    .collection(`projects/${projectId}/milestones`)
-    .limit(1)
-    .get();
+  const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
+  const tenantId = typeof projectData.tenantId === "string" ? projectData.tenantId : undefined;
+  const existingSnap = await msCollection.get();
 
+  // Recover from the pre-deploy bug where the old generator wrote milestones
+  // without tenantId. Those documents are invisible to the mobile listener
+  // (it filters by `where tenantId == tid`). Patch them in place so the
+  // engineer can pick up the review where they left off, instead of being
+  // permanently blocked by an `already-exists` error.
   if (!existingSnap.empty) {
+    const orphans = tenantId
+      ? existingSnap.docs.filter((d) => typeof d.data().tenantId !== "string")
+      : [];
+
+    if (orphans.length > 0 && tenantId) {
+      const repairBatch = admin.firestore().batch();
+      orphans.forEach((d) => repairBatch.update(d.ref, { tenantId }));
+      await repairBatch.commit();
+
+      await logAuditTrail(
+        request.auth.uid,
+        request.auth.token.email || "",
+        "Milestones Repaired",
+        `Project ${projectId}: backfilled tenantId on ${orphans.length} orphan draft${orphans.length === 1 ? "" : "s"}`,
+        true,
+        projectId,
+        undefined,
+        tenantId,
+      );
+
+      return { success: true, count: orphans.length, repaired: true };
+    }
+
     throw new HttpsError("already-exists", "Milestones already exist for this project.");
   }
 
   const batch = admin.firestore().batch();
-  const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
   const weights = distributeWeights(template.length);
-  const tenantId = typeof projectData.tenantId === "string" ? projectData.tenantId : undefined;
 
   template.forEach((phase, i) => {
     const docRef = msCollection.doc();
