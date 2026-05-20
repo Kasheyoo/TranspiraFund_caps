@@ -27,6 +27,7 @@ type GenerateResult = {
     | "not-found"
     | "permission-denied"
     | "already-exists"
+    | "resource-exhausted"
     | "internal"
     | "unknown";
   errorMessage?: string;
@@ -61,6 +62,7 @@ const ERROR_COPY: Record<string, { title: string; body: string; canRetry: boolea
   "not-found":        { title: "Project Not Found",   body: "This project may have been deleted or you no longer have access.",                canRetry: false },
   "permission-denied":{ title: "Not Authorized",      body: "Only the assigned Project Engineer can generate milestones for this project.",    canRetry: false },
   "already-exists":   { title: "Already Drafted",     body: "Milestones already exist for this project. Open the review to edit them.",        canRetry: false },
+  "resource-exhausted":{ title: "Daily Limit Reached", body: "You've reached the daily milestone-generation limit. Please try again later.",   canRetry: false },
   internal:           { title: "AI Unavailable",      body: "The milestone generator is temporarily unavailable. You can retry once.",         canRetry: true  },
   unknown:            { title: "Generation Failed",   body: "Something went wrong while generating milestones. Please try again.",             canRetry: true  },
 };

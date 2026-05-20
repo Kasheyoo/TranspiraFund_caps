@@ -53,21 +53,24 @@ const requestCameraPermission = async (): Promise<boolean> => {
   return granted === PermissionsAndroid.RESULTS.GRANTED;
 };
 
-type GpsPreflight =
-  | { ok: true }
-  | { ok: false; reason: "disabled" | "unavailable" | "timeout" | "denied" };
+type GeoCoords = { latitude: number; longitude: number; accuracy: number };
 
-const preflightGps = (): Promise<GpsPreflight> =>
-  new Promise((resolve) => {
+const fetchProofLocation = (): Promise<GeoCoords> =>
+  new Promise((resolve, reject) => {
     Geolocation.getCurrentPosition(
-      () => resolve({ ok: true }),
+      (pos: { coords: GeoCoords }) => resolve(pos.coords),
       (err: { code: number; message: string }) => {
-        if (err.code === 1) return resolve({ ok: false, reason: "denied" });
-        if (err.code === 2) return resolve({ ok: false, reason: "disabled" });
-        if (err.code === 3) return resolve({ ok: false, reason: "timeout" });
-        return resolve({ ok: false, reason: "unavailable" });
+        if (err.code === 1) {
+          reject(err);
+          return;
+        }
+        Geolocation.getCurrentPosition(
+          (pos: { coords: GeoCoords }) => resolve(pos.coords),
+          (err2: { code: number; message: string }) => reject(err2),
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
+        );
       },
-      { enableHighAccuracy: false, timeout: 8000 },
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 30000 },
     );
   });
 
@@ -276,39 +279,12 @@ export const useProjectDetailsPresenter = (
         return;
       }
 
-      const preflight = await preflightGps();
-      logger.log("[AddProof] gps preflight:", preflight);
-      if (!preflight.ok) {
-        if (preflight.reason === "denied") {
-          askOpenSettings(
-            "Location Permission Off",
-            "Enable Location permission for TranspiraFund in your device Settings, then try again.",
-          );
-        } else if (preflight.reason === "disabled") {
-          askOpenSettings(
-            "Turn On Location",
-            "Location Services is OFF on your device. Open Quick Settings and turn on Location, then try again.",
-          );
-        } else if (preflight.reason === "timeout") {
-          askRetry(
-            "No GPS Signal",
-            "Couldn't get a GPS fix. Step outside or near a window for clear sky, then try again.",
-            () => handleAddProof(m),
-          );
-        } else {
-          askRetry(
-            "Location Unavailable",
-            "Your device couldn't provide a location fix. Check that Location Services is on and try again.",
-            () => handleAddProof(m),
-          );
-        }
-        return;
-      }
-
       logger.log("[AddProof] launching camera...");
       const result = await launchCamera({
         mediaType: "photo",
-        quality: 1.0,
+        quality: 0.8,
+        maxWidth: 2048,
+        maxHeight: 2048,
         saveToPhotos: false,
         includeBase64: true,
       });
@@ -368,29 +344,31 @@ export const useProjectDetailsPresenter = (
           : typeof rawTs === "string" ? Date.parse(rawTs) || Date.now()
           : Date.now();
 
-        const userLocation = await new Promise<{
-          latitude: number;
-          longitude: number;
-          accuracy: number;
-        }>((resolve, reject) => {
-          Geolocation.getCurrentPosition(
-            (pos: { coords: { latitude: number; longitude: number; accuracy: number } }) =>
-              resolve(pos.coords),
-            (err: { code: number; message: string }) => reject(err),
-            { enableHighAccuracy: true, timeout: 15000 },
-          );
-        });
-
-        const { latitude, longitude, accuracy } = userLocation;
-
-
-        if (accuracy > 50) {
-          showToast(
-            "error",
-            "GPS signal is too weak. Move to a clearer area and try again.",
-          );
+        let userLocation: GeoCoords;
+        try {
+          userLocation = await fetchProofLocation();
+        } catch (err: any) {
+          if (err?.code === 1) {
+            askOpenSettings(
+              "Location Permission Off",
+              "Enable Location permission for TranspiraFund in your device Settings, then take the photo again.",
+            );
+          } else if (err?.code === 2) {
+            askOpenSettings(
+              "Turn On Location",
+              "Location Services is OFF on your device. Open Quick Settings and turn on Location, then take the photo again.",
+            );
+          } else {
+            askRetry(
+              "Couldn't Get a GPS Fix",
+              "Your phone couldn't pinpoint the site this time. Step into a more open area for clear sky, then take the photo again.",
+              () => handleAddProof(m),
+            );
+          }
           return;
         }
+
+        const { latitude, longitude, accuracy } = userLocation;
 
         logger.log("[AddProof] dispatching upload, base64 len:", asset.base64.length);
         startProofUpload({
@@ -413,7 +391,8 @@ export const useProjectDetailsPresenter = (
     ok: boolean;
     count?: number;
     errorCode?: "unauthenticated" | "invalid-argument" | "not-found"
-              | "permission-denied" | "already-exists" | "internal" | "unknown";
+              | "permission-denied" | "already-exists" | "resource-exhausted"
+              | "internal" | "unknown";
     errorMessage?: string;
   }> => {
     try {
@@ -431,6 +410,7 @@ export const useProjectDetailsPresenter = (
         raw.includes("not-found") ? "not-found" :
         raw.includes("permission-denied") ? "permission-denied" :
         raw.includes("already-exists") ? "already-exists" :
+        raw.includes("resource-exhausted") ? "resource-exhausted" :
         raw.includes("internal") ? "internal" : "unknown";
       return { ok: false, errorCode: code, errorMessage: error?.message };
     }

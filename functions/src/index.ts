@@ -393,80 +393,97 @@ function assertSameTenant(
 }
 
 
-const MILESTONE_TEMPLATES: Record<string, string[]> = {
+type MilestoneTemplate = {
+  title: string;
+  description: string;
+  durationDays: number;
+};
+
+const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
   "Building Construction": [
-    "Site Preparation & Mobilization",
-    "Excavation & Foundation Works",
-    "Structural Framing",
-    "Masonry & Wall Works",
-    "Roofing Works",
-    "Plumbing Rough-In",
-    "Electrical Rough-In",
-    "Finishing Works",
-    "Final Inspection & Turnover",
+    { title: "Site Preparation & Mobilization", description: "Site cleared and fenced. Staging area, temporary utilities, and contractor field office set up.", durationDays: 7 },
+    { title: "Excavation & Foundation Works",   description: "Excavation to design depth completed. Footings and foundation poured and cured to specifications.", durationDays: 21 },
+    { title: "Structural Framing",              description: "Columns, beams, and slabs formed and poured per approved structural drawings.", durationDays: 30 },
+    { title: "Masonry & Wall Works",            description: "CHB walls laid plumb and true. Lintels, jambs, and openings in place per plan.", durationDays: 21 },
+    { title: "Roofing Works",                   description: "Roof framing, sheets, gutters, and downspouts installed and watertight.", durationDays: 14 },
+    { title: "Plumbing Rough-In",               description: "Supply, waste, and vent lines roughed in and pressure-tested before closure.", durationDays: 10 },
+    { title: "Electrical Rough-In",             description: "Conduits, boxes, and feeders pulled to plan. Panel locations and grounding verified.", durationDays: 10 },
+    { title: "Finishing Works",                 description: "Plastering, painting, tile, ceiling, doors, and fixtures installed to spec.", durationDays: 28 },
+    { title: "Final Inspection & Turnover",     description: "Punch-list cleared. Final inspection passed and project formally turned over to HCSD.", durationDays: 7 },
   ],
   "Roads & Pavement": [
-    "Site Clearing & Survey",
-    "Subgrade Preparation",
-    "Base Course Installation",
-    "Drainage Provisions",
-    "Concreting & Paving Works",
-    "Curing Period",
-    "Line Striping & Signage",
-    "Final Inspection & Acceptance",
+    { title: "Site Clearing & Survey",          description: "Right-of-way cleared. Centerline staked and elevations verified against approved plans.", durationDays: 5 },
+    { title: "Subgrade Preparation",            description: "Subgrade graded, compacted, and proof-rolled to required density.", durationDays: 10 },
+    { title: "Base Course Installation",        description: "Aggregate base course placed, watered, and compacted to design thickness.", durationDays: 10 },
+    { title: "Drainage Provisions",             description: "Side ditches, culverts, and outfalls in place for proper road drainage.", durationDays: 7 },
+    { title: "Concreting & Paving Works",       description: "PCCP poured to design thickness with joints, dowels, and tie bars per spec.", durationDays: 21 },
+    { title: "Curing Period",                   description: "Concrete cured for the full design period before opening to traffic.", durationDays: 14 },
+    { title: "Line Striping & Signage",         description: "Pavement markings, road signs, and safety devices installed per MUTCD/DPWH.", durationDays: 3 },
+    { title: "Final Inspection & Acceptance",   description: "Final walk-through and acceptance by HCSD with all punch items cleared.", durationDays: 3 },
   ],
   "Drainage & Flood Control": [
-    "Site Survey & Staking",
-    "Excavation",
-    "Lean Concrete Works",
-    "Pipe & Culvert Laying",
-    "Manhole & Catch Basin Construction",
-    "Backfill & Compaction",
-    "Surface Restoration",
-    "Hydraulic Testing",
-    "Final Inspection & Acceptance",
+    { title: "Site Survey & Staking",           description: "Alignment staked and inverts checked against plan.", durationDays: 3 },
+    { title: "Excavation",                      description: "Trench excavated to required depth and width with safe slopes or shoring.", durationDays: 10 },
+    { title: "Lean Concrete Works",             description: "Lean concrete bedding poured to grade.", durationDays: 5 },
+    { title: "Pipe & Culvert Laying",           description: "RCPC/RCBC laid true to line and grade with joints sealed.", durationDays: 14 },
+    { title: "Manhole & Catch Basin Construction", description: "Manholes and catch basins built per detail with proper covers and frames.", durationDays: 10 },
+    { title: "Backfill & Compaction",           description: "Trenches backfilled in lifts and compacted to required density.", durationDays: 7 },
+    { title: "Surface Restoration",             description: "Disturbed surfaces restored to original condition or better.", durationDays: 5 },
+    { title: "Hydraulic Testing",               description: "Hydraulic test passed with no leaks observed.", durationDays: 2 },
+    { title: "Final Inspection & Acceptance",   description: "Final inspection passed and turnover documents signed.", durationDays: 3 },
   ],
   "Water Supply": [
-    "Site Survey & Staking",
-    "Trenching & Excavation",
-    "Mainline Pipe Laying",
-    "Valve & Fitting Installation",
-    "Service Connections",
-    "Pressure Testing",
-    "Disinfection & Flushing",
-    "Backfill & Surface Restoration",
-    "Final Inspection & Acceptance",
+    { title: "Site Survey & Staking",           description: "Pipeline alignment staked and depths verified against plan.", durationDays: 3 },
+    { title: "Trenching & Excavation",          description: "Trench excavated to required depth with safe slopes or shoring.", durationDays: 10 },
+    { title: "Mainline Pipe Laying",            description: "Main pipes laid to line and grade with proper bedding.", durationDays: 14 },
+    { title: "Valve & Fitting Installation",    description: "Gate valves, air valves, blow-offs, and fittings installed per plan.", durationDays: 5 },
+    { title: "Service Connections",             description: "Service taps and meter assemblies installed at each connection point.", durationDays: 7 },
+    { title: "Pressure Testing",                description: "System pressure-tested for the required duration with no leaks.", durationDays: 2 },
+    { title: "Disinfection & Flushing",         description: "Lines chlorinated, flushed, and bacteriologically cleared before use.", durationDays: 3 },
+    { title: "Backfill & Surface Restoration",  description: "Trenches backfilled and surfaces restored to original condition.", durationDays: 5 },
+    { title: "Final Inspection & Acceptance",   description: "Final inspection passed and system formally accepted.", durationDays: 3 },
   ],
   "Electrical & Lighting": [
-    "Site Survey & Fixture Layout",
-    "Post & Pole Installation",
-    "Conduit & Wiring Installation",
-    "Fixture Mounting",
-    "Panel Board & Meter Installation",
-    "Grounding Works",
-    "Circuit Testing & Commissioning",
-    "Final Inspection & Energization",
+    { title: "Site Survey & Fixture Layout",    description: "Pole positions and fixture layout staked against approved plan.", durationDays: 3 },
+    { title: "Post & Pole Installation",        description: "Poles set plumb on concrete foundations to required depth.", durationDays: 7 },
+    { title: "Conduit & Wiring Installation",   description: "Underground/aerial conduits and feeders pulled per electrical plan.", durationDays: 10 },
+    { title: "Fixture Mounting",                description: "Luminaires mounted, aimed, and secured per detail.", durationDays: 5 },
+    { title: "Panel Board & Meter Installation", description: "Panel boards, meters, and disconnects installed and labeled.", durationDays: 5 },
+    { title: "Grounding Works",                 description: "Grounding rods driven and bonded; resistance verified within spec.", durationDays: 3 },
+    { title: "Circuit Testing & Commissioning", description: "Each circuit tested and commissioned for safe operation.", durationDays: 3 },
+    { title: "Final Inspection & Energization", description: "Final inspection passed and system energized by utility.", durationDays: 3 },
   ],
   "Public Facility Rehabilitation": [
-    "Condition Assessment & Documentation",
-    "Demolition of Defective Elements",
-    "Structural Repairs",
-    "Plumbing & Electrical Repairs",
-    "Masonry & Finishing Repairs",
-    "Painting Works",
-    "Fixture Replacement",
-    "Final Inspection & Turnover",
+    { title: "Condition Assessment & Documentation", description: "Existing condition documented with photos and measurements before any work.", durationDays: 5 },
+    { title: "Demolition of Defective Elements", description: "Defective elements safely removed and hauled off-site.", durationDays: 7 },
+    { title: "Structural Repairs",              description: "Cracks, spalls, and structural defects repaired per engineering recommendation.", durationDays: 14 },
+    { title: "Plumbing & Electrical Repairs",   description: "Defective plumbing/electrical components replaced and tested.", durationDays: 10 },
+    { title: "Masonry & Finishing Repairs",     description: "Masonry, plaster, and finishes restored to original or better.", durationDays: 10 },
+    { title: "Painting Works",                  description: "Surfaces prepared and painted with required coats per spec.", durationDays: 7 },
+    { title: "Fixture Replacement",             description: "Worn fixtures replaced and tested for proper operation.", durationDays: 5 },
+    { title: "Final Inspection & Turnover",     description: "Final inspection passed and facility turned over for public use.", durationDays: 3 },
   ],
   "Other": [
-    "Project Mobilization",
-    "Site Preparation",
-    "Implementation Phase 1",
-    "Implementation Phase 2",
-    "Implementation Phase 3",
-    "Final Inspection",
-    "Project Turnover",
+    { title: "Project Mobilization",     description: "Contractor mobilized, permits secured, and pre-construction meeting held.", durationDays: 5 },
+    { title: "Site Preparation",         description: "Site cleared, staked, and prepared for construction activities.", durationDays: 7 },
+    { title: "Implementation Phase 1",   description: "First major implementation phase per the approved program of work.", durationDays: 21 },
+    { title: "Implementation Phase 2",   description: "Second major implementation phase per the approved program of work.", durationDays: 21 },
+    { title: "Implementation Phase 3",   description: "Third major implementation phase per the approved program of work.", durationDays: 21 },
+    { title: "Final Inspection",         description: "Final walk-through with HCSD; punch list issued and cleared.", durationDays: 5 },
+    { title: "Project Turnover",         description: "Formal acceptance and turnover documents signed by all parties.", durationDays: 3 },
   ],
 };
+
+function distributeWeights(count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(100 / count);
+  const weights = new Array<number>(count).fill(base);
+  let remainder = 100 - base * count;
+  for (let i = 0; i < count && remainder > 0; i++, remainder--) {
+    weights[i] += 1;
+  }
+  return weights;
+}
 
 export const generateMilestones = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) {
@@ -515,17 +532,23 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
 
   const batch = admin.firestore().batch();
   const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
+  const weights = distributeWeights(template.length);
+  const tenantId = typeof projectData.tenantId === "string" ? projectData.tenantId : undefined;
 
-  template.forEach((title, i) => {
+  template.forEach((phase, i) => {
     const docRef = msCollection.doc();
     batch.set(docRef, {
-      title,
+      title: phase.title,
+      description: phase.description,
+      weightPercentage: weights[i],
+      suggestedDurationDays: phase.durationDays,
       sequence: i + 1,
       status: "Pending",
       proofs: [],
       confirmed: false,
       generatedBy: "template",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(tenantId ? { tenantId } : {}),
     });
   });
 
@@ -971,11 +994,6 @@ export const uploadProofPhoto = onCall(
     }
     if (typeof latitude !== "number" || typeof longitude !== "number") {
       throw new HttpsError("invalid-argument", "Geotag coordinates are required.");
-    }
-
-
-    if (typeof accuracy === "number" && accuracy > 50) {
-      throw new HttpsError("invalid-argument", "GPS accuracy too low — move to a clearer area.");
     }
 
     if (typeof capturedAt === "number") {

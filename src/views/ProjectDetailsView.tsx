@@ -43,7 +43,8 @@ interface GenerateMilestonesResult {
   count?: number;
   errorCode?:
     | "unauthenticated" | "invalid-argument" | "not-found"
-    | "permission-denied" | "already-exists" | "internal" | "unknown";
+    | "permission-denied" | "already-exists" | "resource-exhausted"
+    | "internal" | "unknown";
   errorMessage?: string;
 }
 
