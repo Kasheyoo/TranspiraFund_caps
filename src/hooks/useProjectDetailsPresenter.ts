@@ -392,6 +392,7 @@ export const useProjectDetailsPresenter = (
     count?: number;
     errorCode?: "unauthenticated" | "invalid-argument" | "not-found"
               | "permission-denied" | "already-exists" | "resource-exhausted"
+              | "failed-precondition" | "deadline-exceeded" | "unavailable"
               | "internal" | "unknown";
     errorMessage?: string;
   }> => {
@@ -403,7 +404,9 @@ export const useProjectDetailsPresenter = (
       return { ok: true, count: result.count };
     } catch (error: any) {
       logger.error("Generate milestones error:", error);
-      const raw = (error?.code || error?.message || "").toLowerCase();
+      const raw = `${error?.code || ""} ${error?.message || ""}`
+        .toLowerCase()
+        .replace(/_/g, "-");
       const code: any =
         raw.includes("unauthenticated") ? "unauthenticated" :
         raw.includes("invalid-argument") ? "invalid-argument" :
@@ -411,6 +414,9 @@ export const useProjectDetailsPresenter = (
         raw.includes("permission-denied") ? "permission-denied" :
         raw.includes("already-exists") ? "already-exists" :
         raw.includes("resource-exhausted") ? "resource-exhausted" :
+        raw.includes("failed-precondition") ? "failed-precondition" :
+        raw.includes("deadline-exceeded") ? "deadline-exceeded" :
+        raw.includes("unavailable") ? "unavailable" :
         raw.includes("internal") ? "internal" : "unknown";
       return { ok: false, errorCode: code, errorMessage: error?.message };
     }

@@ -13,6 +13,27 @@ export function NotificationsScreen() {
         params: { projectId },
       });
     },
+    onNavigateToMilestone: (projectId: string, milestoneId: string) => {
+      navigation.navigate(ROUTES.PROJECTS, {
+        screen: ROUTES.PROJECT_DETAILS,
+        params: { projectId, milestoneId },
+      });
+    },
+    onNavigateToAuditTrail: () => {
+      navigation.navigate(ROUTES.SETTINGS, {
+        screen: ROUTES.AUDIT_TRAIL,
+      });
+    },
+    onNavigateToProfile: () => {
+      navigation.navigate(ROUTES.SETTINGS, {
+        screen: ROUTES.PROFILE,
+      });
+    },
+    onNavigateToSettings: () => {
+      navigation.navigate(ROUTES.SETTINGS, {
+        screen: "SettingsHome",
+      });
+    },
   });
 
   return <NotificationsView data={data} actions={actions} />;

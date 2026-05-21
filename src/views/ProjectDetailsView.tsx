@@ -44,6 +44,7 @@ interface GenerateMilestonesResult {
   errorCode?:
     | "unauthenticated" | "invalid-argument" | "not-found"
     | "permission-denied" | "already-exists" | "resource-exhausted"
+    | "failed-precondition" | "deadline-exceeded" | "unavailable"
     | "internal" | "unknown";
   errorMessage?: string;
 }

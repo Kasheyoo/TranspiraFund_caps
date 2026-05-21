@@ -5,10 +5,20 @@ import { logger } from "../utils/logger";
 
 interface UseNotificationPresenterArgs {
   onNavigateToProject?: (projectId: string) => void;
+  onNavigateToMilestone?: (projectId: string, milestoneId: string) => void;
+  onNavigateToAuditTrail?: () => void;
+  onNavigateToProfile?: () => void;
+  onNavigateToSettings?: () => void;
 }
 
 export const useNotificationPresenter = (
-  { onNavigateToProject }: UseNotificationPresenterArgs = {},
+  {
+    onNavigateToProject,
+    onNavigateToMilestone,
+    onNavigateToAuditTrail,
+    onNavigateToProfile,
+    onNavigateToSettings,
+  }: UseNotificationPresenterArgs = {},
 ) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,8 +52,36 @@ export const useNotificationPresenter = (
         logger.error("[Notifications] markAsRead error:", err);
       });
     }
-    if (item.targetType === "project" && item.targetId && onNavigateToProject) {
-      onNavigateToProject(item.targetId);
+    const meta = (item.metadata ?? {}) as { projectId?: string; milestoneId?: string };
+    const projectIdFromMeta = typeof meta.projectId === "string" ? meta.projectId : null;
+    const milestoneIdFromMeta = typeof meta.milestoneId === "string" ? meta.milestoneId : null;
+
+    switch (item.targetType) {
+      case "project":
+        if (item.targetId && onNavigateToProject) onNavigateToProject(item.targetId);
+        return;
+      case "milestone": {
+        const projectId = projectIdFromMeta;
+        const milestoneId = milestoneIdFromMeta ?? item.targetId;
+        if (projectId && milestoneId && onNavigateToMilestone) {
+          onNavigateToMilestone(projectId, milestoneId);
+        } else if (projectId && onNavigateToProject) {
+          onNavigateToProject(projectId);
+        }
+        return;
+      }
+      case "auditTrail":
+        if (onNavigateToAuditTrail) onNavigateToAuditTrail();
+        return;
+      case "profile":
+        if (onNavigateToProfile) onNavigateToProfile();
+        return;
+      case "settings":
+        if (onNavigateToSettings) onNavigateToSettings();
+        return;
+      default:
+        logger.log("[Notifications] no route handler for targetType:", item.targetType);
+        return;
     }
   };
 

@@ -143,7 +143,14 @@ export interface AppNotification {
   severity: "info" | "success" | "critical";
   title: string;
   body: string;
-  targetType: "project" | null;
+  targetType:
+    | "project"
+    | "milestone"
+    | "auditTrail"
+    | "profile"
+    | "settings"
+    | string
+    | null;
   targetId: string | null;
   metadata?: Record<string, unknown>;
   isRead: boolean;

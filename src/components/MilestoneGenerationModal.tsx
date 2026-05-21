@@ -28,6 +28,9 @@ type GenerateResult = {
     | "permission-denied"
     | "already-exists"
     | "resource-exhausted"
+    | "failed-precondition"
+    | "deadline-exceeded"
+    | "unavailable"
     | "internal"
     | "unknown";
   errorMessage?: string;
@@ -63,6 +66,9 @@ const ERROR_COPY: Record<string, { title: string; body: string; canRetry: boolea
   "permission-denied":{ title: "Not Authorized",      body: "Only the assigned Project Engineer can generate milestones for this project.",    canRetry: false },
   "already-exists":   { title: "Already Drafted",     body: "Milestones already exist for this project. Open the review to edit them.",        canRetry: false },
   "resource-exhausted":{ title: "Daily Limit Reached", body: "You've reached the daily milestone-generation limit. Please try again later.",   canRetry: false },
+  "failed-precondition":{ title: "Can't Generate Now", body: "This project isn't in a state where milestones can be generated. Refresh and try again.", canRetry: true },
+  "deadline-exceeded": { title: "Took Too Long",      body: "The request timed out. Check your connection and try again.",                     canRetry: true  },
+  unavailable:        { title: "Server Busy",         body: "The milestone generator is temporarily busy. Please try again in a moment.",      canRetry: true  },
   internal:           { title: "AI Unavailable",      body: "The milestone generator is temporarily unavailable. You can retry once.",         canRetry: true  },
   unknown:            { title: "Generation Failed",   body: "Something went wrong while generating milestones. Please try again.",             canRetry: true  },
 };
@@ -656,6 +662,11 @@ export const MilestoneGenerationModal = ({
                     </View>
                     <Text style={S.title}>{copy.title}</Text>
                     <Text style={S.desc}>{copy.body}</Text>
+                    {genResult.errorCode === "unknown" && genResult.errorMessage ? (
+                      <Text style={S.errorDetail} numberOfLines={4}>
+                        {genResult.errorMessage}
+                      </Text>
+                    ) : null}
                     <View style={S.actionRow}>
                       <TouchableOpacity style={S.secondaryBtn} onPress={onClose} activeOpacity={0.85}>
                         <Text style={S.secondaryBtnText}>Close</Text>
@@ -934,5 +945,10 @@ const S = StyleSheet.create({
   addErrorText: {
     fontSize: 12, fontWeight: "700", color: COLORS.error,
     marginTop: 10, lineHeight: 16,
+  },
+  errorDetail: {
+    fontSize: 11, color: COLORS.textTertiary,
+    textAlign: "center", marginTop: 6, lineHeight: 15,
+    fontStyle: "italic",
   },
 });

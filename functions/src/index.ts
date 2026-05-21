@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
+import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
@@ -14,6 +15,7 @@ admin.initializeApp();
 
 const gmailUser = defineSecret("GMAIL_USER");
 const gmailPass = defineSecret("GMAIL_PASS");
+const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
 
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
@@ -485,16 +487,167 @@ function distributeWeights(count: number): number[] {
   return weights;
 }
 
-export const generateMilestones = onCall({ region: "asia-southeast1" }, async (request) => {
+type AIGeneratedPhase = {
+  title: string;
+  description: string;
+  durationDays: number;
+};
+
+async function generateMilestonesWithAI(
+  projectData: Record<string, unknown>,
+  resolvedType: string,
+  referenceTemplate: MilestoneTemplate[],
+): Promise<AIGeneratedPhase[]> {
+  const apiKey = anthropicKey.value();
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY secret not configured");
+  }
+
+  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+
+  const name = str(projectData.projectName) || str(projectData.title);
+  const description = str(projectData.description);
+  const barangay = str(projectData.barangay);
+  const sitio = str(projectData.sitioStreet);
+  const fallbackLoc = str(projectData.location);
+  const location =
+    [sitio, barangay].filter((s) => s.length > 0).join(", ") || fallbackLoc;
+  const contractAmount = num(projectData.contractAmount) ?? num(projectData.budget);
+  const contractor = str(projectData.contractor);
+  const startDate =
+    str(projectData.officialDateStarted) || str(projectData.startDate);
+  const completionDate =
+    str(projectData.originalDateCompletion) || str(projectData.completionDate);
+  const fundingSource = str(projectData.fundingSource);
+
+  const projectContext = [
+    `Project name: ${name || "(unspecified)"}`,
+    `Project type: ${resolvedType}`,
+    `Description: ${description || "(none provided)"}`,
+    `Location: ${location || "(unspecified)"}`,
+    contractAmount !== null
+      ? `Contract amount: PHP ${contractAmount.toLocaleString("en-PH")}`
+      : "Contract amount: (unspecified)",
+    `Contractor: ${contractor || "(unspecified)"}`,
+    `Funding source: ${fundingSource || "(unspecified)"}`,
+    `Start date: ${startDate || "(unspecified)"}`,
+    `Target completion: ${completionDate || "(unspecified)"}`,
+  ].join("\n");
+
+  const referenceList = referenceTemplate
+    .map(
+      (p, i) =>
+        `${i + 1}. ${p.title} — ${p.description} (~${p.durationDays} days)`,
+    )
+    .join("\n");
+
+  const system =
+    "You are a senior LGU (Local Government Unit) infrastructure project planner in the Philippines, advising HCSD field engineers. Generate a realistic, project-specific milestone breakdown that an engineer can monitor with photo proofs. Use DPWH/HCSD-style phase terminology. Tailor descriptions to the actual project scope, contract amount, and timeline rather than restating generic templates verbatim.";
+
+  const userPrompt = `Generate milestones for this LGU infrastructure project. Use the reference template below as a starting point for "${resolvedType}" projects, but tailor titles, descriptions, and durations to the actual project context. Adjust phase count and durations based on contract amount, location specifics, and described scope. Each description must state measurable completion criteria a field engineer can verify with photos.
+
+PROJECT CONTEXT:
+${projectContext}
+
+REFERENCE TEMPLATE (standard phases for "${resolvedType}"):
+${referenceList}
+
+Return your milestone plan via the submit_milestones tool.`;
+
+  const client = new Anthropic({ apiKey });
+
+  const result = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 4096,
+    system,
+    tools: [
+      {
+        name: "submit_milestones",
+        description: "Submit the tailored milestone plan for this project.",
+        input_schema: {
+          type: "object",
+          properties: {
+            milestones: {
+              type: "array",
+              minItems: 5,
+              maxItems: 12,
+              items: {
+                type: "object",
+                properties: {
+                  title: {
+                    type: "string",
+                    description: "Phase title, ≤ 80 characters",
+                  },
+                  description: {
+                    type: "string",
+                    description:
+                      "Measurable completion criteria a field engineer can verify with photos, 40–250 characters",
+                  },
+                  durationDays: {
+                    type: "integer",
+                    description:
+                      "Estimated duration of this phase in days, between 1 and 180",
+                  },
+                },
+                required: ["title", "description", "durationDays"],
+              },
+            },
+          },
+          required: ["milestones"],
+        },
+      },
+    ],
+    tool_choice: { type: "tool", name: "submit_milestones" },
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const toolBlock = result.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || toolBlock.type !== "tool_use") {
+    throw new Error("AI response did not include a tool_use block");
+  }
+
+  const input = toolBlock.input as { milestones?: unknown };
+  if (!Array.isArray(input.milestones) || input.milestones.length === 0) {
+    throw new Error("AI returned no milestones");
+  }
+
+  const sanitized: AIGeneratedPhase[] = [];
+  for (const raw of input.milestones) {
+    if (!raw || typeof raw !== "object") continue;
+    const m = raw as { title?: unknown; description?: unknown; durationDays?: unknown };
+    const title = typeof m.title === "string" ? m.title.trim() : "";
+    const desc = typeof m.description === "string" ? m.description.trim() : "";
+    const days =
+      typeof m.durationDays === "number" && Number.isFinite(m.durationDays)
+        ? Math.round(m.durationDays)
+        : 0;
+    if (title.length === 0 || title.length > 120) continue;
+    if (desc.length === 0 || desc.length > 400) continue;
+    if (days < 1) continue;
+    sanitized.push({
+      title,
+      description: desc,
+      durationDays: Math.min(180, Math.max(1, days)),
+    });
+  }
+
+  if (sanitized.length < 3) {
+    throw new Error(
+      `AI returned too few valid milestones (${sanitized.length})`,
+    );
+  }
+
+  return sanitized;
+}
+
+export const generateMilestones = onCall(
+  { region: "asia-southeast1", secrets: [anthropicKey] },
+  async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
-
-  await enforceRateLimit(request.auth.uid, "generateMilestones", {
-    max: 10,
-    windowMs: 24 * 60 * 60 * 1000,
-    lockoutMs: 24 * 60 * 60 * 1000,
-  });
 
   const { projectId } = (request.data ?? {}) as { projectId?: string };
   if (!projectId) {
@@ -557,10 +710,30 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("already-exists", "Milestones already exist for this project.");
   }
 
-  const batch = admin.firestore().batch();
-  const weights = distributeWeights(template.length);
+  let phases: AIGeneratedPhase[] = template.map((p) => ({
+    title: p.title,
+    description: p.description,
+    durationDays: p.durationDays,
+  }));
+  let generatedBy: "ai" | "template" = "template";
+  let aiError: string | undefined;
 
-  template.forEach((phase, i) => {
+  try {
+    phases = await generateMilestonesWithAI(projectData, resolvedType, template);
+    generatedBy = "ai";
+  } catch (e: unknown) {
+    aiError =
+      e instanceof Error ? e.message : typeof e === "string" ? e : "unknown error";
+    console.warn(
+      `[generateMilestones] AI generation failed, using template fallback for project ${projectId}:`,
+      aiError,
+    );
+  }
+
+  const batch = admin.firestore().batch();
+  const weights = distributeWeights(phases.length);
+
+  phases.forEach((phase, i) => {
     const docRef = msCollection.doc();
     batch.set(docRef, {
       title: phase.title,
@@ -571,7 +744,7 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
       status: "Pending",
       proofs: [],
       confirmed: false,
-      generatedBy: "template",
+      generatedBy,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(tenantId ? { tenantId } : {}),
     });
@@ -581,11 +754,17 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
 
   const uid   = request.auth.uid;
   const email = request.auth.token.email || "";
-  const suffix = fellBack ? ` (fallback: unknown type "${rawType}")` : "";
+  const typeSuffix = fellBack ? ` (unknown type "${rawType}" → fallback "Other")` : "";
+  const sourceSuffix =
+    generatedBy === "ai"
+      ? ` · AI-generated (${phases.length} phases)`
+      : aiError
+      ? ` · template (AI failed: ${aiError.slice(0, 120)})`
+      : ` · template (${phases.length} phases)`;
   await logAuditTrail(
     uid, email,
     "Milestones Drafted",
-    `Project: ${projectId} (type: ${resolvedType})${suffix}`,
+    `Project: ${projectId} (type: ${resolvedType})${typeSuffix}${sourceSuffix}`,
     true,
     projectId,
     undefined,
@@ -594,8 +773,9 @@ export const generateMilestones = onCall({ region: "asia-southeast1" }, async (r
 
   return {
     success: true,
-    count: template.length,
+    count: phases.length,
     projectType: resolvedType,
+    generatedBy,
   };
 });
 
