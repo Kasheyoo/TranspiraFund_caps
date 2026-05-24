@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
+import { isProjectVerified } from "../utils/projectType";
+import type { DraftPhase } from "../utils/milestonePlan";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal";
 import { NtpViewerModal } from "../components/NtpViewerModal";
@@ -45,7 +47,7 @@ interface GenerateMilestonesResult {
     | "unauthenticated" | "invalid-argument" | "not-found"
     | "permission-denied" | "already-exists" | "resource-exhausted"
     | "failed-precondition" | "deadline-exceeded" | "unavailable"
-    | "internal" | "unknown";
+    | "internal" | "milestone-validation-failed" | "unknown";
   errorMessage?: string;
 }
 
@@ -56,15 +58,8 @@ interface ProjectDetailsActions {
   onGenerateMilestones: () => Promise<GenerateMilestonesResult>;
   onConfirmMilestone: (m: Milestone) => Promise<boolean>;
   onSaveAndConfirmAll: (
-    edits: Record<string, Partial<Milestone>>,
-  ) => Promise<boolean>;
-  onDeleteMilestone: (m: Milestone) => Promise<boolean>;
-  onAddManualMilestone: (input: {
-    title: string;
-    description: string;
-    weightPercentage: number;
-    suggestedDurationDays: number;
-  }) => Promise<{ ok: boolean; errorCode?: string; errorMessage?: string }>;
+    draft: DraftPhase[],
+  ) => Promise<{ ok: boolean; errorMessage?: string }>;
   onDismissToast?: () => void;
   onDismissConfirmModal?: () => void;
 }
@@ -721,12 +716,32 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               <Text style={D.emptyMsBody}>
                 Let AI draft the construction-phase milestones for this project. You'll review and confirm every phase before they're locked in.
               </Text>
-              <TouchableOpacity style={D.emptyMsBtn} onPress={handleGenerate} activeOpacity={0.85}>
-                {isLoading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <><FontAwesome5 name="magic" size={13} color="#fff" /><Text style={D.emptyMsBtnText}>Generate Phases</Text></>
-                }
-              </TouchableOpacity>
+              {!isProjectVerified(project.projectType) ? (
+                <>
+                  <View style={D.unverifiedBanner}>
+                    <FontAwesome5 name="exclamation-triangle" size={12} color={COLORS.warning} />
+                    <Text style={D.unverifiedBannerText}>
+                      This project has not been verified for infrastructure scope. Milestone generation will be unavailable until the Head of Construction Services re-verifies the project name.
+                    </Text>
+                  </View>
+                  <View
+                    style={[D.emptyMsBtn, D.emptyMsBtnDisabled]}
+                    testID="generate-disabled-unverified"
+                  >
+                    <FontAwesome5 name="magic" size={13} color={COLORS.textTertiary} />
+                    <Text style={[D.emptyMsBtnText, { color: COLORS.textTertiary }]}>
+                      Generate Phases
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <TouchableOpacity style={D.emptyMsBtn} onPress={handleGenerate} activeOpacity={0.85}>
+                  {isLoading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <><FontAwesome5 name="magic" size={13} color="#fff" /><Text style={D.emptyMsBtnText}>Generate Phases</Text></>
+                  }
+                </TouchableOpacity>
+              )}
             </View>
           ) : hasDraftsOnly ? (
             <View style={D.resumeCard}>
@@ -774,8 +789,6 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         onGenerate={actions.onGenerateMilestones}
         draftMilestones={draftMilestones}
         onSaveAndConfirmAll={actions.onSaveAndConfirmAll}
-        onDeleteMilestone={actions.onDeleteMilestone}
-        onAddManualMilestone={actions.onAddManualMilestone}
       />
 
       <NtpViewerModal
@@ -1057,7 +1070,22 @@ const D = StyleSheet.create({
     backgroundColor: COLORS.primary, paddingHorizontal: 22,
     paddingVertical: 12, borderRadius: 14, marginTop: 6,
   },
+  emptyMsBtnDisabled: {
+    backgroundColor: COLORS.track,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
   emptyMsBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  unverifiedBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1, borderColor: "#FDE68A",
+    borderRadius: 12, padding: 12, marginTop: 10, alignSelf: "stretch",
+  },
+  unverifiedBannerText: {
+    fontSize: 12, color: COLORS.warning, flex: 1,
+    lineHeight: 17, fontWeight: "600",
+  },
 
   resumeCard: {
     backgroundColor: COLORS.warningSoft,

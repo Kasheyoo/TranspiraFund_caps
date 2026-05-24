@@ -66,10 +66,20 @@ export const NotificationsView = ({ data, actions }: NotificationsViewProps) => 
   const { notifications = [], unreadCount = 0, isLoading = false } = data || {};
   const [activeFilter, setActiveFilter] = useState<FilterName>("All");
 
+  // Critical also surfaces delayed notifications to match the web app's system
+  // categorization. Canonical marker: metadata.kind === "delayed". Substring
+  // check on `action` is a fallback for existing data authored by the web side.
+  const isDelayed = (n: AppNotification): boolean => {
+    const action = (n.action ?? "").toLowerCase();
+    if (action.includes("delay")) return true;
+    const kind = (n.metadata as { kind?: string } | undefined)?.kind;
+    return kind === "delayed";
+  };
+
   const filteredData = useMemo(() => {
     if (activeFilter === "Unread")   return notifications.filter((n) => !n.isRead);
     if (activeFilter === "Read")     return notifications.filter((n) =>  n.isRead);
-    if (activeFilter === "Critical") return notifications.filter((n) => n.severity === "critical");
+    if (activeFilter === "Critical") return notifications.filter((n) => n.severity === "critical" || isDelayed(n));
     return notifications;
   }, [notifications, activeFilter]);
 

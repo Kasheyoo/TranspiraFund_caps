@@ -23,6 +23,7 @@ const STACK_SCREEN_OPTIONS = {
   headerShown: false,
   animation: "slide_from_right" as const,
   animationDuration: 280,
+  gestureEnabled: true,
 };
 
 function DashboardNavigator() {

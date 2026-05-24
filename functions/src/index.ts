@@ -476,6 +476,21 @@ const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
   ],
 };
 
+// Maps a verified mobile project-type value to its milestone template. A
+// projectType that is missing, "unknown", or not in this map is treated as
+// unverified and rejected upstream with a `failed-precondition`.
+const PROJECT_TYPE_TO_TEMPLATE: Record<string, string> = {
+  road_concreting: "Roads & Pavement",
+  drainage_construction: "Drainage & Flood Control",
+  multi_purpose_building: "Building Construction",
+  covered_court: "Building Construction",
+  day_care_center: "Building Construction",
+  footbridge: "Building Construction",
+  slope_protection: "Drainage & Flood Control",
+  waterworks: "Water Supply",
+  electrification: "Electrical & Lighting",
+};
+
 function distributeWeights(count: number): number[] {
   if (count <= 0) return [];
   const base = Math.floor(100 / count);
@@ -605,12 +620,18 @@ Return your milestone plan via the submit_milestones tool.`;
 
   const toolBlock = result.content.find((b) => b.type === "tool_use");
   if (!toolBlock || toolBlock.type !== "tool_use") {
-    throw new Error("AI response did not include a tool_use block");
+    throw new HttpsError(
+      "internal",
+      "milestone-validation-failed: AI response did not include a tool_use block",
+    );
   }
 
   const input = toolBlock.input as { milestones?: unknown };
   if (!Array.isArray(input.milestones) || input.milestones.length === 0) {
-    throw new Error("AI returned no milestones");
+    throw new HttpsError(
+      "internal",
+      "milestone-validation-failed: AI returned no milestones",
+    );
   }
 
   const sanitized: AIGeneratedPhase[] = [];
@@ -634,8 +655,9 @@ Return your milestone plan via the submit_milestones tool.`;
   }
 
   if (sanitized.length < 3) {
-    throw new Error(
-      `AI returned too few valid milestones (${sanitized.length})`,
+    throw new HttpsError(
+      "internal",
+      `milestone-validation-failed: AI returned too few valid milestones (${sanitized.length})`,
     );
   }
 
@@ -667,11 +689,16 @@ export const generateMilestones = onCall(
   }
 
 
-  const KNOWN_TYPES = new Set(Object.keys(MILESTONE_TEMPLATES));
   const rawType = typeof projectData.projectType === "string" ? projectData.projectType : "";
-  const resolvedType = KNOWN_TYPES.has(rawType) ? rawType : "Other";
+  const templateKey = PROJECT_TYPE_TO_TEMPLATE[rawType];
+  if (!templateKey) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Project has not been verified as a city-funded barangay-level infrastructure project.",
+    );
+  }
+  const resolvedType = templateKey;
   const template = MILESTONE_TEMPLATES[resolvedType];
-  const fellBack = rawType !== resolvedType;
 
 
   const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
@@ -722,6 +749,10 @@ export const generateMilestones = onCall(
     phases = await generateMilestonesWithAI(projectData, resolvedType, template);
     generatedBy = "ai";
   } catch (e: unknown) {
+    // Validation failures (bad AI output) must reach the client as
+    // `milestone-validation-failed`. Only transient/API errors fall back to
+    // the static template.
+    if (e instanceof HttpsError) throw e;
     aiError =
       e instanceof Error ? e.message : typeof e === "string" ? e : "unknown error";
     console.warn(
@@ -754,7 +785,6 @@ export const generateMilestones = onCall(
 
   const uid   = request.auth.uid;
   const email = request.auth.token.email || "";
-  const typeSuffix = fellBack ? ` (unknown type "${rawType}" → fallback "Other")` : "";
   const sourceSuffix =
     generatedBy === "ai"
       ? ` · AI-generated (${phases.length} phases)`
@@ -764,7 +794,7 @@ export const generateMilestones = onCall(
   await logAuditTrail(
     uid, email,
     "Milestones Drafted",
-    `Project: ${projectId} (type: ${resolvedType})${typeSuffix}${sourceSuffix}`,
+    `Project: ${projectId} (type: ${rawType} → template "${resolvedType}")${sourceSuffix}`,
     true,
     projectId,
     undefined,
@@ -938,6 +968,204 @@ export const addManualMilestone = onCall({ region: "asia-southeast1" }, async (r
 
   return { success: true, milestoneId: newDoc.id, sequence: maxSeq + 1 };
 });
+
+
+type PhasePayload = {
+  id?: string;
+  sequence?: number;
+  title?: string;
+  description?: string;
+  weightPercentage?: number;
+  suggestedDurationDays?: number;
+  isNew?: boolean;
+  pendingDelete?: boolean;
+};
+
+export const confirmMilestonePlan = onCall(
+  { region: "asia-southeast1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const { projectId, phases } = (request.data ?? {}) as {
+      projectId?: string;
+      phases?: PhasePayload[];
+    };
+
+    if (!projectId || typeof projectId !== "string") {
+      throw new HttpsError("invalid-argument", "projectId is required.");
+    }
+    if (!Array.isArray(phases) || phases.length === 0) {
+      throw new HttpsError("invalid-argument", "phases must be a non-empty array.");
+    }
+    if (phases.length > 12) {
+      throw new HttpsError("invalid-argument", "Cannot confirm more than 12 phases.");
+    }
+
+    const projectRef = admin.firestore().doc(`projects/${projectId}`);
+    const projectSnap = await projectRef.get();
+    if (!projectSnap.exists) {
+      throw new HttpsError("not-found", "Project not found.");
+    }
+    const projectData = projectSnap.data() ?? {};
+    assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
+    if (
+      projectData.projectEngineer &&
+      projectData.projectEngineer !== request.auth.uid
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the assigned engineer can confirm milestones.",
+      );
+    }
+
+    const survivors = phases.filter((p) => !p.pendingDelete);
+    if (survivors.length === 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "At least one phase must remain after deletions.",
+      );
+    }
+
+    const sortedSeq = survivors
+      .map((p) => p.sequence)
+      .filter((s): s is number => typeof s === "number")
+      .sort((a, b) => a - b);
+    if (sortedSeq.length !== survivors.length) {
+      throw new HttpsError("invalid-argument", "Every phase requires a sequence.");
+    }
+    for (let i = 0; i < sortedSeq.length; i += 1) {
+      if (sortedSeq[i] !== i + 1) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Phase sequences must be dense 1..N.",
+        );
+      }
+    }
+
+    let weightSum = 0;
+    for (const p of survivors) {
+      if (
+        typeof p.title !== "string" ||
+        p.title.trim().length === 0 ||
+        p.title.length > 120
+      ) {
+        throw new HttpsError("invalid-argument", "Each phase needs a valid title.");
+      }
+      if (
+        p.description !== undefined &&
+        (typeof p.description !== "string" || p.description.length > 600)
+      ) {
+        throw new HttpsError("invalid-argument", "Description must be ≤ 600 chars.");
+      }
+      if (
+        typeof p.weightPercentage !== "number" ||
+        !Number.isFinite(p.weightPercentage) ||
+        p.weightPercentage < 1 ||
+        p.weightPercentage > 100
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "weightPercentage must be 1..100.",
+        );
+      }
+      if (
+        typeof p.suggestedDurationDays !== "number" ||
+        !Number.isFinite(p.suggestedDurationDays) ||
+        p.suggestedDurationDays < 1 ||
+        p.suggestedDurationDays > 365
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "suggestedDurationDays must be 1..365.",
+        );
+      }
+      weightSum += p.weightPercentage;
+    }
+    if (weightSum !== 100) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Weights must total exactly 100 (got ${weightSum}).`,
+      );
+    }
+
+    const milestonesCol = admin
+      .firestore()
+      .collection(`projects/${projectId}/milestones`);
+    const existingSnap = await milestonesCol.get();
+    const existingById = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+    existingSnap.docs.forEach((d) => existingById.set(d.id, d));
+
+    // Reject confirming if any existing doc is already confirmed (lockdown).
+    for (const d of existingSnap.docs) {
+      if (d.data().confirmed === true) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Milestones already confirmed; reopen via HCSD to edit.",
+        );
+      }
+    }
+
+    const tenantId =
+      typeof projectData.tenantId === "string"
+        ? projectData.tenantId
+        : undefined;
+    const batch = admin.firestore().batch();
+
+    // Deletes
+    for (const p of phases) {
+      if (p.pendingDelete && p.id && existingById.has(p.id)) {
+        batch.delete(milestonesCol.doc(p.id));
+      }
+    }
+
+    // Updates + creates
+    for (const p of survivors) {
+      const baseFields = {
+        title: (p.title ?? "").trim(),
+        description: typeof p.description === "string"
+          ? p.description.trim()
+          : "",
+        weightPercentage: p.weightPercentage as number,
+        suggestedDurationDays: p.suggestedDurationDays as number,
+        sequence: p.sequence as number,
+        confirmed: true,
+      };
+
+      if (p.isNew || !p.id || !existingById.has(p.id)) {
+        const newRef = milestonesCol.doc();
+        batch.set(newRef, {
+          ...baseFields,
+          status: "Pending",
+          proofs: [],
+          generatedBy: "manual",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(tenantId ? { tenantId } : {}),
+        });
+      } else {
+        batch.update(milestonesCol.doc(p.id), baseFields);
+      }
+    }
+
+    await batch.commit();
+
+    const uid = request.auth.uid;
+    const email = request.auth.token.email || "";
+    await logAuditTrail(
+      uid,
+      email,
+      "Milestones Confirmed",
+      `Project ${projectId} · ${survivors.length} phase${survivors.length !== 1 ? "s" : ""} confirmed`,
+      true,
+      projectId,
+      undefined,
+      tenantId,
+    );
+
+    return { success: true, count: survivors.length };
+  },
+);
 
 
 export const markProjectOngoing = onCall({ region: "asia-southeast1" }, async (request) => {

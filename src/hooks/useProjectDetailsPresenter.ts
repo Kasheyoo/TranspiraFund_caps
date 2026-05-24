@@ -13,9 +13,11 @@ import {
 import { ProjectModel } from "../models/ProjectModel";
 import { requireAuth } from "../utils/authGuard";
 import { logger } from "../utils/logger";
+import { projectTypeLabel } from "../utils/projectType";
 import { requireTenantId } from "../utils/tenant";
 import { useAuth } from "../context/AuthContext";
 import type { Milestone, Project } from "../types";
+import type { DraftPhase } from "../utils/milestonePlan";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = [
@@ -393,7 +395,7 @@ export const useProjectDetailsPresenter = (
     errorCode?: "unauthenticated" | "invalid-argument" | "not-found"
               | "permission-denied" | "already-exists" | "resource-exhausted"
               | "failed-precondition" | "deadline-exceeded" | "unavailable"
-              | "internal" | "unknown";
+              | "internal" | "milestone-validation-failed" | "unknown";
     errorMessage?: string;
   }> => {
     try {
@@ -401,6 +403,12 @@ export const useProjectDetailsPresenter = (
       const result = (await callFn("generateMilestones", { projectId })) as {
         success: boolean; count: number;
       };
+      callFn("logMobileAuditTrail", {
+        action: "Milestones Generated",
+        details: `Milestones generated for ${project?.projectName ?? project?.title ?? "project"} (type: ${projectTypeLabel(project?.projectType)})`,
+        targetId: projectId,
+        syncToHCSD: true,
+      }).catch(() => {});
       return { ok: true, count: result.count };
     } catch (error: any) {
       logger.error("Generate milestones error:", error);
@@ -417,6 +425,7 @@ export const useProjectDetailsPresenter = (
         raw.includes("failed-precondition") ? "failed-precondition" :
         raw.includes("deadline-exceeded") ? "deadline-exceeded" :
         raw.includes("unavailable") ? "unavailable" :
+        raw.includes("milestone-validation-failed") ? "milestone-validation-failed" :
         raw.includes("internal") ? "internal" : "unknown";
       return { ok: false, errorCode: code, errorMessage: error?.message };
     }
@@ -438,35 +447,40 @@ export const useProjectDetailsPresenter = (
   };
 
   const handleSaveAndConfirmAll = async (
-    edits: Record<string, Partial<Milestone>>,
-  ): Promise<boolean> => {
-    if (!project) return false;
+    draft: DraftPhase[],
+  ): Promise<{ ok: boolean; errorMessage?: string }> => {
+    if (!project) return { ok: false, errorMessage: "Project not loaded." };
     try {
       requireAuth();
-      const tid = requireTenantId();
-      const drafts = (project.milestones ?? []).filter((m) => m.confirmed === false);
-      if (drafts.length === 0) return true;
+      const payload = draft.map((p) => ({
+        id: p._isNew ? undefined : p.id,
+        sequence: p.sequence,
+        title: p.title,
+        description: p.description ?? "",
+        weightPercentage: p.weightPercentage,
+        suggestedDurationDays: p.suggestedDurationDays,
+        isNew: p._isNew === true,
+        pendingDelete: p._pendingDelete === true,
+      }));
 
-      await Promise.all(
-        drafts.map((m) => {
-          const ref = ProjectModel.milestoneRef(project.id, m.id);
-          const changes = edits[m.id] ?? {};
-          return updateDoc(ref, { ...changes, confirmed: true, tenantId: tid });
-        }),
-      );
+      await callFn("confirmMilestonePlan", {
+        projectId: project.id,
+        phases: payload,
+      });
 
+      const survivorCount = draft.filter((p) => !p._pendingDelete).length;
       callFn("logMobileAuditTrail", {
         action: "Milestones Confirmed",
-        details: `${drafts.length} phase${drafts.length !== 1 ? "s" : ""} confirmed for ${project.projectName ?? project.title ?? "project"}`,
+        details: `${survivorCount} phase${survivorCount !== 1 ? "s" : ""} confirmed for ${project.projectName ?? project.title ?? "project"} (type: ${projectTypeLabel(project.projectType)})`,
         targetId: project.id,
         syncToHCSD: true,
       }).catch(() => {});
 
-      return true;
-    } catch (error) {
+      return { ok: true };
+    } catch (error: any) {
       logger.error("Confirm all milestones error:", error);
       showToast("error", "Failed to confirm milestones. Please try again.");
-      return false;
+      return { ok: false, errorMessage: error?.message };
     }
   };
 

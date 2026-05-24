@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 import { ProjectModel } from "../models/ProjectModel";
 import type { Project } from "../types";
+import { isProjectVerified, projectTypeLabel } from "../utils/projectType";
 
 interface ProjectListData {
   projects: Project[];
@@ -141,6 +142,19 @@ const ProjectCard = ({ item, onPress }: { item: Project; onPress: () => void }) 
             <Text style={S.cardTitle} numberOfLines={2}>
               {item.title || item.projectName || "Untitled Project"}
             </Text>
+            <View style={[
+              S.typeBadge,
+              isProjectVerified(item.projectType)
+                ? { backgroundColor: COLORS.primarySoft }
+                : { backgroundColor: COLORS.track },
+            ]}>
+              <Text style={[
+                S.typeBadgeText,
+                { color: isProjectVerified(item.projectType) ? COLORS.primary : COLORS.textTertiary },
+              ]} numberOfLines={1}>
+                {projectTypeLabel(item.projectType)}
+              </Text>
+            </View>
           </View>
 
           <View style={[S.badge, { backgroundColor: sc.bg }]}>
@@ -389,6 +403,15 @@ const S = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, flexShrink: 0,
   },
   badgeText: { fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
+  typeBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    marginTop: 4, maxWidth: 160,
+  },
+  typeBadgeText: {
+    fontSize: 9, fontWeight: "800",
+    letterSpacing: 0.3, textTransform: "uppercase",
+  },
 
 
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 },

@@ -1,9 +1,7 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,8 +13,26 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+} from "react-native-reanimated";
 import { COLORS } from "../constants";
 import type { Milestone } from "../types";
+import {
+  applyAddition,
+  applyDeletion,
+  applyDurationOverride,
+  applyTextEdit,
+  cumulativeDayMarkers,
+  fromMilestones,
+  MAX_PHASES,
+  totalWeight as totalWeightOf,
+  validateDraft,
+  type DraftPhase,
+} from "../utils/milestonePlan";
 
 type GenerateResult = {
   ok: boolean;
@@ -32,6 +48,7 @@ type GenerateResult = {
     | "deadline-exceeded"
     | "unavailable"
     | "internal"
+    | "milestone-validation-failed"
     | "unknown";
   errorMessage?: string;
 };
@@ -44,17 +61,8 @@ interface MilestoneGenerationModalProps {
   draftMilestones: Milestone[];
 
   onSaveAndConfirmAll: (
-    edits: Record<string, Partial<Milestone>>,
-  ) => Promise<boolean>;
-
-  onDeleteMilestone: (m: Milestone) => Promise<boolean>;
-
-  onAddManualMilestone: (input: {
-    title: string;
-    description: string;
-    weightPercentage: number;
-    suggestedDurationDays: number;
-  }) => Promise<{ ok: boolean; errorCode?: string; errorMessage?: string }>;
+    draft: DraftPhase[],
+  ) => Promise<{ ok: boolean; errorMessage?: string }>;
 }
 
 type Phase = "idle" | "loading" | "review" | "confirming" | "confirmed" | "error";
@@ -66,7 +74,8 @@ const ERROR_COPY: Record<string, { title: string; body: string; canRetry: boolea
   "permission-denied":{ title: "Not Authorized",      body: "Only the assigned Project Engineer can generate milestones for this project.",    canRetry: false },
   "already-exists":   { title: "Already Drafted",     body: "Milestones already exist for this project. Open the review to edit them.",        canRetry: false },
   "resource-exhausted":{ title: "Daily Limit Reached", body: "You've reached the daily milestone-generation limit. Please try again later.",   canRetry: false },
-  "failed-precondition":{ title: "Can't Generate Now", body: "This project isn't in a state where milestones can be generated. Refresh and try again.", canRetry: true },
+  "failed-precondition":{ title: "Project classification incomplete", body: "This project's name has not been verified as a city-funded barangay-level infrastructure project. Please contact the Head of Construction Services to re-verify the project before generating milestones.", canRetry: false },
+  "milestone-validation-failed":{ title: "Milestones could not be generated", body: "The system was unable to produce milestones that align with the project's infrastructure scope and duration. Please notify the Head of Construction Services.", canRetry: false },
   "deadline-exceeded": { title: "Took Too Long",      body: "The request timed out. Check your connection and try again.",                     canRetry: true  },
   unavailable:        { title: "Server Busy",         body: "The milestone generator is temporarily busy. Please try again in a moment.",      canRetry: true  },
   internal:           { title: "AI Unavailable",      body: "The milestone generator is temporarily unavailable. You can retry once.",         canRetry: true  },
@@ -79,72 +88,69 @@ export const MilestoneGenerationModal = ({
   onGenerate,
   draftMilestones,
   onSaveAndConfirmAll,
-  onDeleteMilestone,
-  onAddManualMilestone,
 }: MilestoneGenerationModalProps) => {
   const [phase, setPhase] = useState<Phase>("idle");
   const [genResult, setGenResult] = useState<GenerateResult | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Milestone | null>(null);
-  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
-  const [edits, setEdits] = useState<Record<string, Partial<Milestone>>>({});
+  // Local draft array — every edit/add/delete goes through milestonePlan
+  // utilities so weight totals stay at 100% and sequences stay dense 1..N.
+  const [draft, setDraft] = useState<DraftPhase[]>([]);
 
   const [isAdding, setIsAdding] = useState(false);
-  const [addBusy, setAddBusy] = useState(false);
   const [addTitle, setAddTitle] = useState("");
   const [addDescription, setAddDescription] = useState("");
-  const [addWeight, setAddWeight] = useState("");
   const [addDuration, setAddDuration] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
 
-  const cardScale = useRef(new Animated.Value(0.94)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-
+  // Keep the native Modal mounted long enough for the reanimated exit
+  // animation to play before unmounting.
+  const EXIT_DURATION_MS = 240;
+  const [mounted, setMounted] = useState(visible);
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(cardScale,   { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(cardOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
-    } else {
-      cardScale.setValue(0.94);
-      cardOpacity.setValue(0);
+      setMounted(true);
+      return;
     }
-  }, [visible, cardScale, cardOpacity]);
+    if (!mounted) return;
+    const t = setTimeout(() => setMounted(false), EXIT_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [visible, mounted]);
 
   const resetAddState = () => {
     setIsAdding(false);
-    setAddBusy(false);
     setAddTitle("");
     setAddDescription("");
-    setAddWeight("");
     setAddDuration("");
     setAddError(null);
   };
 
   useEffect(() => {
-    setEdits({});
     setGenResult(null);
-    setPendingDelete(null);
-    setDeleteBusy(false);
+    setPendingDeleteId(null);
     resetAddState();
-    if (visible && draftMilestones.length > 0) setPhase("review");
-    else setPhase("idle");
+    if (visible && draftMilestones.length > 0) {
+      setDraft(fromMilestones(draftMilestones));
+      setPhase("review");
+    } else {
+      setDraft([]);
+      setPhase("idle");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   useEffect(() => {
     if (phase === "loading" && draftMilestones.length > 0) {
+      setDraft(fromMilestones(draftMilestones));
       setPhase("review");
     }
-  }, [phase, draftMilestones.length]);
+  }, [phase, draftMilestones]);
 
   const handleStart = async () => {
     setPhase("loading");
     const r = await onGenerate();
     setGenResult(r);
     if (!r.ok) setPhase("error");
-
   };
 
   const handleRetry = () => {
@@ -152,45 +158,31 @@ export const MilestoneGenerationModal = ({
     setPhase("idle");
   };
 
-  const sortedDrafts = useMemo(
-    () => [...draftMilestones].sort((a, b) => (a.sequence || 0) - (b.sequence || 0)),
-    [draftMilestones],
+  const activeDraft = useMemo(
+    () => draft.filter((p) => !p._pendingDelete),
+    [draft],
   );
 
-  const updateEdit = (id: string, patch: Partial<Milestone>) => {
-    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  const dayMarkers = useMemo(() => cumulativeDayMarkers(draft), [draft]);
+
+  const handleTextChange = (id: string, field: "title" | "description", value: string) => {
+    setDraft((prev) => applyTextEdit(prev, id, field, value));
   };
 
-  const valueFor = <K extends keyof Milestone>(m: Milestone, key: K): Milestone[K] => {
-    const e = edits[m.id];
-    return (e && key in e ? (e[key] as Milestone[K]) : m[key]);
+  const handleDurationChange = (id: string, raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, "");
+    const num = cleaned === "" ? 1 : Math.min(365, Math.max(1, parseInt(cleaned, 10)));
+    setDraft((prev) => applyDurationOverride(prev, id, num));
   };
 
-  const handleDelete = (m: Milestone) => {
-    setPendingDelete(m);
-  };
+  const handleDelete = (id: string) => setPendingDeleteId(id);
 
-  const cancelPendingDelete = () => {
-    if (deleteBusy) return;
-    setPendingDelete(null);
-  };
+  const cancelPendingDelete = () => setPendingDeleteId(null);
 
-  const confirmPendingDelete = async () => {
-    const m = pendingDelete;
-    if (!m || deleteBusy) return;
-    setDeleteBusy(true);
-    try {
-      const ok = await onDeleteMilestone(m);
-      if (ok) {
-        setEdits((prev) => {
-          const { [m.id]: _drop, ...rest } = prev;
-          return rest;
-        });
-      }
-    } finally {
-      setDeleteBusy(false);
-      setPendingDelete(null);
-    }
+  const confirmPendingDelete = () => {
+    if (!pendingDeleteId) return;
+    setDraft((prev) => applyDeletion(prev, pendingDeleteId));
+    setPendingDeleteId(null);
   };
 
   const startAdding = () => {
@@ -199,93 +191,89 @@ export const MilestoneGenerationModal = ({
   };
 
   const cancelAdding = () => {
-    if (addBusy) return;
     setIsAdding(false);
     setAddError(null);
   };
 
-  const confirmAdd = async () => {
-    if (addBusy) return;
+  const confirmAdd = () => {
     const title = addTitle.trim();
     const description = addDescription.trim();
-    const w = parseFloat(addWeight);
     const d = parseFloat(addDuration);
 
     if (title.length === 0) {
       setAddError("Title is required.");
       return;
     }
-    if (!Number.isFinite(w) || w < 0 || w > 100) {
-      setAddError("Weight must be a number between 0 and 100.");
-      return;
-    }
     if (!Number.isFinite(d) || d < 1 || d > 365) {
       setAddError("Duration must be a number of days between 1 and 365.");
       return;
     }
-
-    setAddError(null);
-    setAddBusy(true);
-    const result = await onAddManualMilestone({
-      title,
-      description,
-      weightPercentage: w,
-      suggestedDurationDays: Math.floor(d),
-    });
-    setAddBusy(false);
-
-    if (result.ok) {
-      resetAddState();
-    } else {
-      setAddError(result.errorMessage || "Failed to add the milestone. Please try again.");
+    if (activeDraft.length >= MAX_PHASES) {
+      setAddError(`Cannot exceed ${MAX_PHASES} phases.`);
+      return;
     }
+
+    const newId = `new_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    setDraft((prev) =>
+      applyAddition(prev, {
+        id: newId,
+        title,
+        description,
+        suggestedDurationDays: Math.floor(d),
+      }),
+    );
+    resetAddState();
   };
 
-  const handleConfirmAll = async () => {
-    if (sortedDrafts.length === 0) return;
-    setPhase("confirming");
-    const ok = await onSaveAndConfirmAll(edits);
-    if (ok) {
-      setPhase("confirmed");
+  const validation = useMemo(() => validateDraft(draft), [draft]);
+  const totalWeight = useMemo(() => totalWeightOf(draft), [draft]);
+  const canConfirm = validation.ok && activeDraft.length > 0;
 
+  const handleConfirmAll = async () => {
+    if (!canConfirm) return;
+    setPhase("confirming");
+    const result = await onSaveAndConfirmAll(draft);
+    if (result.ok) {
+      setPhase("confirmed");
       setTimeout(onClose, 1400);
     } else {
       setPhase("review");
     }
   };
 
-  const totalWeight = sortedDrafts.reduce((sum, m) => {
-    const w = valueFor(m, "weightPercentage");
-    return sum + (typeof w === "number" ? w : 0);
-  }, 0);
-
   const allowBackdropClose = phase !== "loading" && phase !== "confirming";
+
+  if (!mounted) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent
       onRequestClose={allowBackdropClose ? onClose : undefined}
     >
-      <TouchableWithoutFeedback onPress={allowBackdropClose ? onClose : undefined}>
-        <View style={S.backdrop} />
-      </TouchableWithoutFeedback>
+      {visible ? (
+        <>
+          <TouchableWithoutFeedback onPress={allowBackdropClose ? onClose : undefined}>
+            <Animated.View
+              entering={FadeIn.duration(180)}
+              exiting={FadeOut.duration(180)}
+              style={S.backdrop}
+            />
+          </TouchableWithoutFeedback>
 
-      <KeyboardAvoidingView
-        style={S.kbWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        pointerEvents="box-none"
-      >
-        <Animated.View
-          style={[
-            S.card,
-            phase === "review" && S.cardReview,
-            { transform: [{ scale: cardScale }], opacity: cardOpacity },
-          ]}
-          pointerEvents="box-none"
-        >
+          <KeyboardAvoidingView
+            style={S.kbWrap}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            pointerEvents="box-none"
+          >
+            <Animated.View
+              entering={ZoomIn.duration(220).springify().damping(16)}
+              exiting={ZoomOut.duration(200)}
+              style={[S.card, phase === "review" && S.cardReview]}
+              pointerEvents="box-none"
+            >
           <View style={S.orb1} /><View style={S.orb2} />
 
           {phase === "idle" && (
@@ -363,11 +351,11 @@ export const MilestoneGenerationModal = ({
                   </View>
                   <Text style={S.reviewTitle}>Review Milestones</Text>
                   <Text style={S.reviewSub}>
-                    {sortedDrafts.length} phase{sortedDrafts.length !== 1 ? "s" : ""} drafted ·{" "}
-                    <Text style={totalWeight !== 100 && sortedDrafts.length > 0 ? S.weightFlag : undefined}>
+                    {activeDraft.length} phase{activeDraft.length !== 1 ? "s" : ""} ·{" "}
+                    <Text style={totalWeight !== 100 && activeDraft.length > 0 ? S.weightFlag : undefined}>
                       {totalWeight}% total weight
                     </Text>
-                    {totalWeight !== 100 && sortedDrafts.length > 0 ? " · must equal 100%" : ""}
+                    {!validation.ok && activeDraft.length > 0 ? ` · ${validation.reason}` : ""}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -419,18 +407,6 @@ export const MilestoneGenerationModal = ({
 
                     <View style={S.addRow}>
                       <View style={S.addCol}>
-                        <Text style={S.fieldLabel}>WEIGHT (%)</Text>
-                        <TextInput
-                          value={addWeight}
-                          onChangeText={setAddWeight}
-                          placeholder="0–100"
-                          placeholderTextColor={COLORS.textTertiary}
-                          style={S.numInput}
-                          keyboardType="numeric"
-                          maxLength={5}
-                        />
-                      </View>
-                      <View style={S.addCol}>
                         <Text style={S.fieldLabel}>DURATION (days)</Text>
                         <TextInput
                           value={addDuration}
@@ -442,13 +418,22 @@ export const MilestoneGenerationModal = ({
                           maxLength={3}
                         />
                       </View>
+                      <View style={S.addCol}>
+                        <Text style={S.fieldLabel}>WEIGHT</Text>
+                        <View style={S.numReadonly}>
+                          <Text style={S.numReadonlyText}>Auto</Text>
+                        </View>
+                      </View>
                     </View>
+                    <Text style={S.formulaHint}>
+                      Weight is computed from duration to keep the total at 100%.
+                    </Text>
 
                     {addError ? (
                       <Text style={S.addErrorText}>{addError}</Text>
                     ) : null}
                   </View>
-                ) : sortedDrafts.length === 0 ? (
+                ) : activeDraft.length === 0 ? (
                   <View style={S.allRemovedBox}>
                     <FontAwesome5 name="exclamation-circle" size={20} color={COLORS.warning} />
                     <Text style={S.allRemovedText}>
@@ -465,28 +450,19 @@ export const MilestoneGenerationModal = ({
                   </View>
                 ) : (
                   <>
-                    {sortedDrafts.map((m, idx) => (
-                      <View key={m.id} style={S.draftCard}>
-                        {/* Top row: phase number + actions */}
+                    {activeDraft.map((p, idx) => (
+                      <View key={p.id} style={S.draftCard}>
                         <View style={S.draftTopRow}>
                           <View style={S.phaseDot}>
-                            <Text style={S.phaseDotText}>{m.sequence ?? idx + 1}</Text>
+                            <Text style={S.phaseDotText}>{p.sequence}</Text>
                           </View>
-                          <Text style={S.phaseLabel}>PHASE {m.sequence ?? idx + 1}</Text>
-                          {typeof m.weightPercentage === "number" && (
-                            <View style={S.draftWeight}>
-                              <FontAwesome5 name="balance-scale" size={9} color={COLORS.primary} />
-                              <Text style={S.draftWeightText}>{m.weightPercentage}%</Text>
-                            </View>
-                          )}
-                          {typeof m.suggestedDurationDays === "number" && (
-                            <View style={S.draftDuration}>
-                              <FontAwesome5 name="calendar-alt" size={9} color={COLORS.textTertiary} />
-                              <Text style={S.draftDurationText}>{m.suggestedDurationDays}d</Text>
-                            </View>
-                          )}
+                          <Text style={S.phaseLabel}>PHASE {p.sequence}</Text>
+                          <View style={S.draftWeight}>
+                            <FontAwesome5 name="balance-scale" size={9} color={COLORS.primary} />
+                            <Text style={S.draftWeightText}>{p.weightPercentage}%</Text>
+                          </View>
                           <TouchableOpacity
-                            onPress={() => handleDelete(m)}
+                            onPress={() => handleDelete(p.id)}
                             style={S.deleteBtn}
                             activeOpacity={0.7}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -495,121 +471,140 @@ export const MilestoneGenerationModal = ({
                           </TouchableOpacity>
                         </View>
 
-                        {/* Title */}
                         <Text style={S.fieldLabel}>TITLE</Text>
                         <TextInput
-                          value={(valueFor(m, "title") as string) ?? ""}
-                          onChangeText={(t) => updateEdit(m.id, { title: t })}
+                          value={p.title}
+                          onChangeText={(t) => handleTextChange(p.id, "title", t)}
                           placeholder="Phase title"
                           placeholderTextColor={COLORS.textTertiary}
                           style={S.titleInput}
                           multiline
+                          maxLength={120}
                         />
 
-                        {/* Description */}
                         <Text style={[S.fieldLabel, { marginTop: 10 }]}>DESCRIPTION</Text>
                         <TextInput
-                          value={(valueFor(m, "description") as string) ?? ""}
-                          onChangeText={(t) => updateEdit(m.id, { description: t })}
+                          value={p.description ?? ""}
+                          onChangeText={(t) => handleTextChange(p.id, "description", t)}
                           placeholder="What field activity proves this phase is done?"
                           placeholderTextColor={COLORS.textTertiary}
                           style={S.descInput}
                           multiline
+                          maxLength={600}
                         />
+
+                        <View style={S.addRow}>
+                          <View style={S.addCol}>
+                            <Text style={S.fieldLabel}>DURATION (days)</Text>
+                            <TextInput
+                              value={String(p.suggestedDurationDays)}
+                              onChangeText={(t) => handleDurationChange(p.id, t)}
+                              placeholder="1–365"
+                              placeholderTextColor={COLORS.textTertiary}
+                              style={S.numInput}
+                              keyboardType="numeric"
+                              maxLength={3}
+                            />
+                          </View>
+                          <View style={S.addCol}>
+                            <Text style={S.fieldLabel}>EXPECTED COMPLETION</Text>
+                            <View style={S.numReadonly}>
+                              <Text style={S.numReadonlyText}>
+                                Day {dayMarkers[idx] ?? p.suggestedDurationDays}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
                       </View>
                     ))}
 
-                    <TouchableOpacity
-                      style={S.addTile}
-                      onPress={startAdding}
-                      activeOpacity={0.85}
-                    >
-                      <View style={S.addTileIcon}>
-                        <FontAwesome5 name="plus" size={14} color={COLORS.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={S.addTileTitle}>Add Milestone</Text>
-                        <Text style={S.addTileSub}>Append a phase manually</Text>
-                      </View>
-                      <FontAwesome5 name="chevron-right" size={11} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
+                    {activeDraft.length < MAX_PHASES && (
+                      <TouchableOpacity
+                        style={S.addTile}
+                        onPress={startAdding}
+                        activeOpacity={0.85}
+                      >
+                        <View style={S.addTileIcon}>
+                          <FontAwesome5 name="plus" size={14} color={COLORS.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={S.addTileTitle}>Add Milestone</Text>
+                          <Text style={S.addTileSub}>
+                            Append a phase manually (weights auto-rebalance)
+                          </Text>
+                        </View>
+                        <FontAwesome5 name="chevron-right" size={11} color={COLORS.textTertiary} />
+                      </TouchableOpacity>
+                    )}
                   </>
                 )}
               </ScrollView>
 
               {/* Footer — inline delete confirmation replaces the regular
                   Save Later / Confirm All buttons while a delete is pending. */}
-              {sortedDrafts.length > 0 && pendingDelete ? (
-                <View style={S.deleteBar}>
-                  <View style={S.deleteBarHeader}>
-                    <View style={S.deleteBarIconRing}>
-                      <FontAwesome5 name="trash-alt" size={14} color={COLORS.error} />
+              {pendingDeleteId ? (() => {
+                const target = activeDraft.find((p) => p.id === pendingDeleteId);
+                return (
+                  <View style={S.deleteBar}>
+                    <View style={S.deleteBarHeader}>
+                      <View style={S.deleteBarIconRing}>
+                        <FontAwesome5 name="trash-alt" size={14} color={COLORS.error} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={S.deleteBarTitle}>Remove this phase?</Text>
+                        <Text style={S.deleteBarBody} numberOfLines={2}>
+                          "{target?.title ?? "This phase"}" will be removed. Remaining phases will renumber and weights will rebalance.
+                        </Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={S.deleteBarTitle}>Remove this phase?</Text>
-                      <Text style={S.deleteBarBody} numberOfLines={2}>
-                        "{(valueFor(pendingDelete, "title") as string) ?? pendingDelete.title}" will be discarded. You can re-generate later.
-                      </Text>
+                    <View style={S.deleteBarActions}>
+                      <TouchableOpacity
+                        style={S.secondaryBtn}
+                        onPress={cancelPendingDelete}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={S.secondaryBtnText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[S.primaryBtn, S.deleteBarConfirm]}
+                        onPress={confirmPendingDelete}
+                        activeOpacity={0.85}
+                      >
+                        <FontAwesome5 name="trash-alt" size={13} color="#fff" />
+                        <Text style={S.primaryBtnText}>Remove</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
-                  <View style={S.deleteBarActions}>
-                    <TouchableOpacity
-                      style={S.secondaryBtn}
-                      onPress={cancelPendingDelete}
-                      activeOpacity={0.85}
-                      disabled={deleteBusy}
-                    >
-                      <Text style={S.secondaryBtnText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[S.primaryBtn, S.deleteBarConfirm, deleteBusy && { opacity: 0.7 }]}
-                      onPress={confirmPendingDelete}
-                      activeOpacity={0.85}
-                      disabled={deleteBusy}
-                    >
-                      {deleteBusy ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <FontAwesome5 name="trash-alt" size={13} color="#fff" />
-                          <Text style={S.primaryBtnText}>Remove</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : isAdding ? (
+                );
+              })() : isAdding ? (
                 <View style={S.reviewFooter}>
                   <TouchableOpacity
                     style={S.secondaryBtn}
                     onPress={cancelAdding}
                     activeOpacity={0.85}
-                    disabled={addBusy}
                   >
                     <Text style={S.secondaryBtnText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[S.primaryBtn, addBusy && { opacity: 0.7 }]}
+                    style={S.primaryBtn}
                     onPress={confirmAdd}
                     activeOpacity={0.85}
-                    disabled={addBusy}
                   >
-                    {addBusy ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <FontAwesome5 name="plus" size={13} color="#fff" />
-                        <Text style={S.primaryBtnText}>Add Milestone</Text>
-                      </>
-                    )}
+                    <FontAwesome5 name="plus" size={13} color="#fff" />
+                    <Text style={S.primaryBtnText}>Add Milestone</Text>
                   </TouchableOpacity>
                 </View>
-              ) : sortedDrafts.length > 0 ? (
+              ) : activeDraft.length > 0 ? (
                 <View style={S.reviewFooter}>
                   <TouchableOpacity style={S.secondaryBtn} onPress={onClose} activeOpacity={0.85}>
                     <Text style={S.secondaryBtnText}>Save Later</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={S.primaryBtn} onPress={handleConfirmAll} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    style={[S.primaryBtn, !canConfirm && { opacity: 0.5 }]}
+                    onPress={handleConfirmAll}
+                    activeOpacity={0.85}
+                    disabled={!canConfirm}
+                  >
                     <FontAwesome5 name="check-double" size={13} color="#fff" />
                     <Text style={S.primaryBtnText}>Confirm All</Text>
                   </TouchableOpacity>
@@ -683,8 +678,10 @@ export const MilestoneGenerationModal = ({
               })()}
             </View>
           )}
-        </Animated.View>
-      </KeyboardAvoidingView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </>
+      ) : null}
     </Modal>
   );
 };
@@ -846,6 +843,18 @@ const S = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
   },
   draftDurationText: { fontSize: 9, fontWeight: "800", color: COLORS.textSecondary },
+
+  numReadonly: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    minHeight: 40, justifyContent: "center",
+  },
+  numReadonlyText: { fontSize: 13, fontWeight: "700", color: COLORS.textSecondary },
+  formulaHint: {
+    fontSize: 11, color: COLORS.textTertiary, fontStyle: "italic",
+    marginTop: 8, lineHeight: 16,
+  },
 
   deleteBtn: {
     width: 28, height: 28, borderRadius: 8,

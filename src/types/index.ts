@@ -111,6 +111,18 @@ export interface Project {
   incurredAmount?: number;
   remarks?: string;
   actionTaken?: string;
+  projectType?:
+    | "road_concreting"
+    | "drainage_construction"
+    | "multi_purpose_building"
+    | "covered_court"
+    | "day_care_center"
+    | "footbridge"
+    | "slope_protection"
+    | "waterworks"
+    | "electrification"
+    | "unknown";
+  classificationConfidence?: number;
 }
 
 export interface UserProfile {
