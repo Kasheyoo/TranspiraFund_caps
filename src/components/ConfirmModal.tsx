@@ -1,8 +1,6 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
-  Animated,
-  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -10,6 +8,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+} from "react-native-reanimated";
 import { COLORS } from "../constants";
 
 type ConfirmTone = "primary" | "success" | "danger" | "warning";
@@ -34,6 +38,11 @@ const TONE: Record<ConfirmTone, { color: string; bg: string; border: string; ico
   warning: { color: COLORS.warning, bg: COLORS.warningSoft, border: "#FDE68A",           icon: "exclamation-triangle" },
 };
 
+// Native <Modal> unmounts children immediately on visible=false, killing the
+// reanimated exit animation. Keep the Modal mounted while the inner content
+// fades out, then unmount via a timer that matches the longest exit duration.
+const EXIT_DURATION_MS = 220;
+
 export const ConfirmModal = ({
   visible,
   title,
@@ -47,70 +56,86 @@ export const ConfirmModal = ({
   onCancel,
 }: ConfirmModalProps) => {
   const cfg = TONE[tone];
-  const scale   = useRef(new Animated.Value(0.94)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(visible);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(scale,   { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
-    } else {
-      scale.setValue(0.94);
-      opacity.setValue(0);
+      setMounted(true);
+      return;
     }
-  }, [visible, opacity, scale]);
+    if (!mounted) return;
+    const t = setTimeout(() => setMounted(false), EXIT_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [visible, mounted]);
+
+  if (!mounted) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onCancel}
       statusBarTranslucent
     >
-      <Pressable style={S.backdrop} onPress={isBusy ? undefined : onCancel}>
-
-        <Pressable onPress={() => {}}>
-          <Animated.View style={[S.card, { transform: [{ scale }], opacity }]}>
-            <View style={[S.iconRing, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-              <FontAwesome5 name={icon || cfg.icon} size={22} color={cfg.color} />
-            </View>
-
-            <Text style={S.title}>{title}</Text>
-            <Text style={S.body}>{message}</Text>
-
-            <View style={S.actions}>
-              <TouchableOpacity
-                style={[S.btn, S.cancelBtn]}
-                onPress={onCancel}
-                activeOpacity={0.85}
-                disabled={isBusy}
+      {visible ? (
+        <Animated.View
+          entering={FadeIn.duration(180)}
+          exiting={FadeOut.duration(180)}
+          style={S.backdrop}
+        >
+          <Pressable
+            style={S.backdropPress}
+            onPress={isBusy ? undefined : onCancel}
+          >
+            <Pressable onPress={() => {}}>
+              <Animated.View
+                entering={ZoomIn.duration(220).springify().damping(16)}
+                exiting={ZoomOut.duration(180)}
+                style={S.card}
               >
-                <Text style={S.cancelText}>{cancelLabel}</Text>
-              </TouchableOpacity>
+                <View style={[S.iconRing, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+                  <FontAwesome5 name={icon || cfg.icon} size={22} color={cfg.color} />
+                </View>
 
-              <TouchableOpacity
-                style={[S.btn, { backgroundColor: cfg.color }, isBusy && { opacity: 0.7 }]}
-                onPress={onConfirm}
-                activeOpacity={0.85}
-                disabled={isBusy}
-              >
-                <Text style={S.confirmText}>{isBusy ? "Working…" : confirmLabel}</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </Pressable>
-      </Pressable>
+                <Text style={S.title}>{title}</Text>
+                <Text style={S.body}>{message}</Text>
+
+                <View style={S.actions}>
+                  <TouchableOpacity
+                    style={[S.btn, S.cancelBtn]}
+                    onPress={onCancel}
+                    activeOpacity={0.85}
+                    disabled={isBusy}
+                  >
+                    <Text style={S.cancelText}>{cancelLabel}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[S.btn, { backgroundColor: cfg.color }, isBusy && { opacity: 0.7 }]}
+                    onPress={onConfirm}
+                    activeOpacity={0.85}
+                    disabled={isBusy}
+                  >
+                    <Text style={S.confirmText}>{isBusy ? "Working…" : confirmLabel}</Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            </Pressable>
+          </Pressable>
+        </Animated.View>
+      ) : null}
     </Modal>
   );
 };
 
 const S = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(15, 23, 42, 0.55)",
+  },
+  backdropPress: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,

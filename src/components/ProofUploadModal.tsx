@@ -10,6 +10,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import RAnimated, {
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+} from "react-native-reanimated";
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { COLORS } from "../constants";
 import type { ProofUploadStage } from "../services/ProofUploadService";
@@ -171,18 +177,43 @@ export const ProofUploadModal = ({
   const accent = isError ? COLORS.error : COLORS.success;
   const label = resuming && !isError && !isDone ? "Resuming upload..." : baseLabel(stage, percent);
 
+  // Keep the native Modal mounted long enough for the reanimated exit
+  // animation to play before unmounting.
+  const EXIT_DURATION_MS = 220;
+  const [mounted, setMounted] = useState(visible);
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      return;
+    }
+    if (!mounted) return;
+    const t = setTimeout(() => setMounted(false), EXIT_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [visible, mounted]);
+
+  if (!mounted) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent
       onRequestClose={() => {
         if (isError) onDismiss?.();
       }}
     >
-      <View style={S.backdrop}>
-        <View style={S.sheet}>
+      {visible ? (
+        <RAnimated.View
+          entering={FadeIn.duration(180)}
+          exiting={FadeOut.duration(180)}
+          style={S.backdrop}
+        >
+          <RAnimated.View
+            entering={ZoomIn.duration(220).springify().damping(16)}
+            exiting={ZoomOut.duration(180)}
+            style={S.sheet}
+          >
           <View style={[S.iconBox, { backgroundColor: isError ? COLORS.errorSoft : COLORS.successSoft }]}>
             {isDone ? (
               <Animated.View style={{ transform: [{ scale: checkScale }] }}>
@@ -250,8 +281,9 @@ export const ProofUploadModal = ({
               </View>
             </>
           )}
-        </View>
-      </View>
+          </RAnimated.View>
+        </RAnimated.View>
+      ) : null}
     </Modal>
   );
 };

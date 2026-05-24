@@ -1,5 +1,14 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  Easing,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants";
 
@@ -16,6 +25,88 @@ const TABS = [
   { name: "Settings",      icon: "user-circle",  label: "Account"   },
 ];
 
+const ACTIVE_TRANSITION = { duration: 200, easing: Easing.out(Easing.cubic) };
+
+interface TabButtonProps {
+  tab: { name: string; icon: string; label: string };
+  active: boolean;
+  hasBadge: boolean;
+  badgeCount: number;
+  onPress: () => void;
+}
+
+const TabButton = ({ tab, active, hasBadge, badgeCount, onPress }: TabButtonProps) => {
+  const progress = useSharedValue(active ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(active ? 1 : 0, ACTIVE_TRANSITION);
+  }, [active, progress]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    width: interpolate(progress.value, [0, 1], [20, 28]),
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      ["rgba(0,0,0,0)", COLORS.primary],
+    ),
+  }));
+
+  const iconWrapStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      ["rgba(0,0,0,0)", COLORS.primarySoft],
+    ),
+  }));
+
+  const activeIconStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const inactiveIconStyle = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      progress.value,
+      [0, 1],
+      [COLORS.textTertiary, COLORS.primary],
+    ),
+    fontWeight: progress.value > 0.5 ? "800" : "600",
+  }));
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        S.tab,
+        pressed && { transform: [{ scale: 0.94 }], opacity: 0.85 },
+      ]}
+      onPress={onPress}
+      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+      android_ripple={null}
+    >
+      <Animated.View style={[S.indicator, indicatorStyle]} />
+
+      <Animated.View style={[S.iconWrap, iconWrapStyle]}>
+        <Animated.View style={[StyleSheet.absoluteFill, S.iconLayer, inactiveIconStyle]}>
+          <FontAwesome5 name={tab.icon} size={20} color={COLORS.textTertiary} />
+        </Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, S.iconLayer, activeIconStyle]}>
+          <FontAwesome5 name={tab.icon} size={20} color={COLORS.primary} />
+        </Animated.View>
+
+        {hasBadge && (
+          <View style={S.badge}>
+            <Text style={S.badgeText}>
+              {badgeCount > 9 ? "9+" : badgeCount}
+            </Text>
+          </View>
+        )}
+      </Animated.View>
+
+      <Animated.Text style={[S.label, labelStyle]}>{tab.label}</Animated.Text>
+    </Pressable>
+  );
+};
+
 export const BottomNavBar = ({
   currentScreen,
   onNavigate,
@@ -26,46 +117,16 @@ export const BottomNavBar = ({
   return (
     <View style={[S.outer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       <View style={S.bar}>
-        {TABS.map((tab) => {
-          const active    = currentScreen === tab.name;
-          const hasBadge  = tab.name === "Notifications" && notificationCount > 0;
-
-          return (
-            <Pressable
-              key={tab.name}
-              style={({ pressed }) => [
-                S.tab,
-                pressed && { transform: [{ scale: 0.94 }], opacity: 0.85 },
-              ]}
-              onPress={() => onNavigate(tab.name)}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              android_ripple={null}
-            >
-
-              <View style={[S.indicator, active && S.indicatorActive]} />
-
-              <View style={[S.iconWrap, active && S.iconWrapActive]}>
-                <FontAwesome5
-                  name={tab.icon}
-                  size={20}
-                  color={active ? COLORS.primary : COLORS.textTertiary}
-                />
-
-                {hasBadge && (
-                  <View style={S.badge}>
-                    <Text style={S.badgeText}>
-                      {notificationCount > 9 ? "9+" : notificationCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <Text style={[S.label, active && S.labelActive]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {TABS.map((tab) => (
+          <TabButton
+            key={tab.name}
+            tab={tab}
+            active={currentScreen === tab.name}
+            hasBadge={tab.name === "Notifications" && notificationCount > 0}
+            badgeCount={notificationCount}
+            onPress={() => onNavigate(tab.name)}
+          />
+        ))}
       </View>
     </View>
   );
@@ -112,14 +173,8 @@ const S = StyleSheet.create({
 
   indicator: {
     height: 3,
-    width: 20,
     borderRadius: 2,
-    backgroundColor: "transparent",
     marginBottom: 6,
-  },
-  indicatorActive: {
-    backgroundColor: COLORS.primary,
-    width: 28,
   },
 
   iconWrap: {
@@ -130,19 +185,14 @@ const S = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
-  iconWrapActive: {
-    backgroundColor: COLORS.primarySoft,
+  iconLayer: {
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   label: {
     fontSize: 10,
-    fontWeight: "600",
-    color: COLORS.textTertiary,
     letterSpacing: 0.2,
-  },
-  labelActive: {
-    fontWeight: "800",
-    color: COLORS.primary,
   },
 
   badge: {
