@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
+import { StyleSheet } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import Animated, { SlideInRight, SlideOutRight } from "react-native-reanimated";
 import { ProofUploadModal } from "../../components/ProofUploadModal";
 import { useProjectDetailsPresenter } from "../../hooks/useProjectDetailsPresenter";
 import { MilestoneDetailsView } from "../../views/MilestoneDetailsView";
@@ -43,15 +45,20 @@ export function ProjectDetailsScreen() {
 
   return (
     <>
+      <ProjectDetailsView
+        data={data}
+        actions={actions}
+        onBack={actions.goBack}
+      />
       {data.selectedMilestone ? (
-        <MilestoneDetailsView data={data as any} actions={actions as any} />
-      ) : (
-        <ProjectDetailsView
-          data={data}
-          actions={actions}
-          onBack={actions.goBack}
-        />
-      )}
+        <Animated.View
+          style={StyleSheet.absoluteFill}
+          entering={SlideInRight.duration(280)}
+          exiting={SlideOutRight.duration(260)}
+        >
+          <MilestoneDetailsView data={data as any} actions={actions as any} />
+        </Animated.View>
+      ) : null}
       <ProofUploadModal
         visible={upload !== null}
         stage={upload?.stage ?? "preparing"}
