@@ -697,6 +697,21 @@ export const generateMilestones = onCall(
       "Project has not been verified as a city-funded barangay-level infrastructure project.",
     );
   }
+
+  // Web's intake flow rejects classifications below 0.8 at project creation
+  // (2026-05-26 update). Legacy docs created under the old 0.6 floor must be
+  // blocked here so we never feed an unreliable classification into the AI.
+  const confidence =
+    typeof projectData.classificationConfidence === "number"
+      ? projectData.classificationConfidence
+      : null;
+  if (confidence === null || confidence < 0.8) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This project's classification is incomplete. Please contact the Head of Construction Services to re-verify the project name before generating milestones.",
+    );
+  }
+
   const resolvedType = templateKey;
   const template = MILESTONE_TEMPLATES[resolvedType];
 
