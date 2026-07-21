@@ -7,6 +7,16 @@ import { getReactNativePersistence } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+// SECURITY: The apiKey below is a Firebase Web SDK key and is public by
+// design — do not attempt to hide it. Enforce access at the key layer in
+// Google Cloud Console → APIs & Services → Credentials → this API key:
+//   1. Application restrictions → Android apps → add the release
+//      applicationId with the SHA-256 signing cert fingerprint from the
+//      release keystore.
+//   2. API restrictions → restrict to: Identity Toolkit API, Cloud Firestore
+//      API, Firebase Installations API, Cloud Storage for Firebase API,
+//      Cloud Functions API. Block everything else.
+// Re-run the restriction check after each keystore rotation.
 const firebaseConfig = {
   apiKey: "AIzaSyBznumKpktI9C71TOBlvXi6VOO0JpwB2gY",
   authDomain: "transpirafund-webapp.firebaseapp.com",
