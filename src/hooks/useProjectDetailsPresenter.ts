@@ -392,6 +392,11 @@ export const useProjectDetailsPresenter = (
   const handleGenerateMilestones = async (): Promise<{
     ok: boolean;
     count?: number;
+    usedFallback?: boolean;
+    fallbackSourceProject?: string;
+    windowDays?: number | null;
+    scheduledDays?: number;
+    overflowDays?: number;
     errorCode?: "unauthenticated" | "invalid-argument" | "not-found"
               | "permission-denied" | "already-exists" | "resource-exhausted"
               | "failed-precondition" | "deadline-exceeded" | "unavailable"
@@ -401,15 +406,30 @@ export const useProjectDetailsPresenter = (
     try {
       requireAuth();
       const result = (await callFn("generateMilestones", { projectId })) as {
-        success: boolean; count: number;
+        success: boolean;
+        count: number;
+        usedFallback?: boolean;
+        fallbackSourceProject?: string;
+        windowDays?: number | null;
+        scheduledDays?: number;
+        overflowDays?: number;
       };
+      const source = result.usedFallback ? "SME fallback" : "AI";
       callFn("logMobileAuditTrail", {
         action: "Milestones Generated",
-        details: `Milestones generated for ${project?.projectName ?? project?.title ?? "project"} (type: ${projectTypeLabel(project?.projectType)})`,
+        details: `Milestones generated for ${project?.projectName ?? project?.title ?? "project"} (type: ${projectTypeLabel(project?.projectType)}, source: ${source})`,
         targetId: projectId,
         syncToHCSD: true,
       }).catch(() => {});
-      return { ok: true, count: result.count };
+      return {
+        ok: true,
+        count: result.count,
+        usedFallback: result.usedFallback,
+        fallbackSourceProject: result.fallbackSourceProject,
+        windowDays: result.windowDays,
+        scheduledDays: result.scheduledDays,
+        overflowDays: result.overflowDays,
+      };
     } catch (error: any) {
       logger.error("Generate milestones error:", error);
       const raw = `${error?.code || ""} ${error?.message || ""}`

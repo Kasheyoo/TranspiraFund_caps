@@ -37,6 +37,11 @@ import {
 type GenerateResult = {
   ok: boolean;
   count?: number;
+  usedFallback?: boolean;
+  fallbackSourceProject?: string;
+  windowDays?: number | null;
+  scheduledDays?: number;
+  overflowDays?: number;
   errorCode?:
     | "unauthenticated"
     | "invalid-argument"
@@ -171,7 +176,7 @@ export const MilestoneGenerationModal = ({
 
   const handleDurationChange = (id: string, raw: string) => {
     const cleaned = raw.replace(/[^0-9]/g, "");
-    const num = cleaned === "" ? 1 : Math.min(365, Math.max(1, parseInt(cleaned, 10)));
+    const num = cleaned === "" ? 1 : Math.min(999, Math.max(1, parseInt(cleaned, 10)));
     setDraft((prev) => applyDurationOverride(prev, id, num));
   };
 
@@ -204,8 +209,8 @@ export const MilestoneGenerationModal = ({
       setAddError("Title is required.");
       return;
     }
-    if (!Number.isFinite(d) || d < 1 || d > 365) {
-      setAddError("Duration must be a number of days between 1 and 365.");
+    if (!Number.isFinite(d) || d < 1 || d > 999) {
+      setAddError("Duration must be a number of days between 1 and 999.");
       return;
     }
     if (activeDraft.length >= MAX_PHASES) {
@@ -367,6 +372,24 @@ export const MilestoneGenerationModal = ({
                 </TouchableOpacity>
               </View>
 
+              {genResult?.usedFallback ? (
+                <View style={S.fallbackBanner}>
+                  <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.warning} />
+                  <Text style={S.fallbackBannerText}>
+                    AI generation unavailable, showing validated DEPW reference milestones for this project type — please review and adjust.
+                  </Text>
+                </View>
+              ) : null}
+
+              {genResult?.overflowDays && genResult.overflowDays > 0 ? (
+                <View style={S.overflowBanner}>
+                  <FontAwesome5 name="exclamation-triangle" size={13} color={COLORS.error} />
+                  <Text style={S.overflowBannerText}>
+                    This schedule needs {genResult.scheduledDays} calendar days but the project window is only {genResult.windowDays}. Extend the project end date or remove phases before confirming.
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Editable list — replaced by the manual-add form while isAdding. */}
               <ScrollView
                 style={S.reviewScroll}
@@ -411,7 +434,7 @@ export const MilestoneGenerationModal = ({
                         <TextInput
                           value={addDuration}
                           onChangeText={setAddDuration}
-                          placeholder="1–365"
+                          placeholder="1–999"
                           placeholderTextColor={COLORS.textTertiary}
                           style={S.numInput}
                           keyboardType="numeric"
@@ -499,7 +522,7 @@ export const MilestoneGenerationModal = ({
                             <TextInput
                               value={String(p.suggestedDurationDays)}
                               onChangeText={(t) => handleDurationChange(p.id, t)}
-                              placeholder="1–365"
+                              placeholder="1–999"
                               placeholderTextColor={COLORS.textTertiary}
                               style={S.numInput}
                               keyboardType="numeric"
@@ -924,6 +947,28 @@ const S = StyleSheet.create({
   },
 
   weightFlag: { color: COLORS.error, fontWeight: "800" },
+
+  fallbackBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    paddingHorizontal: 18, paddingVertical: 12,
+    backgroundColor: COLORS.warningSoft,
+    borderBottomWidth: 1, borderBottomColor: "#FDE68A",
+  },
+  fallbackBannerText: {
+    flex: 1, fontSize: 12, fontWeight: "600",
+    color: COLORS.warning, lineHeight: 17,
+  },
+
+  overflowBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    paddingHorizontal: 18, paddingVertical: 12,
+    backgroundColor: COLORS.errorSoft,
+    borderBottomWidth: 1, borderBottomColor: "#FECACA",
+  },
+  overflowBannerText: {
+    flex: 1, fontSize: 12, fontWeight: "600",
+    color: COLORS.error, lineHeight: 17,
+  },
 
   addTile: {
     flexDirection: "row", alignItems: "center", gap: 12,

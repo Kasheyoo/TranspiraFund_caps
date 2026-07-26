@@ -4,6 +4,7 @@ import * as nodemailer from "nodemailer";
 import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { SME_PROJECTS } from "./data/dataset";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp: typeof import("sharp") = require("sharp");
@@ -395,111 +396,219 @@ function assertSameTenant(
 }
 
 
-type MilestoneTemplate = {
-  title: string;
-  description: string;
-  durationDays: number;
+// Allowlist of verified mobile project-type values. A projectType missing,
+// "unknown", or not in this set is rejected upstream with `failed-precondition`.
+// The category → template payload that used to live on the value side has moved
+// to depw_milestone_dataset.json (installed in Phase 3).
+const SUPPORTED_PROJECT_TYPES: ReadonlySet<string> = new Set([
+  "road_concreting",
+  "drainage_construction",
+  "multi_purpose_building",
+  "covered_court",
+  "day_care_center",
+  "footbridge",
+  "slope_protection",
+  "waterworks",
+  "electrification",
+]);
+
+// 0-based indices into SME_PROJECTS for each mobile projectType enum value.
+// Types with an empty array borrow examples via EXAMPLE_TYPE_FALLBACK below.
+// Note: footbridge is the mobile enum's only bridge slot. SME projects #12
+// and #13 are likely vehicular RC bridges (>=120 CD), not pedestrian
+// footbridges — but they are the only bridge references available and
+// renaming the enum to `bridge` would orphan existing Firestore project
+// documents that persist projectType. The label stays; the semantic
+// mismatch is accepted.
+// Note: drainage_construction has thin coverage (only SME project #5, a box
+// culvert). Non-culvert drainage projects may generalize weakly from a
+// single example.
+const PROJECT_TYPE_TO_EXAMPLES: Record<string, readonly number[]> = {
+  road_concreting:        [1, 8, 14, 18],
+  drainage_construction:  [4],
+  multi_purpose_building: [0, 3, 7, 10, 13, 15, 19],
+  covered_court:          [],
+  day_care_center:        [],
+  footbridge:             [11, 12],
+  slope_protection:       [16, 17],
+  waterworks:             [2, 9],
+  electrification:        [5, 6],
 };
 
-const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
-  "Building Construction": [
-    { title: "Site Preparation & Mobilization", description: "Site cleared and fenced. Staging area, temporary utilities, and contractor field office set up.", durationDays: 7 },
-    { title: "Excavation & Foundation Works",   description: "Excavation to design depth completed. Footings and foundation poured and cured to specifications.", durationDays: 21 },
-    { title: "Structural Framing",              description: "Columns, beams, and slabs formed and poured per approved structural drawings.", durationDays: 30 },
-    { title: "Masonry & Wall Works",            description: "CHB walls laid plumb and true. Lintels, jambs, and openings in place per plan.", durationDays: 21 },
-    { title: "Roofing Works",                   description: "Roof framing, sheets, gutters, and downspouts installed and watertight.", durationDays: 14 },
-    { title: "Plumbing Rough-In",               description: "Supply, waste, and vent lines roughed in and pressure-tested before closure.", durationDays: 10 },
-    { title: "Electrical Rough-In",             description: "Conduits, boxes, and feeders pulled to plan. Panel locations and grounding verified.", durationDays: 10 },
-    { title: "Finishing Works",                 description: "Plastering, painting, tile, ceiling, doors, and fixtures installed to spec.", durationDays: 28 },
-    { title: "Final Inspection & Turnover",     description: "Punch-list cleared. Final inspection passed and project formally turned over to HCSD.", durationDays: 7 },
-  ],
-  "Roads & Pavement": [
-    { title: "Site Clearing & Survey",          description: "Right-of-way cleared. Centerline staked and elevations verified against approved plans.", durationDays: 5 },
-    { title: "Subgrade Preparation",            description: "Subgrade graded, compacted, and proof-rolled to required density.", durationDays: 10 },
-    { title: "Base Course Installation",        description: "Aggregate base course placed, watered, and compacted to design thickness.", durationDays: 10 },
-    { title: "Drainage Provisions",             description: "Side ditches, culverts, and outfalls in place for proper road drainage.", durationDays: 7 },
-    { title: "Concreting & Paving Works",       description: "PCCP poured to design thickness with joints, dowels, and tie bars per spec.", durationDays: 21 },
-    { title: "Curing Period",                   description: "Concrete cured for the full design period before opening to traffic.", durationDays: 14 },
-    { title: "Line Striping & Signage",         description: "Pavement markings, road signs, and safety devices installed per MUTCD/DPWH.", durationDays: 3 },
-    { title: "Final Inspection & Acceptance",   description: "Final walk-through and acceptance by HCSD with all punch items cleared.", durationDays: 3 },
-  ],
-  "Drainage & Flood Control": [
-    { title: "Site Survey & Staking",           description: "Alignment staked and inverts checked against plan.", durationDays: 3 },
-    { title: "Excavation",                      description: "Trench excavated to required depth and width with safe slopes or shoring.", durationDays: 10 },
-    { title: "Lean Concrete Works",             description: "Lean concrete bedding poured to grade.", durationDays: 5 },
-    { title: "Pipe & Culvert Laying",           description: "RCPC/RCBC laid true to line and grade with joints sealed.", durationDays: 14 },
-    { title: "Manhole & Catch Basin Construction", description: "Manholes and catch basins built per detail with proper covers and frames.", durationDays: 10 },
-    { title: "Backfill & Compaction",           description: "Trenches backfilled in lifts and compacted to required density.", durationDays: 7 },
-    { title: "Surface Restoration",             description: "Disturbed surfaces restored to original condition or better.", durationDays: 5 },
-    { title: "Hydraulic Testing",               description: "Hydraulic test passed with no leaks observed.", durationDays: 2 },
-    { title: "Final Inspection & Acceptance",   description: "Final inspection passed and turnover documents signed.", durationDays: 3 },
-  ],
-  "Water Supply": [
-    { title: "Site Survey & Staking",           description: "Pipeline alignment staked and depths verified against plan.", durationDays: 3 },
-    { title: "Trenching & Excavation",          description: "Trench excavated to required depth with safe slopes or shoring.", durationDays: 10 },
-    { title: "Mainline Pipe Laying",            description: "Main pipes laid to line and grade with proper bedding.", durationDays: 14 },
-    { title: "Valve & Fitting Installation",    description: "Gate valves, air valves, blow-offs, and fittings installed per plan.", durationDays: 5 },
-    { title: "Service Connections",             description: "Service taps and meter assemblies installed at each connection point.", durationDays: 7 },
-    { title: "Pressure Testing",                description: "System pressure-tested for the required duration with no leaks.", durationDays: 2 },
-    { title: "Disinfection & Flushing",         description: "Lines chlorinated, flushed, and bacteriologically cleared before use.", durationDays: 3 },
-    { title: "Backfill & Surface Restoration",  description: "Trenches backfilled and surfaces restored to original condition.", durationDays: 5 },
-    { title: "Final Inspection & Acceptance",   description: "Final inspection passed and system formally accepted.", durationDays: 3 },
-  ],
-  "Electrical & Lighting": [
-    { title: "Site Survey & Fixture Layout",    description: "Pole positions and fixture layout staked against approved plan.", durationDays: 3 },
-    { title: "Post & Pole Installation",        description: "Poles set plumb on concrete foundations to required depth.", durationDays: 7 },
-    { title: "Conduit & Wiring Installation",   description: "Underground/aerial conduits and feeders pulled per electrical plan.", durationDays: 10 },
-    { title: "Fixture Mounting",                description: "Luminaires mounted, aimed, and secured per detail.", durationDays: 5 },
-    { title: "Panel Board & Meter Installation", description: "Panel boards, meters, and disconnects installed and labeled.", durationDays: 5 },
-    { title: "Grounding Works",                 description: "Grounding rods driven and bonded; resistance verified within spec.", durationDays: 3 },
-    { title: "Circuit Testing & Commissioning", description: "Each circuit tested and commissioned for safe operation.", durationDays: 3 },
-    { title: "Final Inspection & Energization", description: "Final inspection passed and system energized by utility.", durationDays: 3 },
-  ],
-  "Public Facility Rehabilitation": [
-    { title: "Condition Assessment & Documentation", description: "Existing condition documented with photos and measurements before any work.", durationDays: 5 },
-    { title: "Demolition of Defective Elements", description: "Defective elements safely removed and hauled off-site.", durationDays: 7 },
-    { title: "Structural Repairs",              description: "Cracks, spalls, and structural defects repaired per engineering recommendation.", durationDays: 14 },
-    { title: "Plumbing & Electrical Repairs",   description: "Defective plumbing/electrical components replaced and tested.", durationDays: 10 },
-    { title: "Masonry & Finishing Repairs",     description: "Masonry, plaster, and finishes restored to original or better.", durationDays: 10 },
-    { title: "Painting Works",                  description: "Surfaces prepared and painted with required coats per spec.", durationDays: 7 },
-    { title: "Fixture Replacement",             description: "Worn fixtures replaced and tested for proper operation.", durationDays: 5 },
-    { title: "Final Inspection & Turnover",     description: "Final inspection passed and facility turned over for public use.", durationDays: 3 },
-  ],
-  "Other": [
-    { title: "Project Mobilization",     description: "Contractor mobilized, permits secured, and pre-construction meeting held.", durationDays: 5 },
-    { title: "Site Preparation",         description: "Site cleared, staked, and prepared for construction activities.", durationDays: 7 },
-    { title: "Implementation Phase 1",   description: "First major implementation phase per the approved program of work.", durationDays: 21 },
-    { title: "Implementation Phase 2",   description: "Second major implementation phase per the approved program of work.", durationDays: 21 },
-    { title: "Implementation Phase 3",   description: "Third major implementation phase per the approved program of work.", durationDays: 21 },
-    { title: "Final Inspection",         description: "Final walk-through with HCSD; punch list issued and cleared.", durationDays: 5 },
-    { title: "Project Turnover",         description: "Formal acceptance and turnover documents signed by all parties.", durationDays: 3 },
-  ],
+// When a projectType has no direct SME examples, the AI prompt borrows
+// examples from this substitute type. Audit-logged only, not surfaced to
+// the engineer, because the AI still runs and returns fresh output.
+const EXAMPLE_TYPE_FALLBACK: Record<string, string> = {
+  covered_court:   "multi_purpose_building",
+  day_care_center: "multi_purpose_building",
 };
 
-// Maps a verified mobile project-type value to its milestone template. A
-// projectType that is missing, "unknown", or not in this map is treated as
-// unverified and rejected upstream with a `failed-precondition`.
-const PROJECT_TYPE_TO_TEMPLATE: Record<string, string> = {
-  road_concreting: "Roads & Pavement",
-  drainage_construction: "Drainage & Flood Control",
-  multi_purpose_building: "Building Construction",
-  covered_court: "Building Construction",
-  day_care_center: "Building Construction",
-  footbridge: "Building Construction",
-  slope_protection: "Drainage & Flood Control",
-  waterworks: "Water Supply",
-  electrification: "Electrical & Lighting",
-};
+// Anthropic prompt tokens grow linearly with few-shot count. Three examples
+// covers scope-shape variance without ballooning the request.
+const MAX_FEW_SHOT_EXAMPLES = 3;
 
-function distributeWeights(count: number): number[] {
-  if (count <= 0) return [];
-  const base = Math.floor(100 / count);
-  const weights = new Array<number>(count).fill(base);
-  let remainder = 100 - base * count;
-  for (let i = 0; i < count && remainder > 0; i++, remainder--) {
-    weights[i] += 1;
+function resolveExamplesForType(projectType: string): {
+  indices: readonly number[];
+  substituted: string | null;
+} {
+  const direct = PROJECT_TYPE_TO_EXAMPLES[projectType] ?? [];
+  if (direct.length > 0) {
+    return { indices: direct, substituted: null };
   }
-  return weights;
+  const substituteType = EXAMPLE_TYPE_FALLBACK[projectType];
+  if (substituteType) {
+    const borrowed = PROJECT_TYPE_TO_EXAMPLES[substituteType] ?? [];
+    return { indices: borrowed, substituted: substituteType };
+  }
+  return { indices: [], substituted: null };
+}
+
+// Calendar-days between officialDateStarted (or legacy startDate) and
+// originalDateCompletion (or legacy completionDate). Returns null when
+// either date is missing, unparseable, or the window is non-positive.
+function computeProjectWindowDays(projectData: Record<string, unknown>): number | null {
+  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+  const start = str(projectData.officialDateStarted) || str(projectData.startDate);
+  const end = str(projectData.originalDateCompletion) || str(projectData.completionDate);
+  if (!start || !end) return null;
+  const startMs = Date.parse(start);
+  const endMs = Date.parse(end);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  const days = Math.round((endMs - startMs) / (24 * 60 * 60 * 1000));
+  return days > 0 ? days : null;
+}
+
+// Pick up to `take` SME project indices whose `total` CD is closest to the
+// engineer's project window. When windowDays is null or non-positive,
+// returns the first `take` indices in pool order instead of throwing.
+function pickClosestByWindow(
+  indices: readonly number[],
+  windowDays: number | null,
+  take: number,
+): number[] {
+  if (indices.length === 0) return [];
+  const capped = Math.min(take, indices.length);
+  if (windowDays === null || windowDays <= 0) {
+    return indices.slice(0, capped);
+  }
+  const scored = indices.map((idx) => ({
+    idx,
+    diff: Math.abs(SME_PROJECTS[idx].total - windowDays),
+  }));
+  scored.sort((a, b) => a.diff - b.diff || a.idx - b.idx);
+  return scored.slice(0, capped).map((s) => s.idx);
+}
+
+// Serialize the selected SME projects as a few-shot block for the AI prompt.
+// Every name, desc, crew, and days value passes through verbatim.
+function formatFewShotExamples(indices: readonly number[]): string {
+  if (indices.length === 0) return "";
+  const blocks = indices.map((i, k) => {
+    const p = SME_PROJECTS[i];
+    const phaseLines = p.ms
+      .map((m) => `  ${m.no}. ${m.name} (${m.days} CD) — ${m.desc} ${m.crew}`)
+      .join("\n");
+    return `EXAMPLE ${k + 1} — "${p.name}" (total ${p.total} CD, ${p.ms.length} phases):\n${phaseLines}`;
+  });
+  return blocks.join("\n\n");
+}
+
+// Rescale the AI/SME proportional shape onto the engineer's actual project
+// window using largest-remainder rounding so the returned days sum to
+// windowDays exactly. Enforces >= 1 CD per milestone.
+//
+// Special cases:
+//   - N === 0: returns [].
+//   - windowDays <= 0: caller should have passed null → not scaled. Defensive
+//     branch rounds the originals and floors them at 1.
+//   - N === 1: single milestone gets the full window.
+//   - windowDays < N: min-1 and sum-equals-window are unsatisfiable together.
+//     Returns N ones (sum = N, overflows window by N - windowDays). The caller
+//     must audit-log the overflow AND surface it to the engineer so they can
+//     extend the window or reduce phases during review.
+function scaleDurationsToWindow(
+  originalDays: number[],
+  windowDays: number,
+): number[] {
+  const n = originalDays.length;
+  if (n === 0) return [];
+  if (windowDays <= 0) {
+    return originalDays.map((d) =>
+      Number.isFinite(d) && d > 0 ? Math.max(1, Math.round(d)) : 1,
+    );
+  }
+  if (n === 1) return [windowDays];
+  if (windowDays < n) return new Array<number>(n).fill(1);
+
+  const safe = originalDays.map((d) => (Number.isFinite(d) && d > 0 ? d : 1));
+  const total = safe.reduce((sum, d) => sum + d, 0);
+  if (total <= 0) {
+    const base = Math.floor(windowDays / n);
+    const remainder = windowDays - base * n;
+    const out = new Array<number>(n).fill(base);
+    for (let i = 0; i < remainder; i += 1) out[i] += 1;
+    return out;
+  }
+
+  const raw = safe.map((d) => (d / total) * windowDays);
+  const floors = raw.map((r) => Math.floor(r));
+  const remainders = raw.map((r, i) => ({ idx: i, rem: r - floors[i] }));
+
+  const leftover = windowDays - floors.reduce((sum, v) => sum + v, 0);
+  remainders.sort((a, b) => b.rem - a.rem || a.idx - b.idx);
+  for (let k = 0; k < leftover && k < remainders.length; k += 1) {
+    floors[remainders[k].idx] += 1;
+  }
+
+  // Enforce min=1: steal from the largest allocation if any phase < 1.
+  // This preserves sum=windowDays because it's a redistribution.
+  for (let guard = 0; guard < n; guard += 1) {
+    const belowIdx = floors.findIndex((v) => v < 1);
+    if (belowIdx < 0) break;
+    let maxIdx = 0;
+    for (let i = 1; i < floors.length; i += 1) {
+      if (floors[i] > floors[maxIdx]) maxIdx = i;
+    }
+    if (floors[maxIdx] <= 1) break;
+    floors[maxIdx] -= 1;
+    floors[belowIdx] += 1;
+  }
+
+  return floors;
+}
+
+// Duration-proportional weighting with largest-remainder rounding so the sum
+// equals exactly 100. Mirrors recomputeWeights() in src/utils/milestonePlan.ts
+// so server-issued weights match what the review UI produces after edits.
+// Enforces weight >= 1 per phase (confirmMilestonePlan rejects lower values).
+function deriveWeightsFromDurations(days: number[]): number[] {
+  if (days.length === 0) return [];
+  const safeDays = days.map((d) => (Number.isFinite(d) && d > 0 ? d : 1));
+  const totalDays = safeDays.reduce((sum, d) => sum + d, 0);
+
+  const raw = safeDays.map((d) => (d / totalDays) * 100);
+  const floors = raw.map((r) => Math.floor(r));
+  const remainders = raw.map((r, i) => ({ idx: i, rem: r - floors[i] }));
+
+  const leftover = 100 - floors.reduce((sum, v) => sum + v, 0);
+  remainders.sort((a, b) => b.rem - a.rem || a.idx - b.idx);
+  for (let k = 0; k < leftover && k < remainders.length; k += 1) {
+    floors[remainders[k].idx] += 1;
+  }
+
+  for (let guard = 0; guard < days.length; guard += 1) {
+    const belowIdx = floors.findIndex((v) => v < 1);
+    if (belowIdx < 0) break;
+    let maxIdx = 0;
+    for (let i = 1; i < floors.length; i += 1) {
+      if (floors[i] > floors[maxIdx]) maxIdx = i;
+    }
+    if (floors[maxIdx] <= 1) break;
+    floors[maxIdx] -= 1;
+    floors[belowIdx] += 1;
+  }
+
+  return floors;
 }
 
 type AIGeneratedPhase = {
@@ -510,8 +619,8 @@ type AIGeneratedPhase = {
 
 async function generateMilestonesWithAI(
   projectData: Record<string, unknown>,
-  resolvedType: string,
-  referenceTemplate: MilestoneTemplate[],
+  projectType: string,
+  fewShotIndices: readonly number[],
 ): Promise<AIGeneratedPhase[]> {
   const apiKey = anthropicKey.value();
   if (!apiKey) {
@@ -539,7 +648,7 @@ async function generateMilestonesWithAI(
 
   const projectContext = [
     `Project name: ${name || "(unspecified)"}`,
-    `Project type: ${resolvedType}`,
+    `Project type: ${projectType}`,
     `Description: ${description || "(none provided)"}`,
     `Location: ${location || "(unspecified)"}`,
     contractAmount !== null
@@ -551,23 +660,18 @@ async function generateMilestonesWithAI(
     `Target completion: ${completionDate || "(unspecified)"}`,
   ].join("\n");
 
-  const referenceList = referenceTemplate
-    .map(
-      (p, i) =>
-        `${i + 1}. ${p.title} — ${p.description} (~${p.durationDays} days)`,
-    )
-    .join("\n");
-
   const system =
-    "You are a senior LGU (Local Government Unit) infrastructure project planner in the Philippines, advising HCSD field engineers. Generate a realistic, project-specific milestone breakdown that an engineer can monitor with photo proofs. Use DPWH/HCSD-style phase terminology. Tailor descriptions to the actual project scope, contract amount, and timeline rather than restating generic templates verbatim.";
+    "You are a senior LGU (Local Government Unit) infrastructure project planner in the Philippines, advising HCSD field engineers. Generate a realistic, project-specific milestone breakdown that an engineer can monitor with photo proofs. Use DPWH/HCSD-style phase terminology. Durations are CALENDAR DAYS proportional to project scope — the server rescales your values onto the engineer's actual start-to-end window, so treat your numbers as a proportional shape rather than absolute dates. Tailor descriptions to the actual project scope, contract amount, and timeline rather than restating generic templates verbatim.";
 
-  const userPrompt = `Generate milestones for this LGU infrastructure project. Use the reference template below as a starting point for "${resolvedType}" projects, but tailor titles, descriptions, and durations to the actual project context. Adjust phase count and durations based on contract amount, location specifics, and described scope. Each description must state measurable completion criteria a field engineer can verify with photos.
+  const fewShotBlock = formatFewShotExamples(fewShotIndices);
+  const referenceSection = fewShotBlock.length > 0
+    ? `\n\nREFERENCE EXAMPLES (SME-validated DEPW projects — preserve the phase vocabulary and level of detail, adapt scope and durations to this specific project):\n${fewShotBlock}`
+    : "";
+
+  const userPrompt = `Generate milestones for this LGU infrastructure project. Each description must state measurable completion criteria a field engineer can verify with photos.
 
 PROJECT CONTEXT:
-${projectContext}
-
-REFERENCE TEMPLATE (standard phases for "${resolvedType}"):
-${referenceList}
+${projectContext}${referenceSection}
 
 Return your milestone plan via the submit_milestones tool.`;
 
@@ -690,8 +794,7 @@ export const generateMilestones = onCall(
 
 
   const rawType = typeof projectData.projectType === "string" ? projectData.projectType : "";
-  const templateKey = PROJECT_TYPE_TO_TEMPLATE[rawType];
-  if (!templateKey) {
+  if (!SUPPORTED_PROJECT_TYPES.has(rawType)) {
     throw new HttpsError(
       "failed-precondition",
       "Project has not been verified as a city-funded barangay-level infrastructure project.",
@@ -711,10 +814,6 @@ export const generateMilestones = onCall(
       "This project's classification is incomplete. Please contact the Head of Construction Services to re-verify the project name before generating milestones.",
     );
   }
-
-  const resolvedType = templateKey;
-  const template = MILESTONE_TEMPLATES[resolvedType];
-
 
   const msCollection = admin.firestore().collection(`projects/${projectId}/milestones`);
   const tenantId = typeof projectData.tenantId === "string" ? projectData.tenantId : undefined;
@@ -752,32 +851,68 @@ export const generateMilestones = onCall(
     throw new HttpsError("already-exists", "Milestones already exist for this project.");
   }
 
-  let phases: AIGeneratedPhase[] = template.map((p) => ({
-    title: p.title,
-    description: p.description,
-    durationDays: p.durationDays,
-  }));
-  let generatedBy: "ai" | "template" = "template";
-  let aiError: string | undefined;
+  const windowDays = computeProjectWindowDays(projectData);
+  const { indices: poolIndices, substituted } = resolveExamplesForType(rawType);
+  const fewShotIndices = pickClosestByWindow(
+    poolIndices,
+    windowDays,
+    MAX_FEW_SHOT_EXAMPLES,
+  );
+
+  let phases: AIGeneratedPhase[];
+  let generatedBy: "ai" | "sme_reference" = "ai";
+  let usedFallback = false;
+  let fallbackReason: string | undefined;
+  let fallbackSourceProject: string | undefined;
 
   try {
-    phases = await generateMilestonesWithAI(projectData, resolvedType, template);
-    generatedBy = "ai";
+    phases = await generateMilestonesWithAI(projectData, rawType, fewShotIndices);
   } catch (e: unknown) {
-    // Validation failures (bad AI output) must reach the client as
-    // `milestone-validation-failed`. Only transient/API errors fall back to
-    // the static template.
+    // Validation failures (bad AI output) surface to the client as
+    // `milestone-validation-failed`. Only transient/API errors fall through
+    // to the SME reference fallback below.
     if (e instanceof HttpsError) throw e;
-    aiError =
-      e instanceof Error ? e.message : typeof e === "string" ? e : "unknown error";
+    const reason = e instanceof Error ? e.message : String(e);
     console.warn(
-      `[generateMilestones] AI generation failed, using template fallback for project ${projectId}:`,
-      aiError,
+      `[generateMilestones] AI generation failed for project ${projectId}, falling back to SME reference:`,
+      reason,
     );
+
+    if (poolIndices.length === 0) {
+      // Every SUPPORTED_PROJECT_TYPES value should resolve to a non-empty
+      // pool through PROJECT_TYPE_TO_EXAMPLES or EXAMPLE_TYPE_FALLBACK. If
+      // it doesn't, refuse rather than write an empty milestone set.
+      throw new HttpsError(
+        "internal",
+        `milestone-validation-failed: no SME reference available for projectType "${rawType}"`,
+      );
+    }
+
+    const fallbackIndex = pickClosestByWindow(poolIndices, windowDays, 1)[0];
+    const source = SME_PROJECTS[fallbackIndex];
+    phases = source.ms.map((m) => ({
+      title: m.name,
+      description: m.desc,
+      durationDays: m.days,
+    }));
+    generatedBy = "sme_reference";
+    usedFallback = true;
+    fallbackReason = reason.slice(0, 120);
+    fallbackSourceProject = source.name;
   }
 
+  const originalDays = phases.map((p) => p.durationDays);
+  const scaledDays = windowDays !== null
+    ? scaleDurationsToWindow(originalDays, windowDays)
+    : originalDays;
+  const scheduledDays = scaledDays.reduce((sum, d) => sum + d, 0);
+  const overflowDays =
+    windowDays !== null && scheduledDays > windowDays
+      ? scheduledDays - windowDays
+      : 0;
+
   const batch = admin.firestore().batch();
-  const weights = distributeWeights(phases.length);
+  const weights = deriveWeightsFromDurations(scaledDays);
 
   phases.forEach((phase, i) => {
     const docRef = msCollection.doc();
@@ -785,7 +920,7 @@ export const generateMilestones = onCall(
       title: phase.title,
       description: phase.description,
       weightPercentage: weights[i],
-      suggestedDurationDays: phase.durationDays,
+      suggestedDurationDays: scaledDays[i],
       sequence: i + 1,
       status: "Pending",
       proofs: [],
@@ -800,16 +935,22 @@ export const generateMilestones = onCall(
 
   const uid   = request.auth.uid;
   const email = request.auth.token.email || "";
-  const sourceSuffix =
-    generatedBy === "ai"
-      ? ` · AI-generated (${phases.length} phases)`
-      : aiError
-      ? ` · template (AI failed: ${aiError.slice(0, 120)})`
-      : ` · template (${phases.length} phases)`;
+  const typeSuffix = substituted
+    ? `type: ${rawType} → few-shot borrowed from ${substituted}`
+    : `type: ${rawType}`;
+  const sourceSuffix = usedFallback
+    ? ` · SME fallback (source: "${fallbackSourceProject}", ${phases.length} phases) · reason: ${fallbackReason}`
+    : ` · AI-generated (${phases.length} phases)`;
+  const scheduleSuffix =
+    windowDays === null
+      ? " · window unknown (no scaling)"
+      : overflowDays > 0
+        ? ` · scaled to ${windowDays}cd window (short-window: ${phases.length} phases, overflow +${overflowDays}cd)`
+        : ` · scaled to ${windowDays}cd window`;
   await logAuditTrail(
     uid, email,
     "Milestones Drafted",
-    `Project: ${projectId} (type: ${rawType} → template "${resolvedType}")${sourceSuffix}`,
+    `Project: ${projectId} (${typeSuffix})${sourceSuffix}${scheduleSuffix}`,
     true,
     projectId,
     undefined,
@@ -819,8 +960,14 @@ export const generateMilestones = onCall(
   return {
     success: true,
     count: phases.length,
-    projectType: resolvedType,
+    projectType: rawType,
     generatedBy,
+    usedFallback,
+    fallbackReason,
+    fallbackSourceProject,
+    windowDays,
+    scheduledDays,
+    overflowDays,
   };
 });
 
@@ -915,8 +1062,8 @@ export const addManualMilestone = onCall({ region: "asia-southeast1" }, async (r
     throw new HttpsError("invalid-argument", "weightPercentage must be a number between 0 and 100.");
   }
   if (typeof suggestedDurationDays !== "number" || !Number.isFinite(suggestedDurationDays) ||
-      suggestedDurationDays < 1 || suggestedDurationDays > 365) {
-    throw new HttpsError("invalid-argument", "suggestedDurationDays must be a number between 1 and 365.");
+      suggestedDurationDays < 1 || suggestedDurationDays > 999) {
+    throw new HttpsError("invalid-argument", "suggestedDurationDays must be a number between 1 and 999.");
   }
 
   const projectRef = admin.firestore().doc(`projects/${projectId}`);
@@ -1089,11 +1236,11 @@ export const confirmMilestonePlan = onCall(
         typeof p.suggestedDurationDays !== "number" ||
         !Number.isFinite(p.suggestedDurationDays) ||
         p.suggestedDurationDays < 1 ||
-        p.suggestedDurationDays > 365
+        p.suggestedDurationDays > 999
       ) {
         throw new HttpsError(
           "invalid-argument",
-          "suggestedDurationDays must be 1..365.",
+          "suggestedDurationDays must be 1..999.",
         );
       }
       weightSum += p.weightPercentage;

@@ -1,0 +1,1311 @@
+[
+ {
+  "name": "Construction of 4-storey 20 classrooms school building",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, mobilization and demobilization, and site layout and staking.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 11,
+    "no": 1
+   },
+   {
+    "name": "Earthworks and Termite Control",
+    "desc": "Excavation of column footings, embankment from structure excavation, and gravel fill; soil poisoning for termite control.",
+    "crew": "Crew: foreman, equipment operator, laborers, licensed pest-control applicator.\nEquipment: backhoe, dump truck, plate compactor, power sprayer.",
+    "days": 13,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Works (Substructure and Frame)",
+    "desc": "Structural concrete for column and wall footings, slab-on-fill, ramp and stairs; columns, beams and suspended slabs across all storeys; reinforcing steel; forms and falseworks.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 62,
+    "no": 3
+   },
+   {
+    "name": "Masonry Works",
+    "desc": "Construction of 100 mm and 150 mm CHB walls (load and non-load bearing), including reinforcing steel.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, scaffolding.",
+    "days": 25,
+    "no": 4
+   },
+   {
+    "name": "Roof Framing and Roofing Works",
+    "desc": "Fabrication and erection of structural steel trusses and purlins; prepainted metal roofing sheets, flashings, gutter, fascia board and metal structure accessories.",
+    "crew": "Crew: welders, steel erectors, tinsmiths and roofers, laborers.\nEquipment: welding machines, cutting outfit, boom truck, scaffolding.",
+    "days": 22,
+    "no": 5
+   },
+   {
+    "name": "Fabricated Materials and Joinery",
+    "desc": "Installation of wooden doors, jalousie and casement steel windows, window grills, locksets, hinges, and carpentry and joinery works.",
+    "crew": "Crew: carpenters, glaziers, laborers.\nEquipment: hand and power tools.",
+    "days": 17,
+    "no": 6
+   },
+   {
+    "name": "Finishing Works",
+    "desc": "Plain cement floor finish with hardener, cement plaster finish, fiber-cement board ceiling on metal frame, reflective insulation, glazed and unglazed tiles, pipe railings and waterproofing.",
+    "crew": "Crew: plasterers and masons, finishers, laborers.\nEquipment: concrete mixer, scaffolding, hand tools.",
+    "days": 31,
+    "no": 7
+   },
+   {
+    "name": "Plumbing and Sanitary Works",
+    "desc": "Sewer lines, cold waterlines, storm drainage and downspout, sanitary and plumbing fixtures, septic vault, catch basin and fire protection system.",
+    "crew": "Crew: plumbers, laborers (with electricians for combined works).\nEquipment: pipe threading machine, hand tools.",
+    "days": 17,
+    "no": 8
+   },
+   {
+    "name": "Electrical Works",
+    "desc": "Installation of conduits, boxes and fittings, wires and wiring devices, power load center and panel board, lighting fixtures and fire alarm system.",
+    "crew": "Crew: electricians, laborers.\nEquipment: conduit bender, hand tools, insulation tester (megger).",
+    "days": 17,
+    "no": 9
+   },
+   {
+    "name": "Painting, Punchlisting and Demobilization",
+    "desc": "Masonry, wood and metal painting; final inspection, correction of punchlist items, site cleanup and turnover.",
+    "crew": "Crew: painters, punchlist trade crews, laborers.\nEquipment: paint rollers and airless sprayer, scaffolding, hand tools, low-bed trailer (demobilization).",
+    "days": 20,
+    "no": 10
+   }
+  ],
+  "total": 400,
+  "no": 1
+ },
+ {
+  "name": "Road Concreting with Drainage system",
+  "ms": [
+   {
+    "name": "Mobilization and Demobilization",
+    "desc": "Mobilization of equipment, manpower and temporary facilities to site; demobilization upon completion.",
+    "crew": "Crew: foreman, trade crews, laborers.\nEquipment: hand tools, dump truck, low-bed trailer (demobilization).",
+    "days": 5,
+    "no": 1
+   },
+   {
+    "name": "Removal of Actual Structures and Obstruction (PCCP, Unreinforced, 0.23 m Thick)",
+    "desc": "Breaking, removal and disposal of existing unreinforced Portland cement concrete pavement within the project limits.",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, dump trucks.",
+    "days": 7,
+    "no": 2
+   },
+   {
+    "name": "Removal of Actual Structures and Obstruction (Concrete)",
+    "desc": "Removal and disposal of existing concrete structures and obstructions.",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, dump trucks.",
+    "days": 5,
+    "no": 3
+   },
+   {
+    "name": "Surplus Common Excavation (Includes Disposal)",
+    "desc": "Excavation and hauling and disposal of surplus common material to the designated spoil area.",
+    "crew": "Crew: foreman, excavator operator, laborers and spotters.\nEquipment: hydraulic excavator (backhoe), dump trucks.",
+    "days": 5,
+    "no": 4
+   },
+   {
+    "name": "Structure Excavation (Common Soil)",
+    "desc": "Excavation for drainage and roadside structures in common soil to plan lines and grades.",
+    "crew": "Crew: foreman, excavator operator, laborers and spotters.\nEquipment: hydraulic excavator (backhoe), dump trucks.",
+    "days": 8,
+    "no": 5
+   },
+   {
+    "name": "Pipe Culverts and Drain Excavation (Common Soil)",
+    "desc": "Trench excavation in common soil for pipe culverts and drainage lines.",
+    "crew": "Crew: foreman, excavator operator, laborers and spotters.\nEquipment: hydraulic excavator (backhoe), dump trucks.",
+    "days": 7,
+    "no": 6
+   },
+   {
+    "name": "Embankment from Roadway Excavation (Common Soil)",
+    "desc": "Spreading and layered compaction of embankment using suitable material from roadway excavation.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: dump trucks, motor grader, vibratory roller, water truck.",
+    "days": 8,
+    "no": 7
+   },
+   {
+    "name": "Gravel Fill",
+    "desc": "Furnishing, placing and compacting of gravel fill and bedding.",
+    "crew": "Crew: mason, laborers.\nEquipment: wheel loader or backhoe, plate compactor.",
+    "days": 5,
+    "no": 8
+   },
+   {
+    "name": "Subgrade Preparation (Common Material)",
+    "desc": "Shaping, grading and compaction of the subgrade using common material to receive the subbase.",
+    "crew": "Crew: foreman, equipment operators.\nEquipment: motor grader, vibratory roller, water truck.",
+    "days": 5,
+    "no": 9
+   },
+   {
+    "name": "Aggregate Subbase Course",
+    "desc": "Spreading, watering and compaction of the aggregate subbase course to the required thickness.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: motor grader, vibratory roller, water truck, dump trucks.",
+    "days": 6,
+    "no": 10
+   },
+   {
+    "name": "Polymer Stabilized Subbase, Base and Surface Course",
+    "desc": "Application and compaction of the polymer stabilized subbase, base and surface course.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: motor grader, vibratory roller, water truck, dump trucks.",
+    "days": 8,
+    "no": 11
+   },
+   {
+    "name": "PCC Pavement (Unreinforced), 0.20 m Thick, 14 Days",
+    "desc": "Setting of forms, paving, finishing, curing and joint sawing and sealing of 0.20 m thick unreinforced Portland cement concrete pavement, 14-day mix.",
+    "crew": "Crew: foreman, concrete finishers and masons, laborers.\nEquipment: transit mixers or batching plant, paving screed, concrete vibrators, concrete cutter, curing sprayer.",
+    "days": 15,
+    "no": 12
+   },
+   {
+    "name": "Reinforcing Steel (Grade 40)",
+    "desc": "Cutting, bending and installation of Grade 40 reinforcing steel for drainage structures.",
+    "crew": "Crew: steelmen (bar cutting and bending), laborers.\nEquipment: bar cutter, bar bender.",
+    "days": 5,
+    "no": 13
+   },
+   {
+    "name": "Structural Concrete (20.68 MPa, Class A, 28 Days)",
+    "desc": "Forming, pouring and curing of Class A structural concrete, 20.68 MPa, 28-day strength.",
+    "crew": "Crew: foreman, masons and finishers, carpenters, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators.",
+    "days": 5,
+    "no": 14
+   },
+   {
+    "name": "Paint",
+    "desc": "Surface preparation and application of paint on concrete and metal surfaces.",
+    "crew": "Crew: painters, laborers.\nEquipment: paint rollers and brushes, airless sprayer, scaffolding.",
+    "days": 3,
+    "no": 15
+   },
+   {
+    "name": "Pipe Culverts, 910 mm dia. (36 in.)",
+    "desc": "Laying, jointing and backfilling of 910 mm diameter pipe culverts, including bedding.",
+    "crew": "Crew: pipelayers, riggers, laborers.\nEquipment: backhoe or boom truck for pipe setting, plate compactor, dump trucks.",
+    "days": 5,
+    "no": 16
+   },
+   {
+    "name": "Stone Masonry",
+    "desc": "Construction of grouted stone masonry for drainage and slope protection.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, water truck.",
+    "days": 5,
+    "no": 17
+   },
+   {
+    "name": "Metal Guardrail (Metal Beam) Including Post",
+    "desc": "Installation of metal beam guardrail including posts, complete with fittings.",
+    "crew": "Crew: welders, laborers.\nEquipment: post driver or auger, welding machine.",
+    "days": 4,
+    "no": 18
+   },
+   {
+    "name": "Metal Beam End Piece",
+    "desc": "Installation of metal beam end pieces at guardrail terminals.",
+    "crew": "Crew: welders, laborers.\nEquipment: post driver or auger, welding machine.",
+    "days": 1,
+    "no": 19
+   },
+   {
+    "name": "Concrete Curb (Precast)",
+    "desc": "Fabrication and setting of precast concrete curbs on prepared bedding.",
+    "crew": "Crew: masons, laborers.\nEquipment: curb forms, concrete mixer, boom truck (precast setting).",
+    "days": 5,
+    "no": 20
+   },
+   {
+    "name": "Metal Structure Accessories (Steel Plates)",
+    "desc": "Fabrication and installation of metal structure accessories (steel plates).",
+    "crew": "Crew: welders and steel fabricators.\nEquipment: welding machine, cutting outfit.",
+    "days": 3,
+    "no": 21
+   }
+  ],
+  "total": 120,
+  "no": 2
+ },
+ {
+  "name": "Installation of water tank Inclusive of Gal. Pipes",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and survey, staking and layout of the tank location and pipe routes.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: service vehicle, survey instruments, hand tools.",
+    "days": 3,
+    "no": 1
+   },
+   {
+    "name": "Excavation and Foundation Preparation",
+    "desc": "Excavation for the water tank foundation and pipe trenches, and placement and compaction of gravel bedding.",
+    "crew": "Crew: foreman, equipment operator, laborers.\nEquipment: backhoe, dump truck, plate compactor.",
+    "days": 5,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Tank Foundation and Support Structure",
+    "desc": "Cutting, bending and installation of Grade 40 reinforcing steel, forms and falseworks, and placing and curing of Class A structural concrete for the tank foundation, pedestal or elevated support structure.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer, concrete vibrator, bar cutter and bender.",
+    "days": 12,
+    "no": 3
+   },
+   {
+    "name": "Water Tank Installation",
+    "desc": "Setting, anchoring and leveling of the water tank on the completed support structure, including installation of inlet, outlet, overflow and drain fittings.",
+    "crew": "Crew: plumbers, riggers, laborers.\nEquipment: boom truck, wrenches, hand tools.",
+    "days": 5,
+    "no": 4
+   },
+   {
+    "name": "Galvanized Iron Pipe Laying and Fittings",
+    "desc": "Laying, threading and jointing of galvanized iron pipes, valves and fittings along the distribution route, including trench backfilling and compaction.",
+    "crew": "Crew: plumbers and pipefitters, laborers.\nEquipment: pipe threading machine, pipe wrenches, backhoe.",
+    "days": 10,
+    "no": 5
+   },
+   {
+    "name": "Testing, Disinfection and Commissioning",
+    "desc": "Hydrostatic and pressure testing of the tank and pipelines, rectification of leaks, and disinfection and flushing of the system prior to service.",
+    "crew": "Crew: plumbers, technician.\nEquipment: test pump, hand tools.",
+    "days": 4,
+    "no": 6
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck.",
+    "days": 3,
+    "no": 7
+   }
+  ],
+  "total": 90,
+  "no": 3
+ },
+ {
+  "name": "Construction of Perimeter Fence",
+  "ms": [
+   {
+    "name": "Pre-Construction, Survey and Staking",
+    "desc": "Establishing legal boundary lines, clearing alignment pathways, setting out structural reference stakes, and setting up the mandatory project billboards.",
+    "crew": "Crew: project engineer, foreman, survey team, laborers.\nEquipment: survey instruments, service vehicle, hand tools.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Site Mobilization and Safety Setup",
+    "desc": "Delivery of raw materials (aggregates, reinforcing bars, hollow blocks), transport of heavy equipment, and establishing the safety and health program infrastructure.",
+    "crew": "Crew: foreman, laborers.\nEquipment: dump trucks, low-bed trailer, hand tools.",
+    "days": 7,
+    "no": 2
+   },
+   {
+    "name": "Boundary Line Earth Excavation",
+    "desc": "Bulk mechanical and manual trench excavation along the fence line for isolated column footings and continuous wall footings down to firm soil strata.",
+    "crew": "Crew: foreman, equipment operator, laborers.\nEquipment: backhoe, dump truck, hand tools.",
+    "days": 15,
+    "no": 3
+   },
+   {
+    "name": "Footing Concrete and Column Rebars",
+    "desc": "Assembly, cutting, and tying of Grade 40 reinforcing steel for foundation column footings and dowels, followed by initial lean concrete pouring.",
+    "crew": "Crew: foreman, steelmen, masons, laborers.\nEquipment: bar cutter and bender, concrete mixer.",
+    "days": 15,
+    "no": 4
+   },
+   {
+    "name": "Tie Beam Reinforcement and Pouring",
+    "desc": "Layout of continuous ground tie beams to structurally connect all perimeter columns, installing reinforcement cages, and pouring structural concrete (20.68 MPa, Class A).",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer, concrete vibrator, bar cutter and bender.",
+    "days": 15,
+    "no": 5
+   },
+   {
+    "name": "Concrete Hollow Block (CHB) Laying",
+    "desc": "Core masonry installation of 150 mm (6-inch) concrete hollow blocks between structural columns, including horizontal and vertical block reinforcement and internal mortar cell filling.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, scaffolding.",
+    "days": 20,
+    "no": 6
+   },
+   {
+    "name": "Column Structural Framework and Pouring",
+    "desc": "Erecting column vertical formworks and scaffolding, followed by pouring structural concrete to form the primary load-bearing fence posts at uniform spacing.",
+    "crew": "Crew: foreman, carpenters (forms), masons, laborers.\nEquipment: concrete mixer, concrete vibrator, scaffolding.",
+    "days": 12,
+    "no": 7
+   },
+   {
+    "name": "Masonry Plastering and Surface Finishing",
+    "desc": "Application of structural cement plaster finish on both faces of the fence walls to smooth the surface and protect blocks from environmental degradation.",
+    "crew": "Crew: plasterers and masons, laborers.\nEquipment: concrete mixer, scaffolding, hand tools.",
+    "days": 12,
+    "no": 8
+   },
+   {
+    "name": "Top Concertina Wire and Security Finishes",
+    "desc": "Installation of continuous security enhancements along the top beam, such as razor or concertina wire coils, steel bar extensions, or perimeter gate fabrication.",
+    "crew": "Crew: welders, laborers.\nEquipment: welding machine, hand tools.",
+    "days": 8,
+    "no": 9
+   },
+   {
+    "name": "Perimeter Painting and Demobilization",
+    "desc": "Application of weather-resistant exterior concrete primer and paint coatings along the fence line, final site clearing, punch-list rectifications, and demobilization.",
+    "crew": "Crew: painters, laborers.\nEquipment: paint rollers and brushes, hand tools, low-bed trailer (demobilization).",
+    "days": 6,
+    "no": 10
+   }
+  ],
+  "total": 165,
+  "no": 4
+ },
+ {
+  "name": "Construction of Box Type Culvert",
+  "ms": [
+   {
+    "name": "Mobilization and Project Preparation",
+    "desc": "Mobilization of personnel, equipment, materials and temporary facilities; installation of the project billboard and signboard; occupational safety and health program; traffic management setup; miscellaneous survey and staking; site layout before construction begins.",
+    "crew": "Crew: project engineer, foreman, safety officer, survey team, laborers.\nEquipment: service vehicle, survey instruments, hand tools.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Site Clearing and Demolition",
+    "desc": "Removal of structures and obstruction, including existing pavement, drainage structures, debris, vegetation, and other obstructions within the project limits to prepare the site.",
+    "crew": "Crew: foreman, equipment operator, laborers.\nEquipment: backhoe with breaker, jackhammer, dump truck, hand tools.",
+    "days": 5,
+    "no": 2
+   },
+   {
+    "name": "Earthworks and Excavation",
+    "desc": "Structure excavation in common soil, embankment from roadway and structure excavation, gravel fill placement, and grading to establish the drainage alignment, including backfilling and compaction.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: backhoe, dump truck, plate compactor.",
+    "days": 9,
+    "no": 3
+   },
+   {
+    "name": "Reinforced Concrete Drainage Construction",
+    "desc": "Cutting, bending and installation of Grade 40 reinforcing steel; forms and falseworks; placing and curing of Class A structural concrete, 20.68 MPa, for the reinforced concrete box culvert structure, ensuring compliance with project specifications.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: bar cutter and bender, concrete mixer or transit mixer, concrete vibrator.",
+    "days": 37,
+    "no": 4
+   },
+   {
+    "name": "Stone Masonry and Slope Protection Works",
+    "desc": "Construction of stone masonry, riprap, and other slope protection structures to stabilize the drainage channel and prevent soil erosion.",
+    "crew": "Crew: foreman, masons, laborers.\nEquipment: concrete mixer, hand tools.",
+    "days": 7,
+    "no": 5
+   },
+   {
+    "name": "Pavement Restoration and Surface Course",
+    "desc": "Restoration of the affected roadway: emulsified asphalt application, bituminous concrete surface binder course, hot-laid, 50 mm, bituminous concrete surface wearing course, hot-laid, 50 mm, and reflectorized thermoplastic pavement markings, white, over disturbed pavement sections.",
+    "crew": "Crew: foreman, paving crew, laborers.\nEquipment: asphalt distributor, paver, pneumatic and steel-wheel rollers.",
+    "days": 9,
+    "no": 6
+   },
+   {
+    "name": "Final Inspection, Cleanup, and Demobilization",
+    "desc": "Conduct of final inspection, correction of punch-list items, removal of temporary facilities, site cleanup, preparation of project documentation, and project turnover.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: service vehicle, hand tools.",
+    "days": 5,
+    "no": 7
+   }
+  ],
+  "total": 270,
+  "no": 5
+ },
+ {
+  "name": "Upgrading of Electrical Power System",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and coordination of the scheduled power interruption and isolation plan.",
+    "crew": "Crew: project engineer, foreman, electricians, laborers.\nEquipment: service vehicle, hand tools.",
+    "days": 3,
+    "no": 1
+   },
+   {
+    "name": "Removal and Isolation of Existing Electrical Components",
+    "desc": "Safe isolation of the existing supply and removal of defective wiring, conduits, panel boards and fixtures scheduled for replacement.",
+    "crew": "Crew: electricians, laborers.\nEquipment: insulation tester (megger), hand tools.",
+    "days": 7,
+    "no": 2
+   },
+   {
+    "name": "Roughing-in Works (Conduits, Boxes and Fittings)",
+    "desc": "Installation of conduits, junction and utility boxes, and fittings for the upgraded power layout.",
+    "crew": "Crew: electricians, laborers.\nEquipment: conduit bender, hand tools.",
+    "days": 20,
+    "no": 3
+   },
+   {
+    "name": "Wires and Wiring Devices",
+    "desc": "Pulling and termination of wires and cables and installation of wiring devices in accordance with the approved electrical plan.",
+    "crew": "Crew: electricians, laborers.\nEquipment: fish tape, hand tools.",
+    "days": 16,
+    "no": 4
+   },
+   {
+    "name": "Power Load Center, Switchgear and Panel Board",
+    "desc": "Installation and termination of the upgraded power load center, switchgear and panel boards, including circuit breakers and grounding.",
+    "crew": "Crew: electricians, laborers.\nEquipment: hand tools, insulation tester (megger).",
+    "days": 12,
+    "no": 5
+   },
+   {
+    "name": "Lighting Fixtures and Power Outlets",
+    "desc": "Installation of lighting fixtures and power outlets under the upgraded system.",
+    "crew": "Crew: electricians, laborers.\nEquipment: scaffolding, hand tools.",
+    "days": 10,
+    "no": 6
+   },
+   {
+    "name": "Testing and Commissioning",
+    "desc": "Insulation resistance, continuity, polarity and load testing of the upgraded system, and energization upon passing the required tests.",
+    "crew": "Crew: electricians, technician.\nEquipment: insulation tester (megger), multimeter.",
+    "days": 3,
+    "no": 7
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, service vehicle.",
+    "days": 2,
+    "no": 8
+   }
+  ],
+  "total": 60,
+  "no": 6
+ },
+ {
+  "name": "Renovation of Legislative Building (Improvement enhancement of electrical accent lighting fixtures - luminalies)",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and protection of existing finishes and furniture within the work areas.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: service vehicle, protective coverings, hand tools.",
+    "days": 6,
+    "no": 1
+   },
+   {
+    "name": "Removal of Existing Lighting Fixtures and Accessories",
+    "desc": "Safe isolation of the affected lighting circuits and removal of existing lighting fixtures, accessories and exposed wiring scheduled for replacement.",
+    "crew": "Crew: electricians, laborers.\nEquipment: insulation tester (megger), scaffolding, hand tools.",
+    "days": 12,
+    "no": 2
+   },
+   {
+    "name": "Roughing-in Works for Accent Lighting",
+    "desc": "Installation of conduits, boxes and fittings, and provision of supports and recesses for the accent lighting layout.",
+    "crew": "Crew: electricians, laborers.\nEquipment: conduit bender, scaffolding, hand tools.",
+    "days": 18,
+    "no": 3
+   },
+   {
+    "name": "Wires and Wiring Devices",
+    "desc": "Pulling and termination of wires and installation of switching and dimming devices for the accent lighting circuits.",
+    "crew": "Crew: electricians, laborers.\nEquipment: fish tape, hand tools.",
+    "days": 15,
+    "no": 4
+   },
+   {
+    "name": "Installation of Accent Lighting Fixtures (Luminaires)",
+    "desc": "Mounting, connection and aiming of accent lighting fixtures and luminaires in accordance with the approved lighting layout.",
+    "crew": "Crew: electricians, laborers.\nEquipment: scaffolding, hand tools.",
+    "days": 21,
+    "no": 5
+   },
+   {
+    "name": "Testing, Adjustment and Commissioning",
+    "desc": "Testing of circuits, adjustment of aiming and dimming levels, and commissioning of the completed lighting system.",
+    "crew": "Crew: electricians, technician.\nEquipment: insulation tester (megger), multimeter.",
+    "days": 9,
+    "no": 6
+   },
+   {
+    "name": "Patching, Painting Touch-up, Cleanup and Demobilization",
+    "desc": "Patching and painting touch-up of affected wall and ceiling surfaces, final inspection, cleanup and demobilization.",
+    "crew": "Crew: painters, laborers.\nEquipment: paint rollers and brushes, hand tools.",
+    "days": 9,
+    "no": 7
+   }
+  ],
+  "total": 90,
+  "no": 7
+ },
+ {
+  "name": "Construction of Cebu City Police Office Building",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, mobilization and demobilization, and site layout and staking.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Earthworks and Termite Control",
+    "desc": "Excavation of column footings, embankment from structure excavation, and gravel fill; soil poisoning for termite control.",
+    "crew": "Crew: foreman, equipment operator, laborers, licensed pest-control applicator.\nEquipment: backhoe, dump truck, plate compactor, power sprayer.",
+    "days": 12,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Works (Substructure and Frame)",
+    "desc": "Structural concrete for column and wall footings, slab-on-fill, ramp and stairs; columns, beams and suspended slabs across all storeys; reinforcing steel; forms and falseworks.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 55,
+    "no": 3
+   },
+   {
+    "name": "Painting, Punchlisting and Demobilization",
+    "desc": "Masonry, wood and metal painting; final inspection, correction of punchlist items, site cleanup and turnover.",
+    "crew": "Crew: painters, punchlist trade crews, laborers.\nEquipment: paint rollers and airless sprayer, scaffolding, hand tools, low-bed trailer (demobilization).",
+    "days": 18,
+    "no": 4
+   }
+  ],
+  "total": 300,
+  "no": 8
+ },
+ {
+  "name": "Concreting of Pathways",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and layout and staking of the pathway alignment.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: service vehicle, survey instruments, hand tools.",
+    "days": 2,
+    "no": 1
+   },
+   {
+    "name": "Clearing and Removal of Obstructions",
+    "desc": "Clearing of vegetation, debris and minor obstructions along the pathway alignment, including disposal.",
+    "crew": "Crew: foreman, laborers.\nEquipment: hand tools, dump truck.",
+    "days": 3,
+    "no": 2
+   },
+   {
+    "name": "Excavation, Grading and Subgrade Preparation",
+    "desc": "Excavation and grading to the required pathway elevation, and shaping and compaction of the subgrade.",
+    "crew": "Crew: foreman, equipment operator, laborers.\nEquipment: backhoe or hand excavation tools, plate compactor.",
+    "days": 4,
+    "no": 3
+   },
+   {
+    "name": "Gravel Bedding",
+    "desc": "Placement, spreading and compaction of gravel bedding over the prepared subgrade.",
+    "crew": "Crew: foreman, laborers.\nEquipment: plate compactor, wheelbarrows, hand tools.",
+    "days": 3,
+    "no": 4
+   },
+   {
+    "name": "Concrete Pathway Pouring, Finishing and Curing",
+    "desc": "Setting of side forms, placing, finishing and jointing of the concrete pathway, including the curing period required for the concrete to gain strength.",
+    "crew": "Crew: foreman, masons and finishers, laborers.\nEquipment: concrete mixer, concrete vibrator, screed, curing materials.",
+    "days": 15,
+    "no": 5
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck.",
+    "days": 3,
+    "no": 6
+   }
+  ],
+  "total": 60,
+  "no": 9
+ },
+ {
+  "name": "Construction of water facilities (water system) and Construction of covered walk in.",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard and setup of the occupational safety and health program.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 4,
+    "no": 1
+   },
+   {
+    "name": "Earthworks",
+    "desc": "Excavation for the reservoir, embankment, and gravel fill.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: backhoe, dump trucks, plate compactor.",
+    "days": 10,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Reservoir",
+    "desc": "Reinforced concrete reservoir; structural concrete, reinforcing steel, forms and falseworks.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 18,
+    "no": 3
+   },
+   {
+    "name": "Waterproofing and Plaster Finish",
+    "desc": "Cement plaster finish and waterproofing of the existing and proposed reservoir.",
+    "crew": "Crew: masons, waterproofing applicators, laborers.\nEquipment: concrete mixer, waterproofing tools, scaffolding.",
+    "days": 10,
+    "no": 4
+   },
+   {
+    "name": "Covered Walkway Construction",
+    "desc": "Construction of the covered walk-in structure: column footings and posts, structural steel framing, prepainted metal roofing sheets and concrete walkway flooring.",
+    "crew": "Crew: welders, masons, laborers.\nEquipment: welding machine, concrete mixer, scaffolding.",
+    "days": 12,
+    "no": 5
+   },
+   {
+    "name": "Testing and Commissioning",
+    "desc": "Pressure testing, disinfection and commissioning of the water system.",
+    "crew": "Crew: plumbers, technician.\nEquipment: test pump, multimeter, hand tools.",
+    "days": 3,
+    "no": 6
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck, low-bed trailer (demobilization).",
+    "days": 3,
+    "no": 7
+   }
+  ],
+  "total": 30,
+  "no": 10
+ },
+ {
+  "name": "Construction of DVAIF Building with compound perimeter fence",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and site layout and staking of the building and fence lines.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 3,
+    "no": 1
+   },
+   {
+    "name": "Earthworks",
+    "desc": "Excavation of building column footings and fence wall footings, embankment, and gravel fill.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: backhoe, dump trucks, plate compactor.",
+    "days": 4,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Works (Building)",
+    "desc": "Structural concrete and reinforcing steel for building column footings, columns, beams and slab-on-fill; forms and falseworks.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 12,
+    "no": 3
+   },
+   {
+    "name": "Masonry Works (Building)",
+    "desc": "Construction of non-load-bearing CHB walls, 150 mm thick.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, scaffolding.",
+    "days": 6,
+    "no": 4
+   },
+   {
+    "name": "Roof and Framing Works",
+    "desc": "Fabrication and erection of structural steel framing; installation of prepainted metal roofing sheets.",
+    "crew": "Crew: welders, steel erectors, tinsmiths and roofers, laborers.\nEquipment: welding machines, cutting outfit, boom truck, scaffolding.",
+    "days": 9,
+    "no": 5
+   },
+   {
+    "name": "Electrical and Plumbing Works",
+    "desc": "Installation of conduits, boxes and fittings, wires and wiring devices, panel board and lighting fixtures; plumbing rough-in and fixtures.",
+    "crew": "Crew: electricians, plumbers, laborers.\nEquipment: conduit bender, pipe threading machine, hand tools, insulation tester (megger).",
+    "days": 6,
+    "no": 6
+   },
+   {
+    "name": "Building Finishing and Painting Works",
+    "desc": "Cement plaster finish; masonry and metal painting of finished surfaces.",
+    "crew": "Crew: plasterers, painters, laborers.\nEquipment: concrete mixer, paint rollers and brushes, scaffolding.",
+    "days": 6,
+    "no": 7
+   },
+   {
+    "name": "Finishes, Painting, Cleanup and Demobilization",
+    "desc": "Installation of security enhancements along the top beam such as concertina wire or steel bar extensions; gate fabrication and installation; exterior painting; final inspection, punchlist correction, cleanup and demobilization.",
+    "crew": "Crew: welders, painters, laborers.\nEquipment: welding machine, paint rollers and brushes, hand tools, low-bed trailer (demobilization).",
+    "days": 9,
+    "no": 8
+   }
+  ],
+  "total": 480,
+  "no": 11
+ },
+ {
+  "name": "Construction of Bridge",
+  "ms": [
+   {
+    "name": "Mobilization and Demobilization",
+    "desc": "Mobilization of personnel, equipment, materials and temporary facilities; demobilization at completion.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 5,
+    "no": 1
+   },
+   {
+    "name": "Site Clearing and Removal of Structures",
+    "desc": "Removal of actual structures and obstruction, including 0.23 m thick Portland cement concrete pavement and concrete obstructions; surplus common excavation including hauling and disposal to the designated spoil area.",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, dump trucks.",
+    "days": 15,
+    "no": 2
+   },
+   {
+    "name": "Earthworks, Shoring and Trench Excavation",
+    "desc": "Structure excavation in common soil; installation of shoring, cribbing and temporary earth-retention works; trench excavation for pipe culverts and drainage lines; hauling, spreading and layered compaction of embankment from borrow; gravel fill and bedding; subgrade preparation.",
+    "crew": "Crew: foreman, excavator operator, timbermen and carpenters, laborers.\nEquipment: hydraulic excavator (backhoe), dump trucks, vibratory roller, shoring materials.",
+    "days": 43,
+    "no": 3
+   },
+   {
+    "name": "Steel Sheet Piling and Ground Anchors",
+    "desc": "Furnishing and delivery of structural steel sheet piles to site; driving to the required tip elevation for slope and earth retention; drilling, installation, grouting and stressing of permanent ground anchors for slope stabilization.",
+    "crew": "Crew: pile-driving crew, specialist anchor crew, riggers, surveyor.\nEquipment: crawler crane with vibratory or drop hammer, anchor drilling rig, grout pump, hydraulic stressing jack.",
+    "days": 34,
+    "no": 4
+   },
+   {
+    "name": "Reinforced Concrete Structures",
+    "desc": "Cutting, bending and installation of Grade 40 reinforcing steel; forming, pouring and curing of Class A structural concrete, 20.68 MPa, 28-day strength.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 22,
+    "no": 5
+   },
+   {
+    "name": "Rigid Pavement (PCCP)",
+    "desc": "Setting of forms, paving, finishing, curing and joint sawing and sealing of 0.20 m thick unreinforced Portland cement concrete pavement, 14-day mix.",
+    "crew": "Crew: foreman, concrete finishers and masons, laborers.\nEquipment: transit mixers or batching plant, paving screed, concrete vibrators, concrete cutter, curing sprayer.",
+    "days": 22,
+    "no": 6
+   },
+   {
+    "name": "Slope Protection Works",
+    "desc": "Fabrication and installation of metal frames and grating, 0.80 m x 2.00 m, for drainage openings; cleaning, repair and reconditioning of existing drainage structures; construction of grouted stone masonry for drainage and slope protection.",
+    "crew": "Crew: welders, masons, laborers.\nEquipment: welding machine, concrete mixer, chipping tools.",
+    "days": 18,
+    "no": 7
+   }
+  ],
+  "total": 180,
+  "no": 12
+ },
+ {
+  "name": "Proposed Reinforced Concrete Bridge",
+  "ms": [
+   {
+    "name": "Pre-Construction and Mobilization",
+    "desc": "Execution of the bridge survey and staking, setup of the standard project billboards, implementation of the occupational safety program, and initial site mobilization.",
+    "crew": "Crew: project engineer, foreman, survey team, laborers.\nEquipment: survey instruments, low-bed trailer, service vehicle.",
+    "days": 11,
+    "no": 1
+   },
+   {
+    "name": "Earthworks and Foundation Shoring",
+    "desc": "Bridge structure excavation in common soil, alongside the layout and installation of general scaffolding and shoring to stabilize excavation areas.",
+    "crew": "Crew: foreman, excavator operator, timbermen and carpenters, laborers.\nEquipment: hydraulic excavator (backhoe), dump trucks, shoring and scaffolding materials.",
+    "days": 28,
+    "no": 2
+   },
+   {
+    "name": "Substructure Foundation Piling",
+    "desc": "Handling and driving of structural steel sheet piles to construct the deep support foundation structures for Abutments A and B.",
+    "crew": "Crew: pile-driving crew, riggers, surveyor.\nEquipment: crawler crane with vibratory or drop hammer, delivery trailers.",
+    "days": 44,
+    "no": 3
+   },
+   {
+    "name": "Reinforced Concrete Substructure and Superstructure",
+    "desc": "Layout and installation of Grade 40 and Grade 60 reinforcing steel, followed by formwork assembly and structural concrete pouring, 27.58 MPa, Class A, for the bridge girders, piers, abutments, and deck slab, allowing for proper 28-day curing intervals.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: transit mixer or batching plant, concrete vibrators, bar cutter and bender, falseworks.",
+    "days": 72,
+    "no": 4
+   },
+   {
+    "name": "Bridge Deck Components and Bearings",
+    "desc": "Precision seating of the elastomeric bridge bearings under the structural girders and application of 12 mm premolded expansion joint fillers with sealant between the approach slab and abutments.",
+    "crew": "Crew: foreman, riggers, laborers.\nEquipment: hydraulic jacks, boom truck, hand tools.",
+    "days": 17,
+    "no": 5
+   },
+   {
+    "name": "Drainage and Slope Protection Structures",
+    "desc": "Construction of stone masonry structures for localized structural abutment protection against water flow and soil erosion.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, water truck.",
+    "days": 28,
+    "no": 6
+   },
+   {
+    "name": "Safety Appurtenances and Demobilization",
+    "desc": "Final assembly of the steel pedestrian railings on both sides, construction of the remaining approach slabs, site cleanup, and structural demobilization.",
+    "crew": "Crew: welders, masons, laborers.\nEquipment: welding machine, concrete mixer, hand tools, low-bed trailer (demobilization).",
+    "days": 32,
+    "no": 7
+   }
+  ],
+  "total": 120,
+  "no": 13
+ },
+ {
+  "name": "Renovation of Evacuation Center",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard and setup of the occupational safety and health program.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 15,
+    "no": 1
+   },
+   {
+    "name": "Removal of Existing Structures",
+    "desc": "Demolition and removal of existing structures and obstruction.",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, dump trucks.",
+    "days": 30,
+    "no": 2
+   },
+   {
+    "name": "Earthworks",
+    "desc": "Excavation of column footings, embankment, and gravel fill.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: backhoe, dump trucks, plate compactor.",
+    "days": 30,
+    "no": 3
+   },
+   {
+    "name": "Reinforced Concrete Works",
+    "desc": "Column footings and restoration of slab-on-fill and columns; structural concrete, reinforcing steel, forms and falseworks.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 30,
+    "no": 4
+   },
+   {
+    "name": "Roof and Metal Works",
+    "desc": "Fabrication and erection of structural steel; installation of prepainted metal roofing sheets.",
+    "crew": "Crew: welders, steel erectors, tinsmiths and roofers, laborers.\nEquipment: welding machines, cutting outfit, boom truck, scaffolding.",
+    "days": 30,
+    "no": 5
+   },
+   {
+    "name": "Finishing Works",
+    "desc": "Cement plaster finish.",
+    "crew": "Crew: plasterers and masons, finishers, laborers.\nEquipment: concrete mixer, scaffolding, hand tools.",
+    "days": 30,
+    "no": 6
+   },
+   {
+    "name": "Electrical Works",
+    "desc": "Installation of conduits, boxes and fittings, wires and wiring devices, power load center and panel board, and lighting fixtures.",
+    "crew": "Crew: electricians, laborers.\nEquipment: conduit bender, hand tools, insulation tester (megger).",
+    "days": 30,
+    "no": 7
+   },
+   {
+    "name": "Painting Works",
+    "desc": "Metal painting of steel members and finished surfaces.",
+    "crew": "Crew: painters, laborers.\nEquipment: paint rollers and brushes, airless sprayer, scaffolding.",
+    "days": 30,
+    "no": 8
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck, low-bed trailer (demobilization).",
+    "days": 15,
+    "no": 9
+   }
+  ],
+  "total": 240,
+  "no": 14
+ },
+ {
+  "name": "Road Concreting with Drainage System",
+  "ms": [
+   {
+    "name": "Mobilization, Traffic Management and Site Preparation",
+    "desc": "Project billboard and signboard; occupational safety and health program; traffic management; mobilization and demobilization.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Clearing and Removal Works",
+    "desc": "Individual removal of trees (150-300 mm dia.); removal of structures and obstruction (concrete).",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, chain saw, dump trucks.",
+    "days": 10,
+    "no": 2
+   },
+   {
+    "name": "Roadway and Structure Excavation",
+    "desc": "Surplus common excavation; structure excavation (common soil); foundation fill; embankment from roadway excavation.",
+    "crew": "Crew: foreman, excavator operator, laborers and spotters.\nEquipment: hydraulic excavator (backhoe), dump trucks.",
+    "days": 15,
+    "no": 3
+   },
+   {
+    "name": "Subgrade Preparation",
+    "desc": "Subgrade preparation using common material.",
+    "crew": "Crew: foreman, equipment operators.\nEquipment: motor grader, vibratory roller, water truck.",
+    "days": 15,
+    "no": 4
+   },
+   {
+    "name": "Aggregate Subbase Course",
+    "desc": "Placement and compaction of the aggregate subbase course.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: motor grader, vibratory roller, water truck, dump trucks.",
+    "days": 10,
+    "no": 5
+   },
+   {
+    "name": "Drainage Pipe Culverts",
+    "desc": "Laying of Class II 910 mm diameter reinforced concrete pipe culverts, including bedding and jointing.",
+    "crew": "Crew: pipelayers, masons, laborers.\nEquipment: backhoe or boom truck for pipe setting, concrete mixer, plate compactor.",
+    "days": 10,
+    "no": 6
+   },
+   {
+    "name": "Drainage Structures (Reinforced Concrete)",
+    "desc": "Structural concrete (Class A) and Grade 40 reinforcing steel for drainage structures and lined canal.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 15,
+    "no": 7
+   },
+   {
+    "name": "PCCP Laying",
+    "desc": "Portland cement concrete pavement (unreinforced), 0.28 m thick.",
+    "crew": "Crew: foreman, concrete finishers and masons, laborers.\nEquipment: transit mixers or batching plant, paving screed, concrete vibrators, concrete cutter, curing sprayer.",
+    "days": 25,
+    "no": 8
+   },
+   {
+    "name": "Slope Protection Works",
+    "desc": "Hand-laid rock embankment; concrete slope protection.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, backhoe.",
+    "days": 25,
+    "no": 9
+   },
+   {
+    "name": "Curing, Punchlisting and Demobilization",
+    "desc": "Concrete curing, final inspection, punchlist correction, cleanup and turnover.",
+    "crew": "Crew: foreman, curing and joint-sealing laborers, punchlist crew.\nEquipment: curing compound sprayer, joint sealing tools, low-bed trailer (demobilization).",
+    "days": 15,
+    "no": 10
+   }
+  ],
+  "total": 150,
+  "no": 15
+ },
+ {
+  "name": "Construction of Evacuation Center",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and site layout and staking.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 15,
+    "no": 1
+   },
+   {
+    "name": "Removal and Earthworks",
+    "desc": "Removal of existing structures and obstruction; excavation, embankment (use of excavated materials), stairs-on-grade fill, and gravel fill.",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, dump trucks.",
+    "days": 15,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Works",
+    "desc": "Structural concrete and reinforcing steel for column footings, columns, beams, slab-on-fill, stairs and ramp.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 30,
+    "no": 3
+   },
+   {
+    "name": "Formworks and Falseworks",
+    "desc": "Fabrication, erection and stripping of forms and falseworks for concrete members.",
+    "crew": "Crew: carpenters, laborers.\nEquipment: circular saw, hand tools, scaffolding.",
+    "days": 30,
+    "no": 4
+   },
+   {
+    "name": "Masonry Works",
+    "desc": "Non-load-bearing CHB masonry walls, 150 mm thick.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, scaffolding.",
+    "days": 30,
+    "no": 5
+   },
+   {
+    "name": "Structural Steel and Roof Framing",
+    "desc": "Fabrication and erection of structural steel; prepainted metal roofing sheets; projected metal-louver ventilators; miscellaneous hardware.",
+    "crew": "Crew: welders, steel erectors, tinsmiths and roofers, laborers.\nEquipment: welding machines, cutting outfit, boom truck, scaffolding.",
+    "days": 30,
+    "no": 6
+   },
+   {
+    "name": "Roof Drainage and Fenestration",
+    "desc": "Roof drains and strainers (75 mm dia.); steel windows; fiber glass.",
+    "crew": "Crew: tinsmiths, glaziers, plumber (downspouts), laborers.\nEquipment: hand and power tools, scaffolding.",
+    "days": 30,
+    "no": 7
+   },
+   {
+    "name": "Finishing and Carpentry Works",
+    "desc": "Cement plaster finish; floor topping including chipping of the existing floor; marine plywood ceiling; fascia board.",
+    "crew": "Crew: carpenters, glaziers, laborers.\nEquipment: hand and power tools.",
+    "days": 30,
+    "no": 8
+   },
+   {
+    "name": "Electrical Works",
+    "desc": "Conduits, boxes and fittings; wires and wiring devices; power load center, switchgear and panel board; lighting fixtures.",
+    "crew": "Crew: electricians, laborers.\nEquipment: conduit bender, hand tools, insulation tester (megger).",
+    "days": 15,
+    "no": 9
+   },
+   {
+    "name": "Painting, Punchlisting and Demobilization",
+    "desc": "Masonry painting (stage, covered court and rubberized floor paint); wooden and metal painting; final inspection, punchlist correction, cleanup and turnover.",
+    "crew": "Crew: painters, punchlist trade crews, laborers.\nEquipment: paint rollers and airless sprayer, scaffolding, hand tools, low-bed trailer (demobilization).",
+    "days": 15,
+    "no": 10
+   }
+  ],
+  "total": 240,
+  "no": 16
+ },
+ {
+  "name": "Riprapping of the side of Barangay Hall",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and survey and staking of the protection limits.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: service vehicle, survey instruments, hand tools.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Clearing and Removal of Obstructions",
+    "desc": "Clearing of vegetation, debris and minor obstructions within the work limits, including disposal.",
+    "crew": "Crew: foreman, laborers.\nEquipment: hand tools, dump truck.",
+    "days": 10,
+    "no": 2
+   },
+   {
+    "name": "Structure Excavation and Foundation Preparation",
+    "desc": "Excavation along the slope and foundation line to the required depth and grade, including trimming and preparation of the foundation bed.",
+    "crew": "Crew: foreman, equipment operator, laborers.\nEquipment: backhoe, dump truck, hand tools.",
+    "days": 10,
+    "no": 3
+   },
+   {
+    "name": "Grouted Riprap and Stone Masonry Laying",
+    "desc": "Laying of boulders in grout for the riprap and stone masonry protection along the side of the barangay hall, including provision of weepholes.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, water truck, hand tools.",
+    "days": 10,
+    "no": 4
+   },
+   {
+    "name": "Backfilling and Slope Trimming",
+    "desc": "Backfilling behind the completed protection works, layered compaction, and trimming and dressing of adjacent slopes.",
+    "crew": "Crew: foreman, laborers.\nEquipment: plate compactor, hand tools.",
+    "days": 10,
+    "no": 5
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck.",
+    "days": 10,
+    "no": 6
+   }
+  ],
+  "total": 60,
+  "no": 17
+ },
+ {
+  "name": "Slope Protection",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard, setup of the occupational safety and health program, and survey and staking of the protection limits.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: service vehicle, survey instruments, hand tools.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Clearing and Grubbing",
+    "desc": "Removal of vegetation, debris and minor obstructions within the protection limits, including disposal.",
+    "crew": "Crew: foreman, laborers.\nEquipment: hand tools, chain saw, dump truck.",
+    "days": 30,
+    "no": 2
+   },
+   {
+    "name": "Structure Excavation and Slope Shaping",
+    "desc": "Excavation, trimming and shaping of the slope face and foundation line to the required lines and grades.",
+    "crew": "Crew: foreman, excavator operator, laborers.\nEquipment: backhoe, dump truck.",
+    "days": 30,
+    "no": 3
+   },
+   {
+    "name": "Foundation and Gravel Bedding",
+    "desc": "Preparation of the foundation bed and placement and compaction of gravel bedding.",
+    "crew": "Crew: foreman, laborers.\nEquipment: plate compactor, wheelbarrows, hand tools.",
+    "days": 30,
+    "no": 4
+   },
+   {
+    "name": "Stone Masonry and Hand-Laid Rock Embankment",
+    "desc": "Construction of grouted stone masonry and hand-laid rock embankment along the slope face, including provision of weepholes.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, water truck.",
+    "days": 30,
+    "no": 5
+   },
+   {
+    "name": "Concrete Slope Protection Works",
+    "desc": "Installation of Grade 40 reinforcing steel and placing and curing of Class A structural concrete for slope protection sections where required.",
+    "crew": "Crew: foreman, steelmen, masons, laborers.\nEquipment: concrete mixer, concrete vibrator, bar cutter and bender.",
+    "days": 30,
+    "no": 6
+   },
+   {
+    "name": "Backfilling and Restoration",
+    "desc": "Backfilling behind the completed protection works, layered compaction, and restoration of adjacent disturbed areas.",
+    "crew": "Crew: foreman, laborers.\nEquipment: plate compactor, hand tools.",
+    "days": 30,
+    "no": 7
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck.",
+    "days": 20,
+    "no": 8
+   }
+  ],
+  "total": 210,
+  "no": 18
+ },
+ {
+  "name": "Construction of Portland Cement Pavement",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Project billboard and signboard, occupational safety and health program, mobilization, and provision of a field office for the engineer.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 10,
+    "no": 1
+   },
+   {
+    "name": "Removal of Existing Pavement and Structures",
+    "desc": "Removal of actual structure and obstruction, existing 0.23 m thick unreinforced Portland cement concrete pavement.",
+    "crew": "Crew: foreman, jackhammer operators, laborers.\nEquipment: backhoe with pavement breaker, jackhammers, dump trucks.",
+    "days": 30,
+    "no": 2
+   },
+   {
+    "name": "Earthworks",
+    "desc": "Surplus common excavation, embankment using selected borrow, and subgrade preparation using common materials.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: backhoe, dump trucks, motor grader, vibratory roller, plate compactor.",
+    "days": 30,
+    "no": 3
+   },
+   {
+    "name": "Aggregate Sub-Base Course",
+    "desc": "Delivery, spreading and compaction of the aggregate sub-base course.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: motor grader, vibratory roller, water truck, dump trucks.",
+    "days": 30,
+    "no": 4
+   },
+   {
+    "name": "Portland Cement Concrete Pavement",
+    "desc": "Placing of 280 mm thick unreinforced Portland cement concrete pavement, including forms, pouring, finishing and 14-day curing.",
+    "crew": "Crew: foreman, concrete finishers and masons, laborers.\nEquipment: transit mixers or batching plant, paving screed, concrete vibrators, concrete cutter, curing sprayer.",
+    "days": 30,
+    "no": 5
+   },
+   {
+    "name": "Drainage and Slope Protection",
+    "desc": "Construction of stone masonry drainage and slope protection structures.",
+    "crew": "Crew: masons, steelmen, laborers.\nEquipment: concrete mixer, concrete vibrator.",
+    "days": 30,
+    "no": 6
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and demobilization.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck, low-bed trailer (demobilization).",
+    "days": 20,
+    "no": 7
+   }
+  ],
+  "total": 106,
+  "no": 19
+ },
+ {
+  "name": "Additional second floor of the multi-purpose gym for conversion into an evacuation center",
+  "ms": [
+   {
+    "name": "Mobilization and Site Preparation",
+    "desc": "Installation of the project billboard and signboard and setup of the occupational safety and health program.",
+    "crew": "Crew: project engineer, foreman, laborers.\nEquipment: low-bed trailer, dump truck, service vehicle.",
+    "days": 35,
+    "no": 1
+   },
+   {
+    "name": "Earthworks",
+    "desc": "Excavation of column footings, embankment, and gravel fill.",
+    "crew": "Crew: foreman, equipment operators, laborers.\nEquipment: backhoe, dump trucks, plate compactor.",
+    "days": 35,
+    "no": 2
+   },
+   {
+    "name": "Reinforced Concrete Works",
+    "desc": "Structural concrete for column footings, columns, suspended slab, beams and stairs; reinforcing steel; forms and falseworks.",
+    "crew": "Crew: foreman, steelmen, carpenters (forms), masons, laborers.\nEquipment: concrete mixer or transit mixer, concrete vibrators, bar cutter and bender.",
+    "days": 45,
+    "no": 3
+   },
+   {
+    "name": "Masonry Works",
+    "desc": "Construction of non-load-bearing CHB walls, 150 mm thick.",
+    "crew": "Crew: masons, laborers.\nEquipment: concrete mixer, scaffolding.",
+    "days": 30,
+    "no": 4
+   },
+   {
+    "name": "Roof Framing and Steel Works",
+    "desc": "Fabrication and erection of structural steel and other steel roof-framing works.",
+    "crew": "Crew: welders, steel erectors, tinsmiths and roofers, laborers.\nEquipment: welding machines, cutting outfit, boom truck, scaffolding.",
+    "days": 30,
+    "no": 5
+   },
+   {
+    "name": "Finishing Works",
+    "desc": "Cement plaster finish.",
+    "crew": "Crew: plasterers and masons, finishers, laborers.\nEquipment: concrete mixer, scaffolding, hand tools.",
+    "days": 35,
+    "no": 6
+   },
+   {
+    "name": "Painting Works",
+    "desc": "Masonry and metal painting of finished surfaces.",
+    "crew": "Crew: painters, laborers.\nEquipment: paint rollers and brushes, airless sprayer, scaffolding.",
+    "days": 30,
+    "no": 7
+   },
+   {
+    "name": "Cleanup, Punchlisting and Demobilization",
+    "desc": "Final inspection, correction of punchlist items, cleanup and turnover.",
+    "crew": "Crew: foreman, trade crews for rectification, laborers.\nEquipment: hand tools, dump truck, low-bed trailer (demobilization).",
+    "days": 30,
+    "no": 8
+   }
+  ],
+  "total": 270,
+  "no": 20
+ }
+]

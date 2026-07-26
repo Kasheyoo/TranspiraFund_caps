@@ -170,8 +170,16 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
           <View style={S.specCard}>
             {isAiGenerated ? (
               <View style={S.aiTag}>
-                <FontAwesome5 name="robot" size={10} color={COLORS.primary} />
-                <Text style={S.aiTagText}>AI-DRAFTED · {m.generatedBy?.toUpperCase()}</Text>
+                <FontAwesome5
+                  name={m.generatedBy === "sme_reference" ? "check-circle" : "robot"}
+                  size={10}
+                  color={COLORS.primary}
+                />
+                <Text style={S.aiTagText}>
+                  {m.generatedBy === "sme_reference"
+                    ? "DEPW REFERENCE · SME-VALIDATED"
+                    : `AI-DRAFTED · ${m.generatedBy?.toUpperCase()}`}
+                </Text>
               </View>
             ) : null}
 
