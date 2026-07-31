@@ -1,5 +1,5 @@
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -108,6 +108,14 @@ export const MilestoneGenerationModal = ({
   const [addDuration, setAddDuration] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
 
+  // Per-phase raw edit buffer for the duration TextInput. Decouples on-screen
+  // typing (empty, "0", intermediate values) from committed DraftPhase state.
+  // Ref shadows the state and is written synchronously so blur/Confirm-All
+  // handlers never see a stale buffer when typing outruns React state.
+  const [durationBuffers, setDurationBuffers] = useState<Record<string, string>>({});
+  const durationBuffersRef = useRef<Record<string, string>>({});
+  useEffect(() => { durationBuffersRef.current = durationBuffers; }, [durationBuffers]);
+
   // Keep the native Modal mounted long enough for the reanimated exit
   // animation to play before unmounting.
   const EXIT_DURATION_MS = 240;
@@ -134,6 +142,8 @@ export const MilestoneGenerationModal = ({
     setGenResult(null);
     setPendingDeleteId(null);
     resetAddState();
+    durationBuffersRef.current = {};
+    setDurationBuffers({});
     if (visible && draftMilestones.length > 0) {
       setDraft(fromMilestones(draftMilestones));
       setPhase("review");
@@ -147,6 +157,8 @@ export const MilestoneGenerationModal = ({
   useEffect(() => {
     if (phase === "loading" && draftMilestones.length > 0) {
       setDraft(fromMilestones(draftMilestones));
+      durationBuffersRef.current = {};
+      setDurationBuffers({});
       setPhase("review");
     }
   }, [phase, draftMilestones]);
@@ -175,9 +187,28 @@ export const MilestoneGenerationModal = ({
   };
 
   const handleDurationChange = (id: string, raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, "").slice(0, 3);
+    // Sync ref immediately so a Confirm-All tap right after fast typing sees
+    // the latest buffer without waiting for React state to settle.
+    durationBuffersRef.current = { ...durationBuffersRef.current, [id]: cleaned };
+    setDurationBuffers((prev) => ({ ...prev, [id]: cleaned }));
+  };
+
+  const commitDuration = (id: string) => {
+    const raw = durationBuffersRef.current[id];
+    if (raw === undefined) return;
     const cleaned = raw.replace(/[^0-9]/g, "");
-    const num = cleaned === "" ? 1 : Math.min(999, Math.max(1, parseInt(cleaned, 10)));
-    setDraft((prev) => applyDurationOverride(prev, id, num));
+    const parsed = cleaned === "" ? NaN : parseInt(cleaned, 10);
+    if (Number.isFinite(parsed)) {
+      const num = Math.min(999, Math.max(1, parsed));
+      setDraft((d) => applyDurationOverride(d, id, num));
+    }
+    // Empty or unparseable → drop the buffer, reverting the field to the last
+    // committed value (no forced 1). Sync ref same tick so a duplicate blur
+    // fire (onEndEditing + onBlur) is a true no-op, not a double recompute.
+    const { [id]: _dropped, ...rest } = durationBuffersRef.current;
+    durationBuffersRef.current = rest;
+    setDurationBuffers(rest);
   };
 
   const handleDelete = (id: string) => setPendingDeleteId(id);
@@ -186,7 +217,13 @@ export const MilestoneGenerationModal = ({
 
   const confirmPendingDelete = () => {
     if (!pendingDeleteId) return;
-    setDraft((prev) => applyDeletion(prev, pendingDeleteId));
+    const id = pendingDeleteId;
+    setDraft((prev) => applyDeletion(prev, id));
+    if (id in durationBuffersRef.current) {
+      const { [id]: _dropped, ...rest } = durationBuffersRef.current;
+      durationBuffersRef.current = rest;
+      setDurationBuffers(rest);
+    }
     setPendingDeleteId(null);
   };
 
@@ -236,8 +273,24 @@ export const MilestoneGenerationModal = ({
 
   const handleConfirmAll = async () => {
     if (!canConfirm) return;
+
+    // Flush any pending un-blurred edits so a user who typed and immediately
+    // tapped Confirm All gets the typed value persisted, not the stale one.
+    let flushed = draft;
+    const buffers = durationBuffersRef.current;
+    for (const id of Object.keys(buffers)) {
+      const cleaned = buffers[id].replace(/[^0-9]/g, "");
+      const parsed = cleaned === "" ? NaN : parseInt(cleaned, 10);
+      if (!Number.isFinite(parsed)) continue;
+      const num = Math.min(999, Math.max(1, parsed));
+      flushed = applyDurationOverride(flushed, id, num);
+    }
+    if (flushed !== draft) setDraft(flushed);
+    durationBuffersRef.current = {};
+    setDurationBuffers({});
+
     setPhase("confirming");
-    const result = await onSaveAndConfirmAll(draft);
+    const result = await onSaveAndConfirmAll(flushed);
     if (result.ok) {
       setPhase("confirmed");
       setTimeout(onClose, 1400);
@@ -520,8 +573,10 @@ export const MilestoneGenerationModal = ({
                           <View style={S.addCol}>
                             <Text style={S.fieldLabel}>DURATION (days)</Text>
                             <TextInput
-                              value={String(p.suggestedDurationDays)}
+                              value={durationBuffers[p.id] ?? String(p.suggestedDurationDays)}
                               onChangeText={(t) => handleDurationChange(p.id, t)}
+                              onEndEditing={() => commitDuration(p.id)}
+                              onBlur={() => commitDuration(p.id)}
                               placeholder="1–999"
                               placeholderTextColor={COLORS.textTertiary}
                               style={S.numInput}
