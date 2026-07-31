@@ -5,6 +5,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { SME_PROJECTS } from "./data/dataset";
+import {
+  TITLE_CONFIDENCE_THRESHOLD,
+  checkTitleStructureServer,
+  validateTitleWithAI,
+  validateTitlesWithAI,
+} from "./titleValidation";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp: typeof import("sharp") = require("sharp");
@@ -1028,7 +1034,9 @@ export const deleteMilestone = onCall({ region: "asia-southeast1" }, async (requ
 });
 
 
-export const addManualMilestone = onCall({ region: "asia-southeast1" }, async (request) => {
+export const addManualMilestone = onCall(
+  { region: "asia-southeast1", secrets: [anthropicKey] },
+  async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
@@ -1094,6 +1102,47 @@ export const addManualMilestone = onCall({ region: "asia-southeast1" }, async (r
     );
   }
 
+  // Title guardrail: structural pre-check always binds; semantic model verdict
+  // binds when reachable; Anthropic transport/API errors fail OPEN with a
+  // console.warn so an outage never blocks a manual add.
+  const trimmedTitle = title.trim();
+  const structural = checkTitleStructureServer(trimmedTitle);
+  if (!structural.ok) {
+    throw new HttpsError("failed-precondition", `Title: ${structural.reason}`);
+  }
+  try {
+    const apiKey = anthropicKey.value();
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY secret not configured");
+    const projectNameForCheck =
+      (typeof projectData.projectName === "string" && projectData.projectName.trim()) ||
+      (typeof projectData.title === "string" && projectData.title.trim()) ||
+      "";
+    const projectTypeForCheck =
+      typeof projectData.projectType === "string" ? projectData.projectType : "";
+    const client = new Anthropic({ apiKey });
+    const verdict = await validateTitleWithAI(client, {
+      projectName: projectNameForCheck,
+      projectType: projectTypeForCheck,
+      title: trimmedTitle,
+    });
+    const passes =
+      verdict.valid === true && verdict.confidence >= TITLE_CONFIDENCE_THRESHOLD;
+    if (!passes) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Title: ${verdict.reason || "This doesn't look like a construction phase for this project."}`,
+      );
+    }
+  } catch (err: unknown) {
+    if (err instanceof HttpsError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      "[addManualMilestone] semantic title check skipped due to Anthropic error",
+      { projectId, title: trimmedTitle, err: message },
+    );
+    // Fall through — structural check already passed.
+  }
+
   let maxSeq = 0;
   allSnap.docs.forEach((d) => {
     const s = d.data().sequence;
@@ -1144,7 +1193,7 @@ type PhasePayload = {
 };
 
 export const confirmMilestonePlan = onCall(
-  { region: "asia-southeast1" },
+  { region: "asia-southeast1", secrets: [anthropicKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
@@ -1269,6 +1318,118 @@ export const confirmMilestonePlan = onCall(
       }
     }
 
+    // Title guardrail: validate only phases with new or edited titles.
+    // Unchanged AI-generated titles are trusted and skipped so a plan of
+    // only unchanged titles adds zero AI calls to the confirm path.
+    const projectNameForCheck =
+      (typeof projectData.projectName === "string" && projectData.projectName.trim()) ||
+      (typeof projectData.title === "string" && projectData.title.trim()) ||
+      "";
+    const projectTypeForCheck =
+      typeof projectData.projectType === "string" ? projectData.projectType : "";
+
+    type TitleCandidate = { sequence: number; title: string };
+    const titlesToValidate: TitleCandidate[] = [];
+    for (const p of survivors) {
+      const submittedTitle = (p.title ?? "").trim();
+      const isNewLikeId = !p.id || !existingById.has(p.id);
+      const stored = p.id ? existingById.get(p.id) : undefined;
+      const storedTitle =
+        stored && typeof stored.data()?.title === "string"
+          ? (stored.data()!.title as string).trim()
+          : "";
+      const changed =
+        p.isNew === true || isNewLikeId || storedTitle !== submittedTitle;
+      if (changed) {
+        titlesToValidate.push({
+          sequence: p.sequence as number,
+          title: submittedTitle,
+        });
+      }
+    }
+
+    if (titlesToValidate.length > 0) {
+      // Structural pre-checks always bind.
+      const structuralFailures: { sequence: number; reason: string }[] = [];
+      for (const c of titlesToValidate) {
+        const s = checkTitleStructureServer(c.title);
+        if (!s.ok) {
+          structuralFailures.push({ sequence: c.sequence, reason: s.reason });
+        }
+      }
+      if (structuralFailures.length > 0) {
+        const nums = structuralFailures.map((f) => f.sequence).join(", ");
+        throw new HttpsError(
+          "failed-precondition",
+          `Phase ${nums}: ${structuralFailures[0].reason}`,
+        );
+      }
+
+      // Semantic batch check. Anthropic transport/API errors fail OPEN with a
+      // logger.warn — a model outage must never wedge a confirm whose titles
+      // already passed structural checks. Model verdicts always bind.
+      try {
+        const apiKey = anthropicKey.value();
+        if (!apiKey) throw new Error("ANTHROPIC_API_KEY secret not configured");
+        const client = new Anthropic({ apiKey });
+        const verdicts = await validateTitlesWithAI(client, {
+          projectName: projectNameForCheck,
+          projectType: projectTypeForCheck,
+          titles: titlesToValidate.map((c) => c.title),
+        });
+
+        // If the model returned fewer verdicts than inputs, we cannot safely
+        // resolve which titles it judged. Fail closed — this is a partial
+        // refusal, not an outage.
+        if (verdicts.length !== titlesToValidate.length) {
+          const missing = titlesToValidate
+            .filter((c) => !verdicts.some((v) => v.title === c.title))
+            .map((c) => c.sequence)
+            .join(", ");
+          throw new HttpsError(
+            "failed-precondition",
+            `Phase ${missing || "?"}: AI did not return a verdict for this title.`,
+          );
+        }
+
+        const semanticFailures: { sequence: number; reason: string }[] = [];
+        for (let i = 0; i < titlesToValidate.length; i += 1) {
+          const c = titlesToValidate[i];
+          const v = verdicts[i];
+          const passes =
+            v.valid === true && v.confidence >= TITLE_CONFIDENCE_THRESHOLD;
+          if (!passes) {
+            semanticFailures.push({
+              sequence: c.sequence,
+              reason:
+                v.reason ||
+                "This doesn't look like a construction phase for this project.",
+            });
+          }
+        }
+        if (semanticFailures.length > 0) {
+          const nums = semanticFailures.map((f) => f.sequence).join(", ");
+          throw new HttpsError(
+            "failed-precondition",
+            `Phase ${nums}: ${semanticFailures[0].reason}`,
+          );
+        }
+      } catch (err: unknown) {
+        // HttpsError is a real precondition failure — surface it.
+        if (err instanceof HttpsError) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          "[confirmMilestonePlan] semantic title check skipped due to Anthropic error",
+          {
+            projectId,
+            titles: titlesToValidate.map((c) => c.title),
+            err: message,
+          },
+        );
+        // Fall through — structural checks already passed.
+      }
+    }
+
     const tenantId =
       typeof projectData.tenantId === "string"
         ? projectData.tenantId
@@ -1326,6 +1487,92 @@ export const confirmMilestonePlan = onCall(
     );
 
     return { success: true, count: survivors.length };
+  },
+);
+
+
+export const validateMilestoneTitle = onCall(
+  { region: "asia-southeast1", secrets: [anthropicKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const { projectId, title } = (request.data ?? {}) as {
+      projectId?: string;
+      title?: string;
+    };
+    if (!projectId || typeof projectId !== "string") {
+      throw new HttpsError("invalid-argument", "projectId is required.");
+    }
+    if (!title || typeof title !== "string") {
+      throw new HttpsError("invalid-argument", "title is required.");
+    }
+
+    const projectRef = admin.firestore().doc(`projects/${projectId}`);
+    const projectSnap = await projectRef.get();
+    if (!projectSnap.exists) {
+      throw new HttpsError("not-found", "Project not found.");
+    }
+    const projectData = projectSnap.data() ?? {};
+    assertSameTenant(request.auth.token.tenantId, projectData.tenantId);
+    if (
+      projectData.projectEngineer &&
+      projectData.projectEngineer !== request.auth.uid
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the assigned engineer can validate milestone titles.",
+      );
+    }
+
+    const projectNameForCheck =
+      (typeof projectData.projectName === "string" && projectData.projectName.trim()) ||
+      (typeof projectData.title === "string" && projectData.title.trim()) ||
+      "";
+    const projectTypeForCheck =
+      typeof projectData.projectType === "string" ? projectData.projectType : "";
+
+    // Layer A (structural). No model call on failure.
+    const structural = checkTitleStructureServer(title);
+    if (!structural.ok) {
+      return { valid: false, confidence: 1, reason: structural.reason };
+    }
+
+    // Layer B (semantic). Anthropic transport/API errors fail OPEN so the
+    // client (which already treats an unreachable callable as "allow the add")
+    // is never wedged by an outage.
+    try {
+      const apiKey = anthropicKey.value();
+      if (!apiKey) throw new Error("ANTHROPIC_API_KEY secret not configured");
+      const client = new Anthropic({ apiKey });
+      const verdict = await validateTitleWithAI(client, {
+        projectName: projectNameForCheck,
+        projectType: projectTypeForCheck,
+        title: title.trim(),
+      });
+      const valid =
+        verdict.valid === true && verdict.confidence >= TITLE_CONFIDENCE_THRESHOLD;
+      return {
+        valid,
+        confidence: verdict.confidence,
+        reason: valid
+          ? "Looks like a plausible phase."
+          : verdict.reason ||
+            "This doesn't look like a construction phase for this project.",
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        "[validateMilestoneTitle] semantic title check skipped due to Anthropic error",
+        { projectId, title, err: message },
+      );
+      return {
+        valid: true,
+        confidence: 0,
+        reason: "Semantic check skipped (temporary AI outage).",
+      };
+    }
   },
 );
 
