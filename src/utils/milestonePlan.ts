@@ -23,6 +23,44 @@ export type DraftValidation =
   | { ok: true }
   | { ok: false; reason: string };
 
+export type TitleCheck = { ok: true } | { ok: false; reason: string };
+
+// Structural (Layer A) title validation. Catches gibberish and non-word input;
+// cannot catch grammatically valid but unrelated titles — that is the job of
+// the server-side semantic check (validateMilestoneTitle).
+const GIBBERISH_REASON = "Title looks like gibberish — enter a real phase name.";
+const isAcronym = (word: string): boolean => /^[A-Z]{2,6}$/.test(word);
+
+export const checkTitleStructure = (raw: string): TitleCheck => {
+  const title = raw.trim();
+  if (title.length < 5) {
+    return {
+      ok: false,
+      reason: "Title is too short — describe the phase (e.g., 'Site Clearing').",
+    };
+  }
+  if (!/[A-Za-z]{3,}/.test(title)) {
+    return {
+      ok: false,
+      reason: "Title must contain words, not just numbers or symbols.",
+    };
+  }
+  if (/(.)\1{3,}/.test(title)) {
+    return { ok: false, reason: GIBBERISH_REASON };
+  }
+  const words = title.split(/[^A-Za-z]+/).filter((w) => w.length > 0);
+  for (const w of words) {
+    if (isAcronym(w)) continue;
+    if (/[bcdfghjklmnpqrstvwxz]{5,}/i.test(w)) {
+      return { ok: false, reason: GIBBERISH_REASON };
+    }
+    if (w.length >= 4 && !/[aeiouy]/i.test(w)) {
+      return { ok: false, reason: GIBBERISH_REASON };
+    }
+  }
+  return { ok: true };
+};
+
 const clampMin = (value: number, min: number): number =>
   Number.isFinite(value) && value > min ? Math.floor(value) : min;
 
@@ -207,6 +245,9 @@ export const validateDraft = (phases: DraftPhase[]): DraftValidation => {
   for (const p of active) {
     if (!p.title.trim())
       return { ok: false, reason: "Every phase must have a title." };
+    const titleCheck = checkTitleStructure(p.title);
+    if (!titleCheck.ok)
+      return { ok: false, reason: `Phase ${p.sequence}: ${titleCheck.reason}` };
     if (p.weightPercentage < MIN_WEIGHT)
       return { ok: false, reason: "Each phase must have at least 1% weight." };
     if (p.suggestedDurationDays < MIN_DURATION)

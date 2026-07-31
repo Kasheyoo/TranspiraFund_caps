@@ -251,7 +251,7 @@ export const MilestoneDetailsView = ({ data, actions }: MilestoneDetailsViewProp
             </Text>
           </View>
 
-          {!isCompleted && !needsReview && (
+          {!isCompleted && !needsReview && proofCount > 0 && (
             atProofLimit ? (
               <View style={S.proofLimitChip}>
                 <FontAwesome5 name="check-double" size={11} color={COLORS.success} />

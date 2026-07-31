@@ -16,7 +16,7 @@ import {
 import Animated, {
   FadeIn,
   FadeOut,
-  ZoomIn,
+  LinearTransition,
   ZoomOut,
 } from "react-native-reanimated";
 import { COLORS } from "../constants";
@@ -26,6 +26,7 @@ import {
   applyDeletion,
   applyDurationOverride,
   applyTextEdit,
+  checkTitleStructure,
   cumulativeDayMarkers,
   fromMilestones,
   MAX_PHASES,
@@ -68,6 +69,10 @@ interface MilestoneGenerationModalProps {
   onSaveAndConfirmAll: (
     draft: DraftPhase[],
   ) => Promise<{ ok: boolean; errorMessage?: string }>;
+
+  // Optional semantic (Layer B) title check. When absent or unreachable,
+  // Layer A structural checks remain the only client-side gate.
+  onValidateTitle?: (title: string) => Promise<{ valid: boolean; reason?: string }>;
 }
 
 type Phase = "idle" | "loading" | "review" | "confirming" | "confirmed" | "error";
@@ -93,20 +98,35 @@ export const MilestoneGenerationModal = ({
   onGenerate,
   draftMilestones,
   onSaveAndConfirmAll,
+  onValidateTitle,
 }: MilestoneGenerationModalProps) => {
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>(() =>
+    visible && draftMilestones.length > 0 ? "review" : "idle",
+  );
   const [genResult, setGenResult] = useState<GenerateResult | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Local draft array — every edit/add/delete goes through milestonePlan
   // utilities so weight totals stay at 100% and sequences stay dense 1..N.
-  const [draft, setDraft] = useState<DraftPhase[]>([]);
+  const [draft, setDraft] = useState<DraftPhase[]>(() =>
+    visible && draftMilestones.length > 0 ? fromMilestones(draftMilestones) : [],
+  );
+  // Ref shadow so async Layer B responses can check the current title at
+  // resolve time and silently discard stale verdicts.
+  const draftRef = useRef<DraftPhase[]>(draft);
+  useEffect(() => { draftRef.current = draft; }, [draft]);
 
   const [isAdding, setIsAdding] = useState(false);
   const [addTitle, setAddTitle] = useState("");
   const [addDescription, setAddDescription] = useState("");
   const [addDuration, setAddDuration] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const [addValidating, setAddValidating] = useState(false);
+  const addTitleRef = useRef("");
+
+  // Per-phase inline title errors (Layer A on blur, Layer B on response).
+  const [titleErrors, setTitleErrors] = useState<Record<string, string>>({});
+  const lastValidatedTitles = useRef<Record<string, string>>({});
 
   // Per-phase raw edit buffer for the duration TextInput. Decouples on-screen
   // typing (empty, "0", intermediate values) from committed DraftPhase state.
@@ -133,26 +153,36 @@ export const MilestoneGenerationModal = ({
   const resetAddState = () => {
     setIsAdding(false);
     setAddTitle("");
+    addTitleRef.current = "";
     setAddDescription("");
     setAddDuration("");
     setAddError(null);
+    setAddValidating(false);
   };
 
-  useEffect(() => {
-    setGenResult(null);
-    setPendingDeleteId(null);
-    resetAddState();
-    durationBuffersRef.current = {};
-    setDurationBuffers({});
-    if (visible && draftMilestones.length > 0) {
-      setDraft(fromMilestones(draftMilestones));
-      setPhase("review");
-    } else {
-      setDraft([]);
-      setPhase("idle");
+  // Reset open-state synchronously during render (not in an effect) so the
+  // correct phase is painted on the very first visible frame — no idle or
+  // stale-phase flash, including reopen while `mounted` is still true.
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) {
+      setGenResult(null);
+      setPendingDeleteId(null);
+      resetAddState();
+      setTitleErrors({});
+      lastValidatedTitles.current = {};
+      durationBuffersRef.current = {};
+      setDurationBuffers({});
+      if (draftMilestones.length > 0) {
+        setDraft(fromMilestones(draftMilestones));
+        setPhase("review");
+      } else {
+        setDraft([]);
+        setPhase("idle");
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }
 
   useEffect(() => {
     if (phase === "loading" && draftMilestones.length > 0) {
@@ -184,6 +214,42 @@ export const MilestoneGenerationModal = ({
 
   const handleTextChange = (id: string, field: "title" | "description", value: string) => {
     setDraft((prev) => applyTextEdit(prev, id, field, value));
+    if (field === "title" && titleErrors[id]) {
+      setTitleErrors((prev) => {
+        const { [id]: _dropped, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  // Title commit on end-of-editing (mirrors commitDuration): Layer A runs
+  // synchronously; Layer B fires async and its verdict is applied only if the
+  // phase still holds the exact title that was validated (stale-guard).
+  const commitTitle = (id: string) => {
+    const p = draftRef.current.find((x) => x.id === id);
+    if (!p) return;
+    const title = p.title.trim();
+    if (title.length === 0) return; // validateDraft already blocks empty titles
+    const structure = checkTitleStructure(title);
+    if (!structure.ok) {
+      setTitleErrors((prev) => ({ ...prev, [id]: structure.reason }));
+      return;
+    }
+    if (!onValidateTitle || lastValidatedTitles.current[id] === title) return;
+    lastValidatedTitles.current[id] = title;
+    onValidateTitle(title)
+      .then((verdict) => {
+        const current = draftRef.current.find((x) => x.id === id);
+        if (!current || current.title.trim() !== title) return; // stale — discard
+        if (!verdict.valid) {
+          delete lastValidatedTitles.current[id];
+          setTitleErrors((prev) => ({
+            ...prev,
+            [id]: verdict.reason ?? "This title doesn't look like a valid construction phase.",
+          }));
+        }
+      })
+      .catch(() => {});
   };
 
   const handleDurationChange = (id: string, raw: string) => {
@@ -237,13 +303,18 @@ export const MilestoneGenerationModal = ({
     setAddError(null);
   };
 
-  const confirmAdd = () => {
+  const confirmAdd = async () => {
     const title = addTitle.trim();
     const description = addDescription.trim();
     const d = parseFloat(addDuration);
 
     if (title.length === 0) {
       setAddError("Title is required.");
+      return;
+    }
+    const structure = checkTitleStructure(title);
+    if (!structure.ok) {
+      setAddError(structure.reason);
       return;
     }
     if (!Number.isFinite(d) || d < 1 || d > 999) {
@@ -253,6 +324,24 @@ export const MilestoneGenerationModal = ({
     if (activeDraft.length >= MAX_PHASES) {
       setAddError(`Cannot exceed ${MAX_PHASES} phases.`);
       return;
+    }
+
+    if (onValidateTitle) {
+      setAddValidating(true);
+      let verdict: { valid: boolean; reason?: string };
+      try {
+        verdict = await onValidateTitle(title);
+      } catch {
+        verdict = { valid: true }; // unreachable Layer B never blocks adds
+      }
+      setAddValidating(false);
+      // Stale-guard: apply the verdict only if the form still holds the exact
+      // title that was validated; otherwise discard silently.
+      if (addTitleRef.current.trim() !== title) return;
+      if (!verdict.valid) {
+        setAddError(verdict.reason ?? "This title doesn't look like a valid construction phase.");
+        return;
+      }
     }
 
     const newId = `new_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -269,7 +358,14 @@ export const MilestoneGenerationModal = ({
 
   const validation = useMemo(() => validateDraft(draft), [draft]);
   const totalWeight = useMemo(() => totalWeightOf(draft), [draft]);
-  const canConfirm = validation.ok && activeDraft.length > 0;
+  // Only errors on still-active phases block confirm, so stale keys from
+  // deleted/regenerated phases can never wedge the button. Errors are only
+  // ever set from resolved responses, so an unreachable Layer B never blocks.
+  const hasTitleErrors = useMemo(
+    () => activeDraft.some((p) => !!titleErrors[p.id]),
+    [activeDraft, titleErrors],
+  );
+  const canConfirm = validation.ok && activeDraft.length > 0 && !hasTitleErrors;
 
   const handleConfirmAll = async () => {
     if (!canConfirm) return;
@@ -327,8 +423,9 @@ export const MilestoneGenerationModal = ({
             pointerEvents="box-none"
           >
             <Animated.View
-              entering={ZoomIn.duration(220).springify().damping(16)}
+              entering={FadeIn.duration(180)}
               exiting={ZoomOut.duration(200)}
+              layout={LinearTransition.duration(200)}
               style={[S.card, phase === "review" && S.cardReview]}
               pointerEvents="box-none"
             >
@@ -462,7 +559,7 @@ export const MilestoneGenerationModal = ({
                     <Text style={S.fieldLabel}>TITLE</Text>
                     <TextInput
                       value={addTitle}
-                      onChangeText={setAddTitle}
+                      onChangeText={(t) => { addTitleRef.current = t; setAddTitle(t); }}
                       placeholder="Phase title"
                       placeholderTextColor={COLORS.textTertiary}
                       style={S.titleInput}
@@ -551,12 +648,17 @@ export const MilestoneGenerationModal = ({
                         <TextInput
                           value={p.title}
                           onChangeText={(t) => handleTextChange(p.id, "title", t)}
+                          onEndEditing={() => commitTitle(p.id)}
+                          onBlur={() => commitTitle(p.id)}
                           placeholder="Phase title"
                           placeholderTextColor={COLORS.textTertiary}
                           style={S.titleInput}
                           multiline
                           maxLength={120}
                         />
+                        {titleErrors[p.id] ? (
+                          <Text style={S.addErrorText}>{titleErrors[p.id]}</Text>
+                        ) : null}
 
                         <Text style={[S.fieldLabel, { marginTop: 10 }]}>DESCRIPTION</Text>
                         <TextInput
@@ -664,12 +766,19 @@ export const MilestoneGenerationModal = ({
                     <Text style={S.secondaryBtnText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={S.primaryBtn}
+                    style={[S.primaryBtn, addValidating && { opacity: 0.7 }]}
                     onPress={confirmAdd}
                     activeOpacity={0.85}
+                    disabled={addValidating}
                   >
-                    <FontAwesome5 name="plus" size={13} color="#fff" />
-                    <Text style={S.primaryBtnText}>Add Milestone</Text>
+                    {addValidating ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <FontAwesome5 name="plus" size={13} color="#fff" />
+                        <Text style={S.primaryBtnText}>Add Milestone</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
               ) : activeDraft.length > 0 ? (

@@ -60,6 +60,7 @@ interface ProjectDetailsActions {
   onSaveAndConfirmAll: (
     draft: DraftPhase[],
   ) => Promise<{ ok: boolean; errorMessage?: string }>;
+  onValidateTitle?: (title: string) => Promise<{ valid: boolean; reason?: string }>;
   onDismissToast?: () => void;
   onDismissConfirmModal?: () => void;
 }
@@ -789,6 +790,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         onGenerate={actions.onGenerateMilestones}
         draftMilestones={draftMilestones}
         onSaveAndConfirmAll={actions.onSaveAndConfirmAll}
+        onValidateTitle={actions.onValidateTitle}
       />
 
       <NtpViewerModal

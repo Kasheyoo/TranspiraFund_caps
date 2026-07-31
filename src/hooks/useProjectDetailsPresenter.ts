@@ -504,6 +504,33 @@ export const useProjectDetailsPresenter = (
     }
   };
 
+  // Semantic (Layer B) title validation via the web-deployed callable. Fails
+  // open by design: if the callable is missing or unreachable, Layer A
+  // structural checks remain the only client gate and the server-side
+  // confirmMilestonePlan enforcement is the real backstop.
+  const handleValidateTitle = async (
+    title: string,
+  ): Promise<{ valid: boolean; reason?: string }> => {
+    if (!project) return { valid: true };
+    try {
+      requireAuth();
+      const result = (await callFn("validateMilestoneTitle", {
+        projectId: project.id,
+        title,
+      })) as { valid?: boolean; confidence?: number; reason?: string };
+      if (result?.valid === false) {
+        return {
+          valid: false,
+          reason: `This doesn't look like a construction phase for a ${projectTypeLabel(project.projectType)} project. Enter the actual field activity for this phase.`,
+        };
+      }
+      return { valid: true };
+    } catch (error: any) {
+      logger.log("validateMilestoneTitle unavailable, skipping semantic check:", error?.message);
+      return { valid: true };
+    }
+  };
+
   const handleMarkCompleted = async (m: Milestone): Promise<boolean> => {
     if (!project) return false;
     if (m.status === "Completed") return true;
@@ -591,6 +618,7 @@ export const useProjectDetailsPresenter = (
       onGenerateMilestones: handleGenerateMilestones,
       onConfirmMilestone: handleConfirmMilestone,
       onSaveAndConfirmAll: handleSaveAndConfirmAll,
+      onValidateTitle: handleValidateTitle,
       onDeleteMilestone: handleDeleteMilestone,
       onAddManualMilestone: handleAddManualMilestone,
       onMarkCompleted: handleMarkCompleted,
