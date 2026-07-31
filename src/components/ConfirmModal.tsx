@@ -11,7 +11,6 @@ import {
 import Animated, {
   FadeIn,
   FadeOut,
-  ZoomIn,
   ZoomOut,
 } from "react-native-reanimated";
 import { COLORS } from "../constants";
@@ -90,7 +89,7 @@ export const ConfirmModal = ({
           >
             <Pressable onPress={() => {}}>
               <Animated.View
-                entering={ZoomIn.duration(220).springify().damping(16)}
+                entering={FadeIn.duration(180)}
                 exiting={ZoomOut.duration(180)}
                 style={S.card}
               >

@@ -150,14 +150,6 @@ export const useProjectDetailsPresenter = (
   const lastUploadArgsRef = useRef<ProofUploadArgs | null>(null);
   const uploadHandleRef = useRef<ProofUploadHandle | null>(null);
 
-  const proofDoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (proofDoneTimerRef.current) clearTimeout(proofDoneTimerRef.current);
-    };
-  }, []);
-
   const mapUploadError = (error: any): string => {
     const code = String(error?.code || "").toLowerCase();
     const raw = String(error?.message || "").toLowerCase();
@@ -192,11 +184,10 @@ export const useProjectDetailsPresenter = (
 
     handle.promise
       .then(() => {
-        setProofUpload({ stage: "done", percent: 100 });
-        if (proofDoneTimerRef.current) clearTimeout(proofDoneTimerRef.current);
-        proofDoneTimerRef.current = setTimeout(() => {
-          setProofUpload((cur) => (cur?.stage === "done" ? null : cur));
-        }, 800);
+        // Dismiss the progress modal immediately on success and let the
+        // toast carry the success signal. Avoids the double confirmation
+        // (modal "done" + toast) that used to read as a blink.
+        setProofUpload(null);
         showToast("success", "Geotagged proof saved successfully.");
       })
       .catch((error: any) => {
@@ -547,6 +538,8 @@ export const useProjectDetailsPresenter = (
       const tid = requireTenantId();
       const ref = ProjectModel.milestoneRef(project.id, m.id);
       await updateDoc(ref, { status: "Completed", tenantId: tid });
+
+      showToast("success", `${m.title} marked completed.`);
 
       callFn("logMobileAuditTrail", {
         action: "Milestone Completed",

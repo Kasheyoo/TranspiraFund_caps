@@ -5,6 +5,28 @@ export const MIN_PHASES = 1;
 export const MIN_WEIGHT = 1;
 export const MIN_DURATION = 1;
 
+// Server mirror of computeProjectWindowDays() in functions/src/index.ts.
+// Keep the field order, fallback aliases, and the null-on-missing-or-nonpositive
+// contract identical — the redistribution basis, the server's scaling basis,
+// and the header indicator all read the same value.
+export const computeProjectWindowDaysClient = (project: {
+  officialDateStarted?: string | null;
+  startDate?: string | null;
+  originalDateCompletion?: string | null;
+  completionDate?: string | null;
+}): number | null => {
+  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+  const start = str(project.officialDateStarted) || str(project.startDate);
+  const end =
+    str(project.originalDateCompletion) || str(project.completionDate);
+  if (!start || !end) return null;
+  const startMs = Date.parse(start);
+  const endMs = Date.parse(end);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  const days = Math.round((endMs - startMs) / (24 * 60 * 60 * 1000));
+  return days > 0 ? days : null;
+};
+
 export type DraftPhase = {
   id: string;
   sequence: number;
@@ -186,6 +208,123 @@ export const applyAddition = (
   return recomputeWeights(renumberSequences([...inserted, ...deleted]));
 };
 
+export type RedistributeOptions = {
+  preserveId?: string;
+  preserveValue?: number;
+};
+
+// Proportionally rescale active phase durations so their sum equals windowDays.
+// Mirrors server scaleDurationsToWindow semantics: largest-remainder rounding,
+// min-1 per phase, deterministic ascending-index tiebreaker. When windowDays is
+// null, returns phases unchanged (null-window degradation). When options names a
+// preserveId, that phase pins to preserveValue and only the remaining phases
+// rescale to fit the remainder — matches the "user just typed this deliberately"
+// contract on Add. On Delete, callers omit options and every survivor rescales
+// by its current duration weight. Weights are recomputed here so the caller
+// completes add/delete in a single state transition.
+export const redistributeDurations = (
+  phases: DraftPhase[],
+  windowDays: number | null,
+  options?: RedistributeOptions,
+): DraftPhase[] => {
+  if (windowDays === null) return phases;
+
+  const active = activePhases(phases);
+  const deleted = phases.filter((p) => p._pendingDelete);
+  if (active.length === 0) return phases;
+
+  const preserveId = options?.preserveId;
+  const preserveIdx = preserveId
+    ? active.findIndex((p) => p.id === preserveId)
+    : -1;
+  const rawPreserved =
+    preserveIdx >= 0
+      ? options?.preserveValue ?? active[preserveIdx].suggestedDurationDays
+      : 0;
+  const preservedClamped =
+    preserveIdx >= 0
+      ? Math.min(999, Math.max(MIN_DURATION, Math.floor(rawPreserved)))
+      : 0;
+
+  const otherIdxs: number[] = [];
+  for (let i = 0; i < active.length; i += 1) {
+    if (i !== preserveIdx) otherIdxs.push(i);
+  }
+  const otherCount = otherIdxs.length;
+
+  if (otherCount === 0) {
+    const only = active.map((p, i) =>
+      i === preserveIdx
+        ? { ...p, suggestedDurationDays: preservedClamped }
+        : { ...p, suggestedDurationDays: windowDays },
+    );
+    return recomputeWeights(renumberSequences([...only, ...deleted]));
+  }
+
+  const remainder = windowDays - preservedClamped;
+
+  // Window-too-small edge (matches server's `windowDays < n` branch): every
+  // "other" clamps to 1 and the indicator surfaces the overflow.
+  if (remainder < otherCount) {
+    const updated = active.map((p, i) =>
+      i === preserveIdx
+        ? { ...p, suggestedDurationDays: preservedClamped }
+        : { ...p, suggestedDurationDays: MIN_DURATION },
+    );
+    return recomputeWeights(renumberSequences([...updated, ...deleted]));
+  }
+
+  const others = otherIdxs.map((i) => active[i]);
+  const currentDays = others.map((p) =>
+    Number.isFinite(p.suggestedDurationDays) && p.suggestedDurationDays > 0
+      ? p.suggestedDurationDays
+      : 1,
+  );
+  const totalCurrent = currentDays.reduce((s, d) => s + d, 0);
+
+  let allocated: number[];
+  if (totalCurrent <= 0) {
+    const base = Math.floor(remainder / otherCount);
+    const leftover = remainder - base * otherCount;
+    allocated = new Array<number>(otherCount).fill(base);
+    for (let i = 0; i < leftover; i += 1) allocated[i] += 1;
+  } else {
+    const raw = currentDays.map((d) => (d / totalCurrent) * remainder);
+    const floors = raw.map((r) => Math.floor(r));
+    const remainders = raw.map((r, i) => ({ idx: i, rem: r - floors[i] }));
+    const leftover = remainder - floors.reduce((s, v) => s + v, 0);
+    remainders.sort((a, b) => b.rem - a.rem || a.idx - b.idx);
+    for (let k = 0; k < leftover && k < remainders.length; k += 1) {
+      floors[remainders[k].idx] += 1;
+    }
+    // Enforce min=1: steal from the largest allocation if any phase < 1.
+    for (let guard = 0; guard < otherCount; guard += 1) {
+      const belowIdx = floors.findIndex((v) => v < MIN_DURATION);
+      if (belowIdx < 0) break;
+      let maxIdx = 0;
+      for (let i = 1; i < floors.length; i += 1) {
+        if (floors[i] > floors[maxIdx]) maxIdx = i;
+      }
+      if (floors[maxIdx] <= MIN_DURATION) break;
+      floors[maxIdx] -= 1;
+      floors[belowIdx] += 1;
+    }
+    allocated = floors;
+  }
+
+  const allocByActiveIdx = new Map<number, number>();
+  for (let j = 0; j < otherIdxs.length; j += 1) {
+    allocByActiveIdx.set(otherIdxs[j], allocated[j]);
+  }
+  const updatedActive = active.map((p, i) =>
+    i === preserveIdx
+      ? { ...p, suggestedDurationDays: preservedClamped }
+      : { ...p, suggestedDurationDays: allocByActiveIdx.get(i) ?? MIN_DURATION },
+  );
+
+  return recomputeWeights(renumberSequences([...updatedActive, ...deleted]));
+};
+
 export const applyDurationOverride = (
   phases: DraftPhase[],
   id: string,
@@ -197,6 +336,26 @@ export const applyDurationOverride = (
       : p,
   );
   return recomputeWeights(next);
+};
+
+// Pure extraction of the Confirm-All flush loop. Given a snapshot of the
+// per-phase raw duration buffer, commit each parseable value into the draft
+// via applyDurationOverride, preserving the same 1..999 clamp and NaN skip
+// behavior as the original inline loop. Callers are responsible for clearing
+// the buffer state after invoking this — the helper is pure.
+export const flushDurationBuffers = (
+  phases: DraftPhase[],
+  buffers: Record<string, string>,
+): DraftPhase[] => {
+  let flushed = phases;
+  for (const id of Object.keys(buffers)) {
+    const cleaned = buffers[id].replace(/[^0-9]/g, "");
+    const parsed = cleaned === "" ? NaN : parseInt(cleaned, 10);
+    if (!Number.isFinite(parsed)) continue;
+    const num = Math.min(999, Math.max(1, parsed));
+    flushed = applyDurationOverride(flushed, id, num);
+  }
+  return flushed;
 };
 
 export const applyTextEdit = (

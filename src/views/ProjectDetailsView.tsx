@@ -14,6 +14,7 @@ import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
 import { isProjectVerified } from "../utils/projectType";
 import type { DraftPhase } from "../utils/milestonePlan";
+import { computeProjectWindowDaysClient } from "../utils/milestonePlan";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { MilestoneGenerationModal } from "../components/MilestoneGenerationModal";
 import { NtpViewerModal } from "../components/NtpViewerModal";
@@ -266,6 +267,9 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
   const displayStart      = project.officialDateStarted    ?? project.startDate    ?? null;
   const displayCompletion = project.originalDateCompletion ?? project.completionDate ?? null;
   const displayBudget     = formatBudget(project.contractAmount ?? project.budget);
+  // Mirrors server computeProjectWindowDays exactly (null contract preserved).
+  // Feeds the modal's plan-basis chip row and the add/delete redistribution.
+  const modalWindowDays = computeProjectWindowDaysClient(project);
 
   const initials = displayEngineer
     ?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() ?? "PE";
@@ -791,6 +795,9 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
         draftMilestones={draftMilestones}
         onSaveAndConfirmAll={actions.onSaveAndConfirmAll}
         onValidateTitle={actions.onValidateTitle}
+        windowDays={modalWindowDays}
+        startDate={displayStart}
+        completionDate={displayCompletion}
       />
 
       <NtpViewerModal

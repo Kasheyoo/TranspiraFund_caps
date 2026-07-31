@@ -28,8 +28,11 @@ import {
   applyTextEdit,
   checkTitleStructure,
   cumulativeDayMarkers,
+  flushDurationBuffers,
   fromMilestones,
   MAX_PHASES,
+  redistributeDurations,
+  totalDurationDays,
   totalWeight as totalWeightOf,
   validateDraft,
   type DraftPhase,
@@ -73,6 +76,13 @@ interface MilestoneGenerationModalProps {
   // Optional semantic (Layer B) title check. When absent or unreachable,
   // Layer A structural checks remain the only client-side gate.
   onValidateTitle?: (title: string) => Promise<{ valid: boolean; reason?: string }>;
+
+  // Project window basis for the calendar-days chip row and add/delete
+  // redistribution. null when project dates are missing/invalid — the modal
+  // hides the numeric chips and shows a neutral placeholder in that case.
+  windowDays?: number | null;
+  startDate?: string | null;
+  completionDate?: string | null;
 }
 
 type Phase = "idle" | "loading" | "review" | "confirming" | "confirmed" | "error";
@@ -99,6 +109,9 @@ export const MilestoneGenerationModal = ({
   draftMilestones,
   onSaveAndConfirmAll,
   onValidateTitle,
+  windowDays,
+  startDate,
+  completionDate,
 }: MilestoneGenerationModalProps) => {
   const [phase, setPhase] = useState<Phase>(() =>
     visible && draftMilestones.length > 0 ? "review" : "idle",
@@ -211,6 +224,12 @@ export const MilestoneGenerationModal = ({
   );
 
   const dayMarkers = useMemo(() => cumulativeDayMarkers(draft), [draft]);
+  const allocatedDays = useMemo(() => totalDurationDays(draft), [draft]);
+  const windowDelta =
+    windowDays !== null && windowDays !== undefined
+      ? allocatedDays - windowDays
+      : 0;
+  const hasWindow = windowDays !== null && windowDays !== undefined;
 
   const handleTextChange = (id: string, field: "title" | "description", value: string) => {
     setDraft((prev) => applyTextEdit(prev, id, field, value));
@@ -284,12 +303,17 @@ export const MilestoneGenerationModal = ({
   const confirmPendingDelete = () => {
     if (!pendingDeleteId) return;
     const id = pendingDeleteId;
-    setDraft((prev) => applyDeletion(prev, id));
-    if (id in durationBuffersRef.current) {
-      const { [id]: _dropped, ...rest } = durationBuffersRef.current;
-      durationBuffersRef.current = rest;
-      setDurationBuffers(rest);
-    }
+    // Snapshot the buffer ref BEFORE setDraft — same reason as confirmAdd.
+    const buffers = durationBuffersRef.current;
+    setDraft((prev) => {
+      const flushed = flushDurationBuffers(prev, buffers);
+      const deletedDraft = applyDeletion(flushed, id);
+      return redistributeDurations(deletedDraft, windowDays ?? null);
+    });
+    // Redistribution may have rewritten durations on other phases, so any
+    // remaining buffer text would mask the redistributed values. Clear all.
+    durationBuffersRef.current = {};
+    setDurationBuffers({});
     setPendingDeleteId(null);
   };
 
@@ -345,14 +369,27 @@ export const MilestoneGenerationModal = ({
     }
 
     const newId = `new_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    setDraft((prev) =>
-      applyAddition(prev, {
+    const enteredDuration = Math.floor(d);
+    // Snapshot the buffer ref BEFORE setDraft. The clear below runs
+    // synchronously after setDraft returns while the updater fires later
+    // during render — reading the ref inside the updater would silently
+    // read the already-cleared value and drop in-flight typed durations.
+    const buffers = durationBuffersRef.current;
+    setDraft((prev) => {
+      const flushed = flushDurationBuffers(prev, buffers);
+      const added = applyAddition(flushed, {
         id: newId,
         title,
         description,
-        suggestedDurationDays: Math.floor(d),
-      }),
-    );
+        suggestedDurationDays: enteredDuration,
+      });
+      return redistributeDurations(added, windowDays ?? null, {
+        preserveId: newId,
+        preserveValue: enteredDuration,
+      });
+    });
+    durationBuffersRef.current = {};
+    setDurationBuffers({});
     resetAddState();
   };
 
@@ -372,15 +409,7 @@ export const MilestoneGenerationModal = ({
 
     // Flush any pending un-blurred edits so a user who typed and immediately
     // tapped Confirm All gets the typed value persisted, not the stale one.
-    let flushed = draft;
-    const buffers = durationBuffersRef.current;
-    for (const id of Object.keys(buffers)) {
-      const cleaned = buffers[id].replace(/[^0-9]/g, "");
-      const parsed = cleaned === "" ? NaN : parseInt(cleaned, 10);
-      if (!Number.isFinite(parsed)) continue;
-      const num = Math.min(999, Math.max(1, parsed));
-      flushed = applyDurationOverride(flushed, id, num);
-    }
+    const flushed = flushDurationBuffers(draft, durationBuffersRef.current);
     if (flushed !== draft) setDraft(flushed);
     durationBuffersRef.current = {};
     setDurationBuffers({});
@@ -521,6 +550,75 @@ export const MilestoneGenerationModal = ({
                   <FontAwesome5 name="times" size={14} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
+
+              {/* Plan basis chip row — start/target/window/allocated. Hidden
+                  during add/delete states to keep the footer real estate
+                  focused on the pending action. */}
+              {!isAdding && !pendingDeleteId ? (
+                <View style={S.chipRow}>
+                  {hasWindow ? (
+                    <>
+                      {startDate ? (
+                        <View style={S.winChip}>
+                          <FontAwesome5 name="calendar-alt" size={9} color={COLORS.textSecondary} />
+                          <Text style={S.winChipText}>Start: {startDate}</Text>
+                        </View>
+                      ) : null}
+                      {completionDate ? (
+                        <View style={S.winChip}>
+                          <FontAwesome5 name="calendar-alt" size={9} color={COLORS.textSecondary} />
+                          <Text style={S.winChipText}>Target: {completionDate}</Text>
+                        </View>
+                      ) : null}
+                      <View style={S.winChip}>
+                        <FontAwesome5 name="clock" size={9} color={COLORS.textSecondary} />
+                        <Text style={S.winChipText}>
+                          {windowDays} calendar day{windowDays === 1 ? "" : "s"}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          S.winChip,
+                          windowDelta > 0 && S.winChipOver,
+                          windowDelta < 0 && S.winChipUnder,
+                        ]}
+                      >
+                        <FontAwesome5
+                          name="balance-scale"
+                          size={9}
+                          color={
+                            windowDelta > 0
+                              ? COLORS.error
+                              : windowDelta < 0
+                                ? COLORS.warning
+                                : COLORS.textSecondary
+                          }
+                        />
+                        <Text
+                          style={[
+                            S.winChipText,
+                            windowDelta > 0 && S.winChipOverText,
+                            windowDelta < 0 && S.winChipUnderText,
+                          ]}
+                        >
+                          {windowDelta === 0
+                            ? `${allocatedDays} allocated · balanced`
+                            : windowDelta > 0
+                              ? `${allocatedDays} allocated · +${windowDelta} over window`
+                              : `${allocatedDays} allocated · ${windowDelta} under window`}
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={S.winChip}>
+                      <FontAwesome5 name="info-circle" size={9} color={COLORS.textTertiary} />
+                      <Text style={S.winChipText}>
+                        Project window unavailable — dates missing
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
 
               {genResult?.usedFallback ? (
                 <View style={S.fallbackBanner}>
@@ -1169,4 +1267,23 @@ const S = StyleSheet.create({
     textAlign: "center", marginTop: 6, lineHeight: 15,
     fontStyle: "italic",
   },
+
+  // Plan basis chip row (Change A / Change C fold-in)
+  chipRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 6,
+    paddingHorizontal: 22, paddingTop: 0, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  winChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: COLORS.background,
+    borderWidth: 1, borderColor: COLORS.border,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
+  winChipText: { fontSize: 10, fontWeight: "700", color: COLORS.textSecondary },
+  winChipOver: { backgroundColor: COLORS.errorSoft, borderColor: "#FECACA" },
+  winChipOverText: { color: COLORS.error, fontWeight: "800" },
+  winChipUnder: { backgroundColor: COLORS.warningSoft, borderColor: "#FDE68A" },
+  winChipUnderText: { color: COLORS.warning, fontWeight: "800" },
 });
