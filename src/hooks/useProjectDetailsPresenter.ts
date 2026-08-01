@@ -391,7 +391,8 @@ export const useProjectDetailsPresenter = (
     errorCode?: "unauthenticated" | "invalid-argument" | "not-found"
               | "permission-denied" | "already-exists" | "resource-exhausted"
               | "failed-precondition" | "deadline-exceeded" | "unavailable"
-              | "internal" | "milestone-validation-failed" | "unknown";
+              | "internal" | "milestone-validation-failed"
+              | "milestone-generator-misconfigured" | "unknown";
     errorMessage?: string;
   }> => {
     try {
@@ -405,13 +406,6 @@ export const useProjectDetailsPresenter = (
         scheduledDays?: number;
         overflowDays?: number;
       };
-      const source = result.usedFallback ? "SME fallback" : "AI";
-      callFn("logMobileAuditTrail", {
-        action: "Milestones Generated",
-        details: `Milestones generated for ${project?.projectName ?? project?.title ?? "project"} (type: ${projectTypeLabel(project?.projectType)}, source: ${source})`,
-        targetId: projectId,
-        syncToHCSD: true,
-      }).catch(() => {});
       return {
         ok: true,
         count: result.count,
@@ -433,6 +427,7 @@ export const useProjectDetailsPresenter = (
         raw.includes("permission-denied") ? "permission-denied" :
         raw.includes("already-exists") ? "already-exists" :
         raw.includes("resource-exhausted") ? "resource-exhausted" :
+        raw.includes("milestone-generator-misconfigured") ? "milestone-generator-misconfigured" :
         raw.includes("failed-precondition") ? "failed-precondition" :
         raw.includes("deadline-exceeded") ? "deadline-exceeded" :
         raw.includes("unavailable") ? "unavailable" :
@@ -478,14 +473,6 @@ export const useProjectDetailsPresenter = (
         projectId: project.id,
         phases: payload,
       });
-
-      const survivorCount = draft.filter((p) => !p._pendingDelete).length;
-      callFn("logMobileAuditTrail", {
-        action: "Milestones Confirmed",
-        details: `${survivorCount} phase${survivorCount !== 1 ? "s" : ""} confirmed for ${project.projectName ?? project.title ?? "project"} (type: ${projectTypeLabel(project.projectType)})`,
-        targetId: project.id,
-        syncToHCSD: true,
-      }).catch(() => {});
 
       return { ok: true };
     } catch (error: any) {

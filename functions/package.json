@@ -3,7 +3,7 @@
   "scripts": {
     "build": "tsc && node -e \"require('fs').cpSync('src/data','lib/data',{recursive:true,force:true})\"",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "echo BLOCKED - unscoped deploy overwrites web-owned functions. Use: firebase deploy --only functions:NAME --project transpirafund-webapp. See CLAUDE.md Cloud Functions ownership. && exit 1"
   },
   "engines": {
     "node": "22"

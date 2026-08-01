@@ -4,7 +4,7 @@ import * as nodemailer from "nodemailer";
 import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { SME_PROJECTS } from "./data/dataset";
+import { SME_PROJECTS, type SmeProject } from "./data/dataset";
 import {
   TITLE_CONFIDENCE_THRESHOLD,
   checkTitleStructureServer,
@@ -449,6 +449,29 @@ const EXAMPLE_TYPE_FALLBACK: Record<string, string> = {
   day_care_center: "multi_purpose_building",
 };
 
+// Cross-boundary twin: LABELS at src/utils/projectType.ts:5 holds the identical
+// map on the RN client, used by projectTypeLabel there for UI labeling. Cannot
+// import across the RN/functions boundary; keep the two maps in lockstep or
+// the "Milestones Confirmed" audit message will label a project type
+// differently from what the PE sees in the UI.
+const PROJECT_TYPE_LABELS: Record<string, string> = {
+  road_concreting: "Road Concreting",
+  drainage_construction: "Drainage",
+  multi_purpose_building: "Multi-Purpose Building",
+  covered_court: "Covered Court",
+  day_care_center: "Day Care Center",
+  footbridge: "Footbridge",
+  slope_protection: "Slope Protection",
+  waterworks: "Waterworks",
+  electrification: "Electrification",
+  unknown: "Unverified",
+};
+
+function projectTypeLabel(projectType: unknown): string {
+  if (typeof projectType !== "string" || projectType.length === 0) return "Unverified";
+  return PROJECT_TYPE_LABELS[projectType] ?? "Unverified";
+}
+
 // Anthropic prompt tokens grow linearly with few-shot count. Three examples
 // covers scope-shape variance without ballooning the request.
 const MAX_FEW_SHOT_EXAMPLES = 3;
@@ -623,6 +646,41 @@ type AIGeneratedPhase = {
   durationDays: number;
 };
 
+// Cap on generated/confirmed plan phase count. Referenced across three sites in
+// this file: the submit_milestones tool schema maxItems, the
+// confirmMilestonePlan phase-count guard, and the truncateSmeFallback helper
+// below. SME corpus entry idx 1 carries 21 phases; without truncation the
+// fallback writes drafts confirmMilestonePlan refuses and generateMilestones's
+// already-exists guard blocks regeneration.
+//
+// Cross-boundary twin: MAX_PHASES at src/utils/milestonePlan.ts:3 holds the
+// same value on the RN client and cannot import across the functions/RN
+// boundary. Keep the two in lockstep. The truncation banner in
+// MilestoneGenerationModal.tsx interpolates the client-side MAX_PHASES, so a
+// divergence would misreport the cap to the PE.
+const MAX_PHASES_PER_PLAN = 12;
+
+// First-N-by-sequence is safe for the only current offender, idx 1 in the SME
+// corpus: demob is bundled into phase 1 and there is no closeout phase at the
+// tail to preserve. Revisit if a future entry above MAX_PHASES_PER_PLAN has a
+// real closeout.
+function truncateSmeFallback(source: SmeProject): {
+  phases: AIGeneratedPhase[];
+  truncated: boolean;
+  originalCount: number;
+  keptCount: number;
+} {
+  const originalCount = source.ms.length;
+  const truncated = originalCount > MAX_PHASES_PER_PLAN;
+  const kept = truncated ? source.ms.slice(0, MAX_PHASES_PER_PLAN) : source.ms;
+  const phases: AIGeneratedPhase[] = kept.map((m) => ({
+    title: m.name,
+    description: m.desc,
+    durationDays: m.days,
+  }));
+  return { phases, truncated, originalCount, keptCount: phases.length };
+}
+
 async function generateMilestonesWithAI(
   projectData: Record<string, unknown>,
   projectType: string,
@@ -697,7 +755,7 @@ Return your milestone plan via the submit_milestones tool.`;
             milestones: {
               type: "array",
               minItems: 5,
-              maxItems: 12,
+              maxItems: MAX_PHASES_PER_PLAN,
               items: {
                 type: "object",
                 properties: {
@@ -870,6 +928,10 @@ export const generateMilestones = onCall(
   let usedFallback = false;
   let fallbackReason: string | undefined;
   let fallbackSourceProject: string | undefined;
+  let fallbackTruncated: boolean | undefined;
+  let fallbackOriginalCount: number | undefined;
+  let fallbackKeptCount: number | undefined;
+  let fallbackKind: "transient" | undefined;
 
   try {
     phases = await generateMilestonesWithAI(projectData, rawType, fewShotIndices);
@@ -884,6 +946,28 @@ export const generateMilestones = onCall(
       reason,
     );
 
+    // Config errors must not silently substitute an SME plan. Classify BEFORE
+    // any fallback state is assigned so fallbackKind cannot be set to
+    // "transient" on this path. Distinct sentinel `milestone-generator-misconfigured`
+    // lets the client route to non-retryable copy that tells the PE to report
+    // the outage rather than retry.
+    if (reason.includes("ANTHROPIC_API_KEY")) {
+      await logAuditTrail(
+        request.auth.uid,
+        request.auth.token.email || "",
+        "Milestone Generator Misconfigured",
+        `Project ${projectId} (type: ${rawType}) · reason: ${reason.slice(0, 120)}`,
+        true,
+        projectId,
+        undefined,
+        typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
+      );
+      throw new HttpsError(
+        "failed-precondition",
+        "milestone-generator-misconfigured: The AI milestone generator is not configured on the server.",
+      );
+    }
+
     if (poolIndices.length === 0) {
       // Every SUPPORTED_PROJECT_TYPES value should resolve to a non-empty
       // pool through PROJECT_TYPE_TO_EXAMPLES or EXAMPLE_TYPE_FALLBACK. If
@@ -896,15 +980,16 @@ export const generateMilestones = onCall(
 
     const fallbackIndex = pickClosestByWindow(poolIndices, windowDays, 1)[0];
     const source = SME_PROJECTS[fallbackIndex];
-    phases = source.ms.map((m) => ({
-      title: m.name,
-      description: m.desc,
-      durationDays: m.days,
-    }));
+    const truncation = truncateSmeFallback(source);
+    phases = truncation.phases;
     generatedBy = "sme_reference";
     usedFallback = true;
     fallbackReason = reason.slice(0, 120);
     fallbackSourceProject = source.name;
+    fallbackTruncated = truncation.truncated;
+    fallbackOriginalCount = truncation.originalCount;
+    fallbackKeptCount = truncation.keptCount;
+    fallbackKind = "transient";
   }
 
   const originalDays = phases.map((p) => p.durationDays);
@@ -945,7 +1030,7 @@ export const generateMilestones = onCall(
     ? `type: ${rawType} → few-shot borrowed from ${substituted}`
     : `type: ${rawType}`;
   const sourceSuffix = usedFallback
-    ? ` · SME fallback (source: "${fallbackSourceProject}", ${phases.length} phases) · reason: ${fallbackReason}`
+    ? ` · SME fallback (source: "${fallbackSourceProject}", ${fallbackKeptCount} of ${fallbackOriginalCount} phases${fallbackTruncated ? `, truncated to fit ${MAX_PHASES_PER_PLAN}-phase limit` : ""}) · reason: ${fallbackReason}`
     : ` · AI-generated (${phases.length} phases)`;
   const scheduleSuffix =
     windowDays === null
@@ -971,6 +1056,10 @@ export const generateMilestones = onCall(
     usedFallback,
     fallbackReason,
     fallbackSourceProject,
+    fallbackTruncated,
+    fallbackOriginalCount,
+    fallbackKeptCount,
+    fallbackKind,
     windowDays,
     scheduledDays,
     overflowDays,
@@ -1210,8 +1299,8 @@ export const confirmMilestonePlan = onCall(
     if (!Array.isArray(phases) || phases.length === 0) {
       throw new HttpsError("invalid-argument", "phases must be a non-empty array.");
     }
-    if (phases.length > 12) {
-      throw new HttpsError("invalid-argument", "Cannot confirm more than 12 phases.");
+    if (phases.length > MAX_PHASES_PER_PLAN) {
+      throw new HttpsError("invalid-argument", `Cannot confirm more than ${MAX_PHASES_PER_PLAN} phases.`);
     }
 
     const projectRef = admin.firestore().doc(`projects/${projectId}`);
@@ -1475,11 +1564,15 @@ export const confirmMilestonePlan = onCall(
 
     const uid = request.auth.uid;
     const email = request.auth.token.email || "";
+    const projectName =
+      (typeof projectData.projectName === "string" && projectData.projectName) ||
+      (typeof projectData.title === "string" && projectData.title) ||
+      "project";
     await logAuditTrail(
       uid,
       email,
       "Milestones Confirmed",
-      `Project ${projectId} · ${survivors.length} phase${survivors.length !== 1 ? "s" : ""} confirmed`,
+      `${survivors.length} phase${survivors.length !== 1 ? "s" : ""} confirmed for ${projectName} (type: ${projectTypeLabel(projectData.projectType)})`,
       true,
       projectId,
       undefined,

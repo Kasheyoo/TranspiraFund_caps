@@ -58,6 +58,7 @@ type GenerateResult = {
     | "unavailable"
     | "internal"
     | "milestone-validation-failed"
+    | "milestone-generator-misconfigured"
     | "unknown";
   errorMessage?: string;
 };
@@ -96,6 +97,7 @@ const ERROR_COPY: Record<string, { title: string; body: string; canRetry: boolea
   "resource-exhausted":{ title: "Daily Limit Reached", body: "You've reached the daily milestone-generation limit. Please try again later.",   canRetry: false },
   "failed-precondition":{ title: "Project classification incomplete", body: "This project's name has not been verified as a city-funded barangay-level infrastructure project. Please contact the Head of Construction Services to re-verify the project before generating milestones.", canRetry: false },
   "milestone-validation-failed":{ title: "Milestones could not be generated", body: "The system was unable to produce milestones that align with the project's infrastructure scope and duration. Please notify the Head of Construction Services.", canRetry: false },
+  "milestone-generator-misconfigured": { title: "Milestone Generator Offline", body: "The milestone generator is not properly configured on the server. Please report this to the Head of Construction Services so they can restore the service. Retrying will not help until it is fixed.", canRetry: false },
   "deadline-exceeded": { title: "Took Too Long",      body: "The request timed out. Check your connection and try again.",                     canRetry: true  },
   unavailable:        { title: "Server Busy",         body: "The milestone generator is temporarily busy. Please try again in a moment.",      canRetry: true  },
   internal:           { title: "AI Unavailable",      body: "The milestone generator is temporarily unavailable. You can retry once.",         canRetry: true  },
@@ -624,7 +626,11 @@ export const MilestoneGenerationModal = ({
                 <View style={S.fallbackBanner}>
                   <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.warning} />
                   <Text style={S.fallbackBannerText}>
-                    AI generation unavailable, showing validated DEPW reference milestones for this project type — please review and adjust.
+                    {`AI generation unavailable, showing validated DEPW reference milestones for this project type. Please review and adjust.${
+                      genResult.fallbackTruncated
+                        ? ` Kept the first ${genResult.fallbackKeptCount} of ${genResult.fallbackOriginalCount} phases from "${genResult.fallbackSourceProject}" to fit the ${MAX_PHASES}-phase plan limit.`
+                        : ""
+                    }`}
                   </Text>
                 </View>
               ) : null}

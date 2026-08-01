@@ -2,6 +2,10 @@ import type { Project } from "../types";
 
 export type ProjectType = NonNullable<Project["projectType"]>;
 
+// Cross-boundary twin: PROJECT_TYPE_LABELS in functions/src/index.ts holds the
+// identical map on the server, used by that file's projectTypeLabel helper for
+// audit messages. Cannot import across the RN/functions boundary; keep the two
+// maps in lockstep so audit copy and UI copy agree on every type label.
 const LABELS: Record<ProjectType, string> = {
   road_concreting: "Road Concreting",
   drainage_construction: "Drainage",

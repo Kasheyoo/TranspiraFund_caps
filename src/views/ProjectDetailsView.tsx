@@ -48,7 +48,8 @@ interface GenerateMilestonesResult {
     | "unauthenticated" | "invalid-argument" | "not-found"
     | "permission-denied" | "already-exists" | "resource-exhausted"
     | "failed-precondition" | "deadline-exceeded" | "unavailable"
-    | "internal" | "milestone-validation-failed" | "unknown";
+    | "internal" | "milestone-validation-failed"
+    | "milestone-generator-misconfigured" | "unknown";
   errorMessage?: string;
 }
 

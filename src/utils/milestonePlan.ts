@@ -1,5 +1,13 @@
 import type { Milestone } from "../types";
 
+// Cap on generated/confirmed plan phase count. Used by validateDraft's upper
+// bound, applyAddition's overflow guard, and the truncation banner copy in
+// MilestoneGenerationModal.tsx.
+//
+// Cross-boundary twin: MAX_PHASES_PER_PLAN in functions/src/index.ts holds the
+// same value on the server and cannot import across the RN/functions boundary.
+// Keep the two in lockstep; a divergence would misreport the cap in the banner
+// text and could produce drafts the server rejects at confirm.
 export const MAX_PHASES = 12;
 export const MIN_PHASES = 1;
 export const MIN_WEIGHT = 1;
