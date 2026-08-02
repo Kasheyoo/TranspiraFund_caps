@@ -123,6 +123,35 @@ export interface Project {
     | "electrification"
     | "unknown";
   classificationConfidence?: number;
+  // Classifier contract v1 nested map, written by validateProjectClassification
+  // and createProject on the web side. Pre-contract projects have this
+  // undefined and consumers must fall back to projectType /
+  // classificationConfidence via the legacy admission rule mirrored in
+  // canGenerateMilestones().
+  //
+  // matchMode/noveltyScore/retrievedSourceIds/corpusVersion/generationStages
+  // are per-generation-event fields on the callable response, NOT persisted
+  // on the project doc; they live on GenerateResult, not here.
+  classification?: {
+    admitted?: boolean;
+    isComposite?: boolean;
+    components?: string[];
+    contractVersion?: string;
+    classifierVersion?: string;
+  };
+}
+
+// Retrieval match mode from the server-side scorer. Persisted onto the
+// generateMilestones response and rendered as an advisory when the value is
+// "analogous" or "novel".
+export type MatchMode = "exact" | "variant" | "composite" | "analogous" | "novel";
+
+// One stage in the generateMilestones response's generationStages log. The
+// modal replays these sequentially in the loading view so the PE sees the
+// server named the retrieved reference projects.
+export interface GenerationStage {
+  key: string;
+  body: string;
 }
 
 export interface UserProfile {

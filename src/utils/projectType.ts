@@ -26,3 +26,31 @@ export const projectTypeLabel = (projectType?: string): string => {
 
 export const isProjectVerified = (projectType?: string): boolean =>
   !!projectType && projectType !== "unknown";
+
+// Mirrors the server-side admission gate in functions/src/index.ts. Contract-v1
+// projects with classification.admitted === true generate regardless of the
+// legacy projectType allowlist and confidence floor. Pre-contract projects
+// (classification.admitted undefined) fall through to isProjectVerified plus
+// classificationConfidence >= 0.8. Any other state (admitted === false, or
+// missing top-level type at low confidence) is blocked.
+//
+// Retrieval quality does NOT gate this. matchMode, noveltyScore, isComposite
+// affect what the AI SUGGESTS; they never affect what the PE is PERMITTED to
+// do. Add/edit/delete/confirm affordances inside the review modal remain
+// unconditional regardless of the value returned here.
+export const canGenerateMilestones = (project: {
+  projectType?: string;
+  classificationConfidence?: number;
+  classification?: { admitted?: boolean };
+}): boolean => {
+  const admitted = project.classification?.admitted;
+  if (admitted === true) return true;
+  if (admitted === undefined) {
+    return (
+      isProjectVerified(project.projectType) &&
+      typeof project.classificationConfidence === "number" &&
+      project.classificationConfidence >= 0.8
+    );
+  }
+  return false;
+};

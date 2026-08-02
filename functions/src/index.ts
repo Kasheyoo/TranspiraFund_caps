@@ -4,7 +4,9 @@ import * as nodemailer from "nodemailer";
 import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { SME_PROJECTS, type SmeProject } from "./data/dataset";
+import { SME_PROJECTS, CORPUS_VERSION, type SmeProject } from "./data/dataset";
+import { SME_COMPONENTS } from "./data/corpusComponents";
+import { scoreProject } from "./retrievalScorer";
 import {
   TITLE_CONFIDENCE_THRESHOLD,
   checkTitleStructureServer,
@@ -418,36 +420,35 @@ const SUPPORTED_PROJECT_TYPES: ReadonlySet<string> = new Set([
   "electrification",
 ]);
 
-// 0-based indices into SME_PROJECTS for each mobile projectType enum value.
-// Types with an empty array borrow examples via EXAMPLE_TYPE_FALLBACK below.
-// Note: footbridge is the mobile enum's only bridge slot. SME projects #12
-// and #13 are likely vehicular RC bridges (>=120 CD), not pedestrian
-// footbridges — but they are the only bridge references available and
-// renaming the enum to `bridge` would orphan existing Firestore project
-// documents that persist projectType. The label stays; the semantic
-// mismatch is accepted.
-// Note: drainage_construction has thin coverage (only SME project #5, a box
-// culvert). Non-culvert drainage projects may generalize weakly from a
-// single example.
-const PROJECT_TYPE_TO_EXAMPLES: Record<string, readonly number[]> = {
-  road_concreting:        [1, 8, 14, 18],
-  drainage_construction:  [4],
-  multi_purpose_building: [0, 3, 7, 10, 13, 15, 19],
-  covered_court:          [],
-  day_care_center:        [],
-  footbridge:             [11, 12],
-  slope_protection:       [16, 17],
-  waterworks:             [2, 9],
-  electrification:        [5, 6],
+// Legacy-compatibility map for pre-contract projects. Under classifier
+// contract v1 the web repo writes `components: string[]` onto the project
+// doc; before that ships, projectData.components is undefined and the
+// scorer would see an empty components list. This map derives a single
+// vocabulary component from the persisted projectType so the scorer's main
+// pool is non-empty for every currently-generating project.
+//
+// covered_court and day_care_center map to building_construction, preserving
+// the previous EXAMPLE_TYPE_FALLBACK substitution behavior. footbridge maps
+// to bridge because the corpus has no footbridge exemplar and idx 11/12
+// (both tagged `bridge`) were the retrieval targets under the deleted
+// PROJECT_TYPE_TO_EXAMPLES table. Contract-v1 projects with an explicit
+// components list bypass this map entirely.
+const PROJECTTYPE_TO_COMPONENT: Record<string, string> = {
+  road_concreting:        "road_concreting",
+  drainage_construction:  "drainage",
+  multi_purpose_building: "building_construction",
+  covered_court:          "building_construction",
+  day_care_center:        "building_construction",
+  footbridge:             "bridge",
+  slope_protection:       "slope_protection",
+  waterworks:             "waterworks",
+  electrification:        "electrical_works",
 };
 
-// When a projectType has no direct SME examples, the AI prompt borrows
-// examples from this substitute type. Audit-logged only, not surfaced to
-// the engineer, because the AI still runs and returns fresh output.
-const EXAMPLE_TYPE_FALLBACK: Record<string, string> = {
-  covered_court:   "multi_purpose_building",
-  day_care_center: "multi_purpose_building",
-};
+function deriveComponentsFromType(projectType: string): string[] {
+  const component = PROJECTTYPE_TO_COMPONENT[projectType];
+  return component ? [component] : [];
+}
 
 // Cross-boundary twin: LABELS at src/utils/projectType.ts:5 holds the identical
 // map on the RN client, used by projectTypeLabel there for UI labeling. Cannot
@@ -472,26 +473,6 @@ function projectTypeLabel(projectType: unknown): string {
   return PROJECT_TYPE_LABELS[projectType] ?? "Unverified";
 }
 
-// Anthropic prompt tokens grow linearly with few-shot count. Three examples
-// covers scope-shape variance without ballooning the request.
-const MAX_FEW_SHOT_EXAMPLES = 3;
-
-function resolveExamplesForType(projectType: string): {
-  indices: readonly number[];
-  substituted: string | null;
-} {
-  const direct = PROJECT_TYPE_TO_EXAMPLES[projectType] ?? [];
-  if (direct.length > 0) {
-    return { indices: direct, substituted: null };
-  }
-  const substituteType = EXAMPLE_TYPE_FALLBACK[projectType];
-  if (substituteType) {
-    const borrowed = PROJECT_TYPE_TO_EXAMPLES[substituteType] ?? [];
-    return { indices: borrowed, substituted: substituteType };
-  }
-  return { indices: [], substituted: null };
-}
-
 // Calendar-days between officialDateStarted (or legacy startDate) and
 // originalDateCompletion (or legacy completionDate). Returns null when
 // either date is missing, unparseable, or the window is non-positive.
@@ -507,37 +488,24 @@ function computeProjectWindowDays(projectData: Record<string, unknown>): number 
   return days > 0 ? days : null;
 }
 
-// Pick up to `take` SME project indices whose `total` CD is closest to the
-// engineer's project window. When windowDays is null or non-positive,
-// returns the first `take` indices in pool order instead of throwing.
-function pickClosestByWindow(
-  indices: readonly number[],
-  windowDays: number | null,
-  take: number,
-): number[] {
-  if (indices.length === 0) return [];
-  const capped = Math.min(take, indices.length);
-  if (windowDays === null || windowDays <= 0) {
-    return indices.slice(0, capped);
-  }
-  const scored = indices.map((idx) => ({
-    idx,
-    diff: Math.abs(SME_PROJECTS[idx].total - windowDays),
-  }));
-  scored.sort((a, b) => a.diff - b.diff || a.idx - b.idx);
-  return scored.slice(0, capped).map((s) => s.idx);
-}
-
 // Serialize the selected SME projects as a few-shot block for the AI prompt.
-// Every name, desc, crew, and days value passes through verbatim.
-function formatFewShotExamples(indices: readonly number[]): string {
+// Every name, desc, crew, and days value passes through verbatim. Component
+// tags come from SME_COMPONENTS at the same index, giving the model a
+// per-exemplar label the composition rules in buildMilestoneUserPrompt can
+// reference when instructing which phases to omit.
+export function formatFewShotExamples(indices: readonly number[]): string {
   if (indices.length === 0) return "";
   const blocks = indices.map((i, k) => {
     const p = SME_PROJECTS[i];
+    const comps = SME_COMPONENTS[i];
+    const componentsLine =
+      comps.length > 0
+        ? `Components: ${comps.join(", ")}`
+        : "Components: (none tagged)";
     const phaseLines = p.ms
       .map((m) => `  ${m.no}. ${m.name} (${m.days} CD) — ${m.desc} ${m.crew}`)
       .join("\n");
-    return `EXAMPLE ${k + 1} — "${p.name}" (total ${p.total} CD, ${p.ms.length} phases):\n${phaseLines}`;
+    return `EXAMPLE ${k + 1} — "${p.name}" (total ${p.total} CD, ${p.ms.length} phases)\n${componentsLine}\n${phaseLines}`;
   });
   return blocks.join("\n\n");
 }
@@ -681,16 +649,17 @@ function truncateSmeFallback(source: SmeProject): {
   return { phases, truncated, originalCount, keptCount: phases.length };
 }
 
-async function generateMilestonesWithAI(
+// Pure builder for the system and user prompts sent to Anthropic. Extracted
+// from generateMilestonesWithAI so it can be constructed and inspected without
+// making a live model call. The composition rules block covers item 4 of the
+// Phase 1 plan (composite assembly, shared-phase deduplication, consolidation
+// over truncation).
+export function buildMilestoneUserPrompt(
   projectData: Record<string, unknown>,
   projectType: string,
+  components: readonly string[],
   fewShotIndices: readonly number[],
-): Promise<AIGeneratedPhase[]> {
-  const apiKey = anthropicKey.value();
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY secret not configured");
-  }
-
+): { system: string; userPrompt: string } {
   const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
   const num = (v: unknown): number | null =>
     typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -724,6 +693,9 @@ async function generateMilestonesWithAI(
     `Target completion: ${completionDate || "(unspecified)"}`,
   ].join("\n");
 
+  const componentsLine =
+    components.length > 0 ? components.join(", ") : "(no components identified)";
+
   const system =
     "You are a senior LGU (Local Government Unit) infrastructure project planner in the Philippines, advising HCSD field engineers. Generate a realistic, project-specific milestone breakdown that an engineer can monitor with photo proofs. Use DPWH/HCSD-style phase terminology. Durations are CALENDAR DAYS proportional to project scope — the server rescales your values onto the engineer's actual start-to-end window, so treat your numbers as a proportional shape rather than absolute dates. Tailor descriptions to the actual project scope, contract amount, and timeline rather than restating generic templates verbatim.";
 
@@ -735,9 +707,124 @@ async function generateMilestonesWithAI(
   const userPrompt = `Generate milestones for this LGU infrastructure project. Each description must state measurable completion criteria a field engineer can verify with photos.
 
 PROJECT CONTEXT:
-${projectContext}${referenceSection}
+${projectContext}
+
+PROJECT COMPONENTS: ${componentsLine}${referenceSection}
+
+COMPOSITION RULES:
+1. Cover every component listed under PROJECT COMPONENTS. Every listed component must have at least one phase addressing it.
+2. Omit phases from a REFERENCE EXAMPLE that address a component this project does NOT have. Example: if PROJECT COMPONENTS is [water_tank] only and a reference exemplar includes a "Galvanized Iron Pipe Laying" phase because that reference covered both tank and pipes, omit the pipe-laying phase from your output.
+3. Shared setup and closeout phases appear ONCE across the whole plan, not once per component or once per reference. Consolidate the following into single phases at the appropriate positions: mobilization, site preparation, final inspection, punchlisting, turnover, demobilization.
+4. Order phases in a coherent construction sequence: mobilization first, then earthworks, then substructure, then superstructure, then systems (electrical, plumbing), then finishes, then testing, then punchlisting, then turnover.
+5. Consolidate, do not truncate. The plan is capped at ${MAX_PHASES_PER_PLAN} phases. When retrieved references collectively cover more scope than fits in ${MAX_PHASES_PER_PLAN} phases, merge related activities into broader phases rather than dropping components.
 
 Return your milestone plan via the submit_milestones tool.`;
+
+  return { system, userPrompt };
+}
+
+// One entry in the generationStages response array. Modal replays these in
+// order so the PE sees that validated references were consulted BY NAME.
+export type GenerationStage = { key: string; body: string };
+
+// Soft cap per stage body. Current stage bodies are 60 to 140 chars; longest
+// realistic scenario (three long project names in retrieved_refs) tops out
+// around 320 chars. Set at 400 for headroom. If any stage body exceeds this,
+// truncate with an ellipsis and warn. Payload footprint at 5 stages * 400
+// chars = 2 KB worst case, trivial vs Firebase response limits.
+export const STAGE_BODY_MAX_CHARS = 400;
+
+export function buildGenerationStages(args: {
+  windowDays: number | null;
+  projectType: string;
+  corpusSize: number;
+  retrievedNames: readonly string[];
+  phasesCount: number;
+  usedFallback: boolean;
+  fallbackSourceName?: string;
+  overflowDays: number;
+}): GenerationStage[] {
+  const stages: GenerationStage[] = [];
+
+  const windowStr =
+    args.windowDays !== null ? `${args.windowDays}-day window` : "unknown project window";
+  stages.push({
+    key: "read_scope",
+    body: `Reading project scope: ${windowStr}, classified as ${projectTypeLabel(args.projectType)}.`,
+  });
+
+  stages.push({
+    key: "score_corpus",
+    body: `Scoring ${args.corpusSize} validated DEPW reference projects.`,
+  });
+
+  // On the SME fallback path, only the single fallback source drove the plan.
+  // On the AI path, all retrieved references informed composition.
+  const refNames =
+    args.usedFallback && args.fallbackSourceName
+      ? [args.fallbackSourceName]
+      : [...args.retrievedNames];
+  const refsList = refNames.map((n) => `"${n}"`).join(", ");
+  const kWord = refNames.length === 1 ? "reference" : "references";
+  stages.push({
+    key: "retrieved_refs",
+    body: `Retrieved ${refNames.length} ${kWord}: ${refsList}.`,
+  });
+
+  // compose_phases is AI-only; SME fallback copies phases verbatim from the
+  // single source without composition.
+  if (!args.usedFallback) {
+    stages.push({
+      key: "compose_phases",
+      body: `Composing ${args.phasesCount} phases from these references, adapted to the project scope.`,
+    });
+  }
+
+  if (args.windowDays === null) {
+    stages.push({
+      key: "fit_window",
+      body: `Project window unknown, phase durations not rescaled.`,
+    });
+  } else if (args.overflowDays > 0) {
+    stages.push({
+      key: "fit_window",
+      body: `Fitting ${args.phasesCount} phases into the ${args.windowDays}-day window. Overflow +${args.overflowDays}cd; extend the project end date or remove phases before confirming.`,
+    });
+  } else {
+    stages.push({
+      key: "fit_window",
+      body: `Scaling durations to fit the ${args.windowDays}-day project window.`,
+    });
+  }
+
+  return stages.map((s) => {
+    if (s.body.length > STAGE_BODY_MAX_CHARS) {
+      console.warn(
+        `[generationStages] stage "${s.key}" body length ${s.body.length} exceeded cap ${STAGE_BODY_MAX_CHARS}; truncating.`,
+      );
+      return { key: s.key, body: s.body.slice(0, STAGE_BODY_MAX_CHARS - 3) + "..." };
+    }
+    return s;
+  });
+}
+
+async function generateMilestonesWithAI(
+  projectData: Record<string, unknown>,
+  projectType: string,
+  components: readonly string[],
+  fewShotIndices: readonly number[],
+): Promise<AIGeneratedPhase[]> {
+  const apiKey = anthropicKey.value();
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY secret not configured");
+  }
+
+  const { system, userPrompt } = buildMilestoneUserPrompt(
+    projectData,
+    projectType,
+    components,
+    fewShotIndices,
+  );
 
   const client = new Anthropic({ apiKey });
 
@@ -858,24 +945,38 @@ export const generateMilestones = onCall(
 
 
   const rawType = typeof projectData.projectType === "string" ? projectData.projectType : "";
-  if (!SUPPORTED_PROJECT_TYPES.has(rawType)) {
-    throw new HttpsError(
-      "failed-precondition",
-      "Project has not been verified as a city-funded barangay-level infrastructure project.",
-    );
-  }
 
-  // Web's intake flow rejects classifications below 0.8 at project creation
-  // (2026-05-26 update). Legacy docs created under the old 0.6 floor must be
-  // blocked here so we never feed an unreliable classification into the AI.
+  // Classifier contract v1 nests admitted/isComposite/components/contractVersion
+  // inside projectData.classification. Extract once and reuse below for both
+  // the admission gate and the scorer inputs. Pre-contract docs have no
+  // classification map, so cls is {} and all reads are undefined.
+  const cls: Record<string, unknown> =
+    projectData.classification !== null &&
+    typeof projectData.classification === "object" &&
+    !Array.isArray(projectData.classification)
+      ? (projectData.classification as Record<string, unknown>)
+      : {};
+  const admittedField = cls.admitted;
   const confidence =
     typeof projectData.classificationConfidence === "number"
       ? projectData.classificationConfidence
       : null;
-  if (confidence === null || confidence < 0.8) {
+
+  // Classifier contract v1: admitted === true is the single authoritative
+  // gate, evaluated WITHOUT reference to classificationConfidence. Pre-contract
+  // docs (admittedField === undefined) fall through to the legacy rule:
+  // SUPPORTED_PROJECT_TYPES entry AND confidence >= 0.8. Every other state
+  // (admitted === false, or missing type at low confidence) is blocked.
+  const isAdmitted =
+    admittedField === true ||
+    (admittedField === undefined &&
+      SUPPORTED_PROJECT_TYPES.has(rawType) &&
+      confidence !== null &&
+      confidence >= 0.8);
+  if (!isAdmitted) {
     throw new HttpsError(
       "failed-precondition",
-      "This project's classification is incomplete. Please contact the Head of Construction Services to re-verify the project name before generating milestones.",
+      "This project has not been admitted for milestone generation. Please contact the Head of Construction Services to verify the project name.",
     );
   }
 
@@ -916,12 +1017,47 @@ export const generateMilestones = onCall(
   }
 
   const windowDays = computeProjectWindowDays(projectData);
-  const { indices: poolIndices, substituted } = resolveExamplesForType(rawType);
-  const fewShotIndices = pickClosestByWindow(
-    poolIndices,
-    windowDays,
-    MAX_FEW_SHOT_EXAMPLES,
-  );
+
+  // Derive scorer inputs. Under classifier contract v1 the web repo writes
+  // components[], isComposite, and contractVersion INSIDE the classification
+  // map (nested); pre-contract docs have no classification map at all. Fall
+  // back to a single type-derived component so the scorer's main pool is
+  // non-empty and pre-contract projects do not regress to single-pick novel.
+  //
+  // Precedence for components:
+  //   1. classification.components, if it is an array with at least one
+  //      non-empty string element.
+  //   2. deriveComponentsFromType(rawType), otherwise.
+  //
+  // Empty-array case is treated as absent, since an empty components list
+  // zeroes every cScore and collapses the main pool to empty.
+  const projectName =
+    (typeof projectData.projectName === "string" && projectData.projectName) ||
+    (typeof projectData.title === "string" && projectData.title) ||
+    "project";
+  const rawComponents = Array.isArray(cls.components)
+    ? cls.components.filter((c): c is string => typeof c === "string" && c.length > 0)
+    : [];
+  const components =
+    rawComponents.length > 0 ? rawComponents : deriveComponentsFromType(rawType);
+  const isComposite = cls.isComposite === true;
+
+  const retrieval = scoreProject({ projectName, components, isComposite, windowDays });
+  const pickedIndices = retrieval.pickedIndices;
+  const matchMode = retrieval.matchMode;
+  const noveltyScore = retrieval.noveltyScore;
+
+  // Retrieval must always produce at least one exemplar. Only pathological
+  // case is windowDays === null AND main pool empty, which under the current
+  // corpus and PROJECTTYPE_TO_COMPONENT map cannot occur for a
+  // SUPPORTED_PROJECT_TYPES entry with valid components. Defensive throw
+  // preserves the previous empty-pool refusal.
+  if (pickedIndices.length === 0) {
+    throw new HttpsError(
+      "internal",
+      `milestone-validation-failed: no SME reference available for project "${projectName}"`,
+    );
+  }
 
   let phases: AIGeneratedPhase[];
   let generatedBy: "ai" | "sme_reference" = "ai";
@@ -934,7 +1070,7 @@ export const generateMilestones = onCall(
   let fallbackKind: "transient" | undefined;
 
   try {
-    phases = await generateMilestonesWithAI(projectData, rawType, fewShotIndices);
+    phases = await generateMilestonesWithAI(projectData, rawType, components, pickedIndices);
   } catch (e: unknown) {
     // Validation failures (bad AI output) surface to the client as
     // `milestone-validation-failed`. Only transient/API errors fall through
@@ -968,17 +1104,12 @@ export const generateMilestones = onCall(
       );
     }
 
-    if (poolIndices.length === 0) {
-      // Every SUPPORTED_PROJECT_TYPES value should resolve to a non-empty
-      // pool through PROJECT_TYPE_TO_EXAMPLES or EXAMPLE_TYPE_FALLBACK. If
-      // it doesn't, refuse rather than write an empty milestone set.
-      throw new HttpsError(
-        "internal",
-        `milestone-validation-failed: no SME reference available for projectType "${rawType}"`,
-      );
-    }
-
-    const fallbackIndex = pickClosestByWindow(poolIndices, windowDays, 1)[0];
+    // Upfront pickedIndices guard already ensured at least one exemplar,
+    // so no empty-pool check needed here. Top-scored pick becomes the SME
+    // fallback source; when the scorer's own fallback fired (matchMode
+    // "novel"), pickedIndices[0] is already the closest-by-duration entry,
+    // preserving the semantics of the deleted pickClosestByWindow helper.
+    const fallbackIndex = pickedIndices[0];
     const source = SME_PROJECTS[fallbackIndex];
     const truncation = truncateSmeFallback(source);
     phases = truncation.phases;
@@ -1026,9 +1157,10 @@ export const generateMilestones = onCall(
 
   const uid   = request.auth.uid;
   const email = request.auth.token.email || "";
-  const typeSuffix = substituted
-    ? `type: ${rawType} → few-shot borrowed from ${substituted}`
-    : `type: ${rawType}`;
+  const typeSuffix = `type: ${rawType}`;
+  const retrievedPlainNames = pickedIndices.map((i) => SME_PROJECTS[i].name);
+  const retrievedNames = retrievedPlainNames.map((n) => `"${n}"`);
+  const retrievalSuffix = ` · retrieval: matchMode=${matchMode}, novelty=${noveltyScore.toFixed(2)}, corpus=${CORPUS_VERSION}, refs=[${retrievedNames.join(", ")}]`;
   const sourceSuffix = usedFallback
     ? ` · SME fallback (source: "${fallbackSourceProject}", ${fallbackKeptCount} of ${fallbackOriginalCount} phases${fallbackTruncated ? `, truncated to fit ${MAX_PHASES_PER_PLAN}-phase limit` : ""}) · reason: ${fallbackReason}`
     : ` · AI-generated (${phases.length} phases)`;
@@ -1041,12 +1173,23 @@ export const generateMilestones = onCall(
   await logAuditTrail(
     uid, email,
     "Milestones Drafted",
-    `Project: ${projectId} (${typeSuffix})${sourceSuffix}${scheduleSuffix}`,
+    `Project: ${projectId} (${typeSuffix})${retrievalSuffix}${sourceSuffix}${scheduleSuffix}`,
     true,
     projectId,
     undefined,
     typeof projectData.tenantId === "string" ? projectData.tenantId : undefined,
   );
+
+  const generationStages = buildGenerationStages({
+    windowDays,
+    projectType: rawType,
+    corpusSize: SME_PROJECTS.length,
+    retrievedNames: retrievedPlainNames,
+    phasesCount: phases.length,
+    usedFallback,
+    fallbackSourceName: fallbackSourceProject,
+    overflowDays,
+  });
 
   return {
     success: true,
@@ -1060,6 +1203,11 @@ export const generateMilestones = onCall(
     fallbackOriginalCount,
     fallbackKeptCount,
     fallbackKind,
+    matchMode,
+    noveltyScore,
+    retrievedSourceIds: pickedIndices,
+    corpusVersion: CORPUS_VERSION,
+    generationStages,
     windowDays,
     scheduledDays,
     overflowDays,

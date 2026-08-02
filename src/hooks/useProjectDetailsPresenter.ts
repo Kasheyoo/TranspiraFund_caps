@@ -16,7 +16,7 @@ import { logger } from "../utils/logger";
 import { projectTypeLabel } from "../utils/projectType";
 import { requireTenantId } from "../utils/tenant";
 import { useAuth } from "../context/AuthContext";
-import type { Milestone, Project } from "../types";
+import type { GenerationStage, MatchMode, Milestone, Project } from "../types";
 import type { DraftPhase } from "../utils/milestonePlan";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -385,6 +385,15 @@ export const useProjectDetailsPresenter = (
     count?: number;
     usedFallback?: boolean;
     fallbackSourceProject?: string;
+    fallbackTruncated?: boolean;
+    fallbackOriginalCount?: number;
+    fallbackKeptCount?: number;
+    fallbackKind?: "transient";
+    matchMode?: MatchMode;
+    noveltyScore?: number;
+    retrievedSourceIds?: number[];
+    corpusVersion?: string;
+    generationStages?: GenerationStage[];
     windowDays?: number | null;
     scheduledDays?: number;
     overflowDays?: number;
@@ -402,6 +411,15 @@ export const useProjectDetailsPresenter = (
         count: number;
         usedFallback?: boolean;
         fallbackSourceProject?: string;
+        fallbackTruncated?: boolean;
+        fallbackOriginalCount?: number;
+        fallbackKeptCount?: number;
+        fallbackKind?: "transient";
+        matchMode?: MatchMode;
+        noveltyScore?: number;
+        retrievedSourceIds?: number[];
+        corpusVersion?: string;
+        generationStages?: GenerationStage[];
         windowDays?: number | null;
         scheduledDays?: number;
         overflowDays?: number;
@@ -411,6 +429,15 @@ export const useProjectDetailsPresenter = (
         count: result.count,
         usedFallback: result.usedFallback,
         fallbackSourceProject: result.fallbackSourceProject,
+        fallbackTruncated: result.fallbackTruncated,
+        fallbackOriginalCount: result.fallbackOriginalCount,
+        fallbackKeptCount: result.fallbackKeptCount,
+        fallbackKind: result.fallbackKind,
+        matchMode: result.matchMode,
+        noveltyScore: result.noveltyScore,
+        retrievedSourceIds: result.retrievedSourceIds,
+        corpusVersion: result.corpusVersion,
+        generationStages: result.generationStages,
         windowDays: result.windowDays,
         scheduledDays: result.scheduledDays,
         overflowDays: result.overflowDays,

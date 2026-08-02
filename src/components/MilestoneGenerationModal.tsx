@@ -43,6 +43,15 @@ type GenerateResult = {
   count?: number;
   usedFallback?: boolean;
   fallbackSourceProject?: string;
+  fallbackTruncated?: boolean;
+  fallbackOriginalCount?: number;
+  fallbackKeptCount?: number;
+  fallbackKind?: "transient";
+  matchMode?: "exact" | "variant" | "composite" | "analogous" | "novel";
+  noveltyScore?: number;
+  retrievedSourceIds?: number[];
+  corpusVersion?: string;
+  generationStages?: { key: string; body: string }[];
   windowDays?: number | null;
   scheduledDays?: number;
   overflowDays?: number;
@@ -95,7 +104,7 @@ const ERROR_COPY: Record<string, { title: string; body: string; canRetry: boolea
   "permission-denied":{ title: "Not Authorized",      body: "Only the assigned Project Engineer can generate milestones for this project.",    canRetry: false },
   "already-exists":   { title: "Already Drafted",     body: "Milestones already exist for this project. Open the review to edit them.",        canRetry: false },
   "resource-exhausted":{ title: "Daily Limit Reached", body: "You've reached the daily milestone-generation limit. Please try again later.",   canRetry: false },
-  "failed-precondition":{ title: "Project classification incomplete", body: "This project's name has not been verified as a city-funded barangay-level infrastructure project. Please contact the Head of Construction Services to re-verify the project before generating milestones.", canRetry: false },
+  "failed-precondition":{ title: "Project classification incomplete", body: "This project has not been admitted for milestone generation. Please contact the Head of Construction Services to verify the project details.", canRetry: false },
   "milestone-validation-failed":{ title: "Milestones could not be generated", body: "The system was unable to produce milestones that align with the project's infrastructure scope and duration. Please notify the Head of Construction Services.", canRetry: false },
   "milestone-generator-misconfigured": { title: "Milestone Generator Offline", body: "The milestone generator is not properly configured on the server. Please report this to the Head of Construction Services so they can restore the service. Retrying will not help until it is fixed.", canRetry: false },
   "deadline-exceeded": { title: "Took Too Long",      body: "The request timed out. Check your connection and try again.",                     canRetry: true  },
@@ -120,6 +129,10 @@ export const MilestoneGenerationModal = ({
   );
   const [genResult, setGenResult] = useState<GenerateResult | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  // Index of the currently-displayed stage during loading replay (1g). Reset
+  // to 0 on every open and on retry. Absent generationStages falls through
+  // to the legacy spinner UI.
+  const [stageIndex, setStageIndex] = useState(0);
 
   // Local draft array — every edit/add/delete goes through milestonePlan
   // utilities so weight totals stay at 100% and sequences stay dense 1..N.
@@ -189,6 +202,7 @@ export const MilestoneGenerationModal = ({
       lastValidatedTitles.current = {};
       durationBuffersRef.current = {};
       setDurationBuffers({});
+      setStageIndex(0);
       if (draftMilestones.length > 0) {
         setDraft(fromMilestones(draftMilestones));
         setPhase("review");
@@ -199,16 +213,38 @@ export const MilestoneGenerationModal = ({
     }
   }
 
+  // Advance the replay one stage every 700ms. Stops at the last stage;
+  // subsequent transition to review is handled by the effect below once the
+  // Firestore listener also delivers drafts. No-op when generationStages is
+  // absent (older server or fallback path with empty payload).
   useEffect(() => {
-    if (phase === "loading" && draftMilestones.length > 0) {
-      setDraft(fromMilestones(draftMilestones));
-      durationBuffersRef.current = {};
-      setDurationBuffers({});
-      setPhase("review");
-    }
-  }, [phase, draftMilestones]);
+    if (phase !== "loading") return;
+    const stages = genResult?.generationStages;
+    if (!stages || stages.length === 0) return;
+    if (stageIndex >= stages.length - 1) return;
+    const t = setTimeout(
+      () => setStageIndex((i) => Math.min(i + 1, stages.length - 1)),
+      700,
+    );
+    return () => clearTimeout(t);
+  }, [phase, genResult, stageIndex]);
+
+  useEffect(() => {
+    if (phase !== "loading" || draftMilestones.length === 0) return;
+    // Wait for the callable response before transitioning; drafts can arrive
+    // via the Firestore listener slightly before the callable resolves.
+    if (!genResult) return;
+    // If we have stages, hold until the replay reaches the last one.
+    const stages = genResult.generationStages;
+    if (stages && stages.length > 0 && stageIndex < stages.length - 1) return;
+    setDraft(fromMilestones(draftMilestones));
+    durationBuffersRef.current = {};
+    setDurationBuffers({});
+    setPhase("review");
+  }, [phase, draftMilestones, genResult, stageIndex]);
 
   const handleStart = async () => {
+    setStageIndex(0);
     setPhase("loading");
     const r = await onGenerate();
     setGenResult(r);
@@ -217,6 +253,7 @@ export const MilestoneGenerationModal = ({
 
   const handleRetry = () => {
     setGenResult(null);
+    setStageIndex(0);
     setPhase("idle");
   };
 
@@ -515,13 +552,35 @@ export const MilestoneGenerationModal = ({
                 </View>
               </View>
               <Text style={S.title}>Generating Milestones…</Text>
-              <Text style={S.desc}>
-                Analyzing the project metadata and drafting phases. This usually takes 5–15 seconds.
-              </Text>
-              <View style={S.loadingHint}>
-                <FontAwesome5 name="info-circle" size={11} color={COLORS.textTertiary} />
-                <Text style={S.loadingHintText}>Don't close the app</Text>
-              </View>
+              {genResult?.generationStages && genResult.generationStages.length > 0 ? (
+                <>
+                  <Text style={S.desc}>
+                    {
+                      genResult.generationStages[
+                        Math.min(stageIndex, genResult.generationStages.length - 1)
+                      ].body
+                    }
+                  </Text>
+                  <View style={S.loadingHint}>
+                    <FontAwesome5 name="info-circle" size={11} color={COLORS.textTertiary} />
+                    <Text style={S.loadingHintText}>
+                      Step{" "}
+                      {Math.min(stageIndex, genResult.generationStages.length - 1) + 1} of{" "}
+                      {genResult.generationStages.length}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={S.desc}>
+                    Analyzing the project metadata and drafting phases. This usually takes 5–15 seconds.
+                  </Text>
+                  <View style={S.loadingHint}>
+                    <FontAwesome5 name="info-circle" size={11} color={COLORS.textTertiary} />
+                    <Text style={S.loadingHintText}>Don't close the app</Text>
+                  </View>
+                </>
+              )}
             </View>
           )}
 
@@ -631,6 +690,17 @@ export const MilestoneGenerationModal = ({
                         ? ` Kept the first ${genResult.fallbackKeptCount} of ${genResult.fallbackOriginalCount} phases from "${genResult.fallbackSourceProject}" to fit the ${MAX_PHASES}-phase plan limit.`
                         : ""
                     }`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {genResult?.matchMode === "analogous" || genResult?.matchMode === "novel" ? (
+                <View style={S.fallbackBanner}>
+                  <FontAwesome5 name="exclamation-circle" size={13} color={COLORS.warning} />
+                  <Text style={S.fallbackBannerText}>
+                    {genResult.matchMode === "analogous"
+                      ? "This project does not closely match any single validated DEPW reference. Phases were composed by adapting the closest references. Review each phase carefully. Durations and scope may need adjustment before you confirm."
+                      : "No close precedent for this project in the validated DEPW corpus. Phases were generated using general infrastructure knowledge with limited reference support. Every phase warrants careful review. Consult the Head of Construction Services if any phase looks off."}
                   </Text>
                 </View>
               ) : null}

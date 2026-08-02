@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
 import { COLORS } from "../constants";
 import type { Milestone, Project } from "../types";
-import { isProjectVerified } from "../utils/projectType";
+import { canGenerateMilestones } from "../utils/projectType";
 import type { DraftPhase } from "../utils/milestonePlan";
 import { computeProjectWindowDaysClient } from "../utils/milestonePlan";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -44,6 +44,20 @@ interface ProjectDetailsData {
 interface GenerateMilestonesResult {
   ok: boolean;
   count?: number;
+  usedFallback?: boolean;
+  fallbackSourceProject?: string;
+  fallbackTruncated?: boolean;
+  fallbackOriginalCount?: number;
+  fallbackKeptCount?: number;
+  fallbackKind?: "transient";
+  matchMode?: "exact" | "variant" | "composite" | "analogous" | "novel";
+  noveltyScore?: number;
+  retrievedSourceIds?: number[];
+  corpusVersion?: string;
+  generationStages?: { key: string; body: string }[];
+  windowDays?: number | null;
+  scheduledDays?: number;
+  overflowDays?: number;
   errorCode?:
     | "unauthenticated" | "invalid-argument" | "not-found"
     | "permission-denied" | "already-exists" | "resource-exhausted"
@@ -722,7 +736,7 @@ export const ProjectDetailsView = ({ data, actions, onBack }: ProjectDetailsView
               <Text style={D.emptyMsBody}>
                 Let AI draft the construction-phase milestones for this project. You'll review and confirm every phase before they're locked in.
               </Text>
-              {!isProjectVerified(project.projectType) ? (
+              {!canGenerateMilestones(project) ? (
                 <>
                   <View style={D.unverifiedBanner}>
                     <FontAwesome5 name="exclamation-triangle" size={12} color={COLORS.warning} />
